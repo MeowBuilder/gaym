@@ -2,11 +2,44 @@
 #include "Dx12App.h"
 
 static Dx12App g_app;
+static bool g_fullscreen = false;
+static RECT g_window_rect = { 0 };
 
 LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
 	switch (msg)
 	{
+	case WM_KEYDOWN:
+		if (wParam == VK_RETURN && (GetKeyState(VK_SHIFT) & 0x8000))
+		{
+			g_fullscreen = !g_fullscreen;
+			if (g_fullscreen)
+			{
+				GetWindowRect(hWnd, &g_window_rect);
+
+				SetWindowLong(hWnd, GWL_STYLE, WS_POPUP);
+
+				HMONITOR hmon = MonitorFromWindow(hWnd, MONITOR_DEFAULTTONEAREST);
+				MONITORINFO mi = { sizeof(mi) };
+				GetMonitorInfo(hmon, &mi);
+
+				SetWindowPos(hWnd, HWND_TOP, mi.rcMonitor.left, mi.rcMonitor.top,
+					mi.rcMonitor.right - mi.rcMonitor.left,
+					mi.rcMonitor.bottom - mi.rcMonitor.top,
+					SWP_FRAMECHANGED | SWP_NOACTIVATE);
+				ShowWindow(hWnd, SW_MAXIMIZE);
+			}
+			else
+			{
+				SetWindowLong(hWnd, GWL_STYLE, WS_OVERLAPPEDWINDOW);
+				SetWindowPos(hWnd, HWND_NOTOPMOST, g_window_rect.left, g_window_rect.top,
+					g_window_rect.right - g_window_rect.left,
+					g_window_rect.bottom - g_window_rect.top,
+					SWP_FRAMECHANGED | SWP_NOACTIVATE);
+				ShowWindow(hWnd, SW_NORMAL);
+			}
+		}
+		return 0;
 	case WM_SIZE:
 	{
 		UINT w = LOWORD(lParam), h = HIWORD(lParam);
