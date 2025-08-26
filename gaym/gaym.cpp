@@ -1,120 +1,131 @@
-﻿#include "stdafx.h"
+#include "stdafx.h"
+#include "gaym.h"
 #include "Dx12App.h"
 
-static Dx12App g_app;
-static bool g_fullscreen = false;
-static RECT g_window_rect = { 0 };
+#define MAX_LOADSTRING 100
 
-LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
+HINSTANCE hInst;
+WCHAR szTitle[MAX_LOADSTRING];
+WCHAR szWindowClass[MAX_LOADSTRING];
+
+Dx12App* g_pDx12App;
+
+ATOM MyRegisterClass(HINSTANCE hInstance);
+BOOL InitInstance(HINSTANCE, int);
+LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
+
+int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
+                     _In_opt_ HINSTANCE hPrevInstance,
+                     _In_ LPWSTR    lpCmdLine,
+                     _In_ int       nCmdShow)
 {
-	switch (msg)
-	{
-	case WM_KEYDOWN:
-		if (wParam == VK_RETURN && (GetKeyState(VK_SHIFT) & 0x8000))
-		{
-			g_fullscreen = !g_fullscreen;
-			if (g_fullscreen)
-			{
-				GetWindowRect(hWnd, &g_window_rect);
+    UNREFERENCED_PARAMETER(hPrevInstance);
+    UNREFERENCED_PARAMETER(lpCmdLine);
 
-				SetWindowLong(hWnd, GWL_STYLE, WS_POPUP);
+    LoadStringW(hInstance, IDS_APP_TITLE, szTitle, MAX_LOADSTRING);
+    LoadStringW(hInstance, IDC_GAYM, szWindowClass, MAX_LOADSTRING);
+    MyRegisterClass(hInstance);
 
-				HMONITOR hmon = MonitorFromWindow(hWnd, MONITOR_DEFAULTTONEAREST);
-				MONITORINFO mi = { sizeof(mi) };
-				GetMonitorInfo(hmon, &mi);
+    g_pDx12App = new Dx12App();
 
-				SetWindowPos(hWnd, HWND_TOP, mi.rcMonitor.left, mi.rcMonitor.top,
-					mi.rcMonitor.right - mi.rcMonitor.left,
-					mi.rcMonitor.bottom - mi.rcMonitor.top,
-					SWP_FRAMECHANGED | SWP_NOACTIVATE);
-				ShowWindow(hWnd, SW_MAXIMIZE);
-			}
-			else
-			{
-				SetWindowLong(hWnd, GWL_STYLE, WS_OVERLAPPEDWINDOW);
-				SetWindowPos(hWnd, HWND_NOTOPMOST, g_window_rect.left, g_window_rect.top,
-					g_window_rect.right - g_window_rect.left,
-					g_window_rect.bottom - g_window_rect.top,
-					SWP_FRAMECHANGED | SWP_NOACTIVATE);
-				ShowWindow(hWnd, SW_NORMAL);
-			}
-		}
-		return 0;
-	case WM_SIZE:
-	{
-		UINT w = LOWORD(lParam), h = HIWORD(lParam);
-		try { g_app.Resize(w, h); }
-		catch (...) {}
-		return 0;
-	}
-	case WM_DESTROY:
-		PostQuitMessage(0);
-		return 0;
-	default:
-		return DefWindowProc(hWnd, msg, wParam, lParam);
-	}
+    if (!InitInstance (hInstance, nCmdShow))
+    {
+        return FALSE;
+    }
+
+    HACCEL hAccelTable = LoadAccelerators(hInstance, MAKEINTRESOURCE(IDC_GAYM));
+
+    MSG msg;
+
+    while (true)
+    {
+        if (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE))
+        {
+            if (msg.message == WM_QUIT) break;
+            if (!TranslateAccelerator(msg.hwnd, hAccelTable, &msg))
+            {
+                TranslateMessage(&msg);
+                DispatchMessage(&msg);
+            }
+        }
+        else
+        {
+            g_pDx12App->FrameAdvance();
+        }
+    }
+
+    delete g_pDx12App;
+
+    return (int) msg.wParam;
 }
 
-int APIENTRY wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR, int nCmdShow)
+ATOM MyRegisterClass(HINSTANCE hInstance)
 {
-	// 윈도우 클래스 등록
-	const wchar_t* kClass = L"DX12WindowClass";
-	WNDCLASSEXW wc{};
-	wc.cbSize = sizeof(wc);
-	wc.style = CS_HREDRAW | CS_VREDRAW;
-	wc.lpfnWndProc = WndProc;
-	wc.hInstance = hInstance;
-	wc.hCursor = LoadCursor(nullptr, IDC_ARROW);
-	wc.lpszClassName = kClass;
-	RegisterClassExW(&wc);
+    WNDCLASSEXW wcex;
 
-	// 창 생성
-	RECT rc{ 0,0,1280,720 };
-	AdjustWindowRect(&rc, WS_OVERLAPPEDWINDOW, FALSE);
-	HWND hwnd = CreateWindowW(
-		kClass, L"DX12 Starter",
-		WS_OVERLAPPEDWINDOW,
-		CW_USEDEFAULT, CW_USEDEFAULT,
-		rc.right - rc.left, rc.bottom - rc.top,
-		nullptr, nullptr, hInstance, nullptr);
+    wcex.cbSize = sizeof(WNDCLASSEX);
 
-	if (!hwnd) return -1;
+    wcex.style          = CS_HREDRAW | CS_VREDRAW;
+    wcex.lpfnWndProc    = WndProc;
+    wcex.cbClsExtra     = 0;
+    wcex.cbWndExtra     = 0;
+    wcex.hInstance      = hInstance;
+    wcex.hIcon          = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_GAYM));
+    wcex.hCursor        = LoadCursor(nullptr, IDC_ARROW);
+    wcex.hbrBackground  = (HBRUSH)(COLOR_WINDOW+1);
+    wcex.lpszMenuName   = NULL;
+    wcex.lpszClassName  = szWindowClass;
+    wcex.hIconSm        = LoadIcon(wcex.hInstance, MAKEINTRESOURCE(IDI_SMALL));
 
-	ShowWindow(hwnd, nCmdShow);
-	UpdateWindow(hwnd);
+    return RegisterClassExW(&wcex);
+}
 
-	// DX12 초기화
-	try
-	{
-		g_app.Initialize(hwnd, 1280, 720, /*debug*/true);
-	}
-	catch (const std::exception& e)
-	{
-		MessageBoxA(hwnd, e.what(), "DX12 Init Failed", MB_ICONERROR);
-		return -2;
-	}
+BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
+{
+   hInst = hInstance;
 
-	// 메시지 루프
-	MSG msg{};
-	while (msg.message != WM_QUIT)
-	{
-		if (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE))
-		{
-			TranslateMessage(&msg);
-			DispatchMessage(&msg);
-		}
-		else
-		{
-			// 한 프레임 렌더
-			try { g_app.Render(); }
-			catch (const std::exception& e)
-			{
-				MessageBoxA(hwnd, e.what(), "Render Error", MB_ICONERROR);
-				break;
-			}
-		}
-	}
+   RECT rc = { 0, 0, kWindowWidth, kWindowHeight };
+   DWORD dwStyle = WS_OVERLAPPED | WS_CAPTION | WS_MINIMIZEBOX | WS_SYSMENU | WS_BORDER;
+   AdjustWindowRect(&rc, dwStyle, FALSE);
 
-	g_app.WaitForGPU();
-	return static_cast<int>(msg.wParam);
+   HWND hWnd = CreateWindowW(szWindowClass, szTitle, dwStyle, CW_USEDEFAULT, CW_USEDEFAULT, rc.right - rc.left, rc.bottom - rc.top, nullptr, nullptr, hInstance, nullptr);
+
+   if (!hWnd)
+   {
+      return FALSE;
+   }
+
+   ShowWindow(hWnd, nCmdShow);
+   UpdateWindow(hWnd);
+
+   return TRUE;
+}
+
+LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
+{
+    switch (message)
+    {
+    case WM_CREATE:
+        g_pDx12App->OnCreate(hInst, hWnd);
+        break;
+    case WM_KEYUP:
+        switch (wParam)
+        {
+        case VK_F11:
+            g_pDx12App->ToggleFullscreen();
+            break;
+        case VK_ESCAPE:
+            PostQuitMessage(0);
+            break;
+        }
+        break;
+    case WM_SIZE:
+        g_pDx12App->OnResize(LOWORD(lParam), HIWORD(lParam));
+        break;
+    case WM_DESTROY:
+        g_pDx12App->OnDestroy();
+        PostQuitMessage(0);
+        return 0;
+    }
+    return DefWindowProc(hWnd, message, wParam, lParam);
 }

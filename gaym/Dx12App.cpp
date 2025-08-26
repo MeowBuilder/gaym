@@ -1,353 +1,274 @@
 #include "stdafx.h"
 #include "Dx12App.h"
-using Microsoft::WRL::ComPtr;
 
 Dx12App::Dx12App()
 {
+    m_nWndClientWidth = kWindowWidth;
+    m_nWndClientHeight = kWindowHeight;
+    m_nSwapChainBufferIndex = 0;
+    m_nFenceValue = 0;
+    m_bIsFullscreen = false;
 }
 
 Dx12App::~Dx12App()
 {
-	Cleanup();
 }
 
-void Dx12App::Initialize(HWND hwnd, UINT width, UINT height, bool enableDebug)
+void Dx12App::OnCreate(HINSTANCE hInstance, HWND hMainWnd)
 {
-	m_hWnd = hwnd;
-	m_width = width;
-	m_height = height;
+    m_hInstance = hInstance;
+    m_hWnd = hMainWnd;
 
-	CreateDeviceAndQueue(enableDebug);
-	CreateSwapChain();
-	CreateRTVs();
+    CreateDirect3DDevice();
+    CreateCommandQueueAndList();
+    CreateSwapChain(hInstance, hMainWnd);
+    CreateRtvAndDsvDescriptorHeaps();
+    CreateRenderTargetViews();
+    CreateDepthStencilView();
 
-	// 커맨드리스트/할로케이터
-	for (UINT i = 0; i < FrameCount; ++i)
-	{
-		CHECK_HR(m_device->CreateCommandAllocator(
-			D3D12_COMMAND_LIST_TYPE_DIRECT,
-			IID_PPV_ARGS(m_cmdAlloc[i].ReleaseAndGetAddressOf())));
-	}
-	CHECK_HR(m_device->CreateCommandList(
-		0,
-		D3D12_COMMAND_LIST_TYPE_DIRECT,
-		m_cmdAlloc[m_frameIndex].Get(),
-		nullptr,
-		IID_PPV_ARGS(m_cmdList.ReleaseAndGetAddressOf())));
-	CHECK_HR(m_cmdList->Close());
-
-	// 뷰포트/시저
-	m_viewport.TopLeftX = 0.0f;
-	m_viewport.TopLeftY = 0.0f;
-	m_viewport.Width = static_cast<float>(m_width);
-	m_viewport.Height = static_cast<float>(m_height);
-	m_viewport.MinDepth = 0.0f;
-	m_viewport.MaxDepth = 1.0f;
-
-	m_scissorRect.left = 0;
-	m_scissorRect.top = 0;
-	m_scissorRect.right = static_cast<LONG>(m_width);
-	m_scissorRect.bottom = static_cast<LONG>(m_height);
-
-	m_frameIndex = m_swapChain->GetCurrentBackBufferIndex();
-	CreateFenceObjects();
-
-	//  시간 시스템 초기화
-	InitTime();
-
-	// 초기 동기화(옵션)
-	WaitForGPU();
+    m_GameTimer.Reset();
 }
 
-void Dx12App::Cleanup()
+void Dx12App::OnDestroy()
 {
-	if (m_cmdQueue && m_fence)
-	{
-		WaitForGPU();
-	}
-	if (m_fenceEvent)
-	{
-		CloseHandle(m_fenceEvent);
-		m_fenceEvent = nullptr;
-	}
+    WaitForGpuComplete();
+    if (m_pdxgiSwapChain)
+    {
+        m_pdxgiSwapChain->SetFullscreenState(FALSE, NULL);
+    }
+    CloseHandle(m_hFenceEvent);
 }
 
-void Dx12App::CreateDeviceAndQueue(bool enableDebug)
+void Dx12App::CreateDirect3DDevice()
 {
-#if _DEBUG
-	if (enableDebug)
-	{
-		ComPtr<ID3D12Debug> debug;
-		if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&debug))))
-		{
-			debug->EnableDebugLayer();
-		}
-	}
+    UINT nDXGIFactoryFlags = 0;
+#if defined(_DEBUG)
+    ComPtr<ID3D12Debug> pd3dDebugController;
+    D3D12GetDebugInterface(__uuidof(ID3D12Debug), (void**)&pd3dDebugController);
+    pd3dDebugController->EnableDebugLayer();
+    nDXGIFactoryFlags |= DXGI_CREATE_FACTORY_DEBUG;
 #endif
 
-	UINT factoryFlags = 0;
-#if _DEBUG
-	if (enableDebug) factoryFlags |= DXGI_CREATE_FACTORY_DEBUG;
-#endif
-	CHECK_HR(CreateDXGIFactory2(factoryFlags, IID_PPV_ARGS(m_factory.ReleaseAndGetAddressOf())));
-
-	// 어댑터 → 디바이스
-	ComPtr<IDXGIAdapter1> adapter;
-	for (UINT i = 0;
-		m_factory->EnumAdapters1(i, adapter.ReleaseAndGetAddressOf()) != DXGI_ERROR_NOT_FOUND;
-		++i)
-	{
-		DXGI_ADAPTER_DESC1 desc{};
-		adapter->GetDesc1(&desc);
-		if (desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE) continue;
-
-		if (SUCCEEDED(D3D12CreateDevice(
-			adapter.Get(), D3D_FEATURE_LEVEL_12_0,
-			IID_PPV_ARGS(m_device.ReleaseAndGetAddressOf()))))
-		{
-			break;
-		}
-	}
-	if (!m_device)
-	{
-		CHECK_HR(m_factory->EnumWarpAdapter(IID_PPV_ARGS(adapter.ReleaseAndGetAddressOf())));
-		CHECK_HR(D3D12CreateDevice(
-			adapter.Get(), D3D_FEATURE_LEVEL_12_0,
-			IID_PPV_ARGS(m_device.ReleaseAndGetAddressOf())));
-	}
-
-	// 큐
-	D3D12_COMMAND_QUEUE_DESC qdesc{};
-	qdesc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
-	qdesc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
-	CHECK_HR(m_device->CreateCommandQueue(&qdesc, IID_PPV_ARGS(m_cmdQueue.ReleaseAndGetAddressOf())));
+    CHECK_HR(CreateDXGIFactory2(nDXGIFactoryFlags, __uuidof(IDXGIFactory4), (void**)&m_pdxgiFactory));
+    CHECK_HR(D3D12CreateDevice(NULL, D3D_FEATURE_LEVEL_12_0, __uuidof(ID3D12Device), (void**)&m_pd3dDevice));
 }
 
-void Dx12App::CreateSwapChain()
+void Dx12App::CreateCommandQueueAndList()
 {
-	if (m_swapChain)
-	{
-		CHECK_HR(m_swapChain->SetFullscreenState(FALSE, nullptr));
-		m_swapChain.Reset();
-	}
+    D3D12_COMMAND_QUEUE_DESC d3dCommandQueueDesc;
+    ::ZeroMemory(&d3dCommandQueueDesc, sizeof(D3D12_COMMAND_QUEUE_DESC));
+    d3dCommandQueueDesc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
+    d3dCommandQueueDesc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
+    CHECK_HR(m_pd3dDevice->CreateCommandQueue(&d3dCommandQueueDesc, __uuidof(ID3D12CommandQueue), (void**)&m_pd3dCommandQueue));
 
-	DXGI_SWAP_CHAIN_DESC1 scDesc{};
-	scDesc.Width = m_width;
-	scDesc.Height = m_height;
-	scDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-	scDesc.SampleDesc.Count = 1;
-	scDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-	scDesc.BufferCount = FrameCount;
-	scDesc.Scaling = DXGI_SCALING_STRETCH;
-	scDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
-	scDesc.AlphaMode = DXGI_ALPHA_MODE_IGNORE;
-
-	ComPtr<IDXGISwapChain1> sc1;
-	CHECK_HR(m_factory->CreateSwapChainForHwnd(
-		m_cmdQueue.Get(), m_hWnd, &scDesc, nullptr, nullptr,
-		sc1.ReleaseAndGetAddressOf()));
-	CHECK_HR(sc1.As(&m_swapChain));
-
-	CHECK_HR(m_factory->MakeWindowAssociation(m_hWnd, DXGI_MWA_NO_ALT_ENTER));
-	m_frameIndex = m_swapChain->GetCurrentBackBufferIndex();
+    CHECK_HR(m_pd3dDevice->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, __uuidof(ID3D12CommandAllocator), (void**)&m_pd3dCommandAllocator));
+    CHECK_HR(m_pd3dDevice->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, m_pd3dCommandAllocator.Get(), NULL, __uuidof(ID3D12GraphicsCommandList), (void**)&m_pd3dCommandList));
+    CHECK_HR(m_pd3dCommandList->Close());
 }
 
-void Dx12App::CreateRTVs()
+void Dx12App::CreateSwapChain(HINSTANCE hInstance, HWND hMainWnd)
 {
-	// RTV 힙
-	D3D12_DESCRIPTOR_HEAP_DESC heapDesc{};
-	heapDesc.NumDescriptors = FrameCount;
-	heapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
-	heapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
-	CHECK_HR(m_device->CreateDescriptorHeap(&heapDesc, IID_PPV_ARGS(m_rtvHeap.ReleaseAndGetAddressOf())));
+    DXGI_SWAP_CHAIN_DESC1 dxgiSwapChainDesc;
+    ::ZeroMemory(&dxgiSwapChainDesc, sizeof(dxgiSwapChainDesc));
+    dxgiSwapChainDesc.Width = m_nWndClientWidth;
+    dxgiSwapChainDesc.Height = m_nWndClientHeight;
+    dxgiSwapChainDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    dxgiSwapChainDesc.SampleDesc.Count = 1;
+    dxgiSwapChainDesc.SampleDesc.Quality = 0;
+    dxgiSwapChainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+    dxgiSwapChainDesc.BufferCount = kFrameCount;
+    dxgiSwapChainDesc.Scaling = DXGI_SCALING_NONE;
+    dxgiSwapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
+    dxgiSwapChainDesc.AlphaMode = DXGI_ALPHA_MODE_UNSPECIFIED;
+    dxgiSwapChainDesc.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
 
-	m_rtvDescriptorSize = m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+    ComPtr<IDXGISwapChain1> pdxgiSwapChain1;
+    CHECK_HR(m_pdxgiFactory->CreateSwapChainForHwnd(m_pd3dCommandQueue.Get(), hMainWnd, &dxgiSwapChainDesc, NULL, NULL, &pdxgiSwapChain1));
+    CHECK_HR(pdxgiSwapChain1.As(&m_pdxgiSwapChain));
+    m_nSwapChainBufferIndex = m_pdxgiSwapChain->GetCurrentBackBufferIndex();
 
-	// RTV 생성 (헬퍼 없이 수동 오프셋)
-	D3D12_CPU_DESCRIPTOR_HANDLE handle = m_rtvHeap->GetCPUDescriptorHandleForHeapStart();
-	for (UINT i = 0; i < FrameCount; ++i)
-	{
-		CHECK_HR(m_swapChain->GetBuffer(i, IID_PPV_ARGS(m_renderTargets[i].ReleaseAndGetAddressOf())));
-		m_device->CreateRenderTargetView(m_renderTargets[i].Get(), nullptr, handle);
-		handle.ptr += static_cast<SIZE_T>(m_rtvDescriptorSize);
-	}
+    CHECK_HR(m_pdxgiFactory->MakeWindowAssociation(hMainWnd, DXGI_MWA_NO_ALT_ENTER));
+
+    CHECK_HR(m_pd3dDevice->CreateFence(0, D3D12_FENCE_FLAG_NONE, __uuidof(ID3D12Fence), (void**)&m_pd3dFence));
+    m_hFenceEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
 }
 
-void Dx12App::CreateFenceObjects()
+void Dx12App::CreateRtvAndDsvDescriptorHeaps()
 {
-	CHECK_HR(m_device->CreateFence(
-		0, D3D12_FENCE_FLAG_NONE,
-		IID_PPV_ARGS(m_fence.ReleaseAndGetAddressOf())));
+    D3D12_DESCRIPTOR_HEAP_DESC d3dDescriptorHeapDesc;
+    ::ZeroMemory(&d3dDescriptorHeapDesc, sizeof(D3D12_DESCRIPTOR_HEAP_DESC));
+    d3dDescriptorHeapDesc.NumDescriptors = kFrameCount;
+    d3dDescriptorHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
+    d3dDescriptorHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
+    d3dDescriptorHeapDesc.NodeMask = 0;
+    CHECK_HR(m_pd3dDevice->CreateDescriptorHeap(&d3dDescriptorHeapDesc, __uuidof(ID3D12DescriptorHeap), (void**)&m_pd3dRtvDescriptorHeap));
+    m_nRtvDescriptorIncrementSize = m_pd3dDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 
-	for (UINT i = 0; i < FrameCount; ++i)
-	{
-		m_fenceValue[i] = 0;
-	}
-
-	m_fenceEvent = CreateEvent(nullptr, FALSE, FALSE, nullptr);
-	if (!m_fenceEvent)
-	{
-		CHECK_HR(HRESULT_FROM_WIN32(GetLastError()));
-	}
+    d3dDescriptorHeapDesc.NumDescriptors = 1;
+    d3dDescriptorHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV;
+    CHECK_HR(m_pd3dDevice->CreateDescriptorHeap(&d3dDescriptorHeapDesc, __uuidof(ID3D12DescriptorHeap), (void**)&m_pd3dDsvDescriptorHeap));
 }
 
-void Dx12App::WaitForGPU()
+void Dx12App::CreateRenderTargetViews()
 {
-	if (!m_cmdQueue || !m_fence || !m_fenceEvent)
-	{
-		throw std::runtime_error("WaitForGPU called before queue/fence/event are ready.");
-	}
-
-	const UINT64 fenceToWait = ++m_fenceValue[m_frameIndex];
-	CHECK_HR(m_cmdQueue->Signal(m_fence.Get(), fenceToWait));
-	CHECK_HR(m_fence->SetEventOnCompletion(fenceToWait, m_fenceEvent));
-	WaitForSingleObject(m_fenceEvent, INFINITE);
+    D3D12_CPU_DESCRIPTOR_HANDLE d3dRtvCPUDescriptorHandle = m_pd3dRtvDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
+    for (UINT i = 0; i < kFrameCount; i++)
+    {
+        CHECK_HR(m_pdxgiSwapChain->GetBuffer(i, __uuidof(ID3D12Resource), (void**)&m_pd3dRenderTargetBuffers[i]));
+        m_pd3dDevice->CreateRenderTargetView(m_pd3dRenderTargetBuffers[i].Get(), NULL, d3dRtvCPUDescriptorHandle);
+        d3dRtvCPUDescriptorHandle.ptr += m_nRtvDescriptorIncrementSize;
+    }
 }
 
-void Dx12App::MoveToNextFrame()
+void Dx12App::CreateDepthStencilView()
 {
-	const UINT64 fenceToSignal = ++m_fenceValue[m_frameIndex];
-	CHECK_HR(m_cmdQueue->Signal(m_fence.Get(), fenceToSignal));
+    D3D12_RESOURCE_DESC d3dResourceDesc;
+    d3dResourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+    d3dResourceDesc.Alignment = 0;
+    d3dResourceDesc.Width = m_nWndClientWidth;
+    d3dResourceDesc.Height = m_nWndClientHeight;
+    d3dResourceDesc.DepthOrArraySize = 1;
+    d3dResourceDesc.MipLevels = 1;
+    d3dResourceDesc.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
+    d3dResourceDesc.SampleDesc.Count = 1;
+    d3dResourceDesc.SampleDesc.Quality = 0;
+    d3dResourceDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+    d3dResourceDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
 
-	m_frameIndex = m_swapChain->GetCurrentBackBufferIndex();
+    D3D12_HEAP_PROPERTIES d3dHeapProperties;
+    ::ZeroMemory(&d3dHeapProperties, sizeof(D3D12_HEAP_PROPERTIES));
+    d3dHeapProperties.Type = D3D12_HEAP_TYPE_DEFAULT;
+    d3dHeapProperties.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
+    d3dHeapProperties.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
+    d3dHeapProperties.CreationNodeMask = 1;
+    d3dHeapProperties.VisibleNodeMask = 1;
 
-	if (m_fence->GetCompletedValue() < m_fenceValue[m_frameIndex])
-	{
-		CHECK_HR(m_fence->SetEventOnCompletion(m_fenceValue[m_frameIndex], m_fenceEvent));
-		WaitForSingleObject(m_fenceEvent, INFINITE);
-	}
+    D3D12_CLEAR_VALUE d3dClearValue;
+    d3dClearValue.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
+    d3dClearValue.DepthStencil.Depth = 1.0f;
+    d3dClearValue.DepthStencil.Stencil = 0;
+
+    CHECK_HR(m_pd3dDevice->CreateCommittedResource(&d3dHeapProperties, D3D12_HEAP_FLAG_NONE, &d3dResourceDesc, D3D12_RESOURCE_STATE_DEPTH_WRITE, &d3dClearValue, __uuidof(ID3D12Resource), (void**)&m_pd3dDepthStencilBuffer));
+
+    D3D12_DEPTH_STENCIL_VIEW_DESC d3dDepthStencilViewDesc;
+    ::ZeroMemory(&d3dDepthStencilViewDesc, sizeof(D3D12_DEPTH_STENCIL_VIEW_DESC));
+    d3dDepthStencilViewDesc.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
+    d3dDepthStencilViewDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
+    d3dDepthStencilViewDesc.Flags = D3D12_DSV_FLAG_NONE;
+
+    D3D12_CPU_DESCRIPTOR_HANDLE d3dDsvCPUDescriptorHandle = m_pd3dDsvDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
+    m_pd3dDevice->CreateDepthStencilView(m_pd3dDepthStencilBuffer.Get(), &d3dDepthStencilViewDesc, d3dDsvCPUDescriptorHandle);
 }
 
-void Dx12App::Render()
+void Dx12App::WaitForGpuComplete()
 {
-	Tick();
-	// 리셋
-	CHECK_HR(m_cmdAlloc[m_frameIndex]->Reset());
-	CHECK_HR(m_cmdList->Reset(m_cmdAlloc[m_frameIndex].Get(), nullptr));
+    const UINT64 nFence = ++m_nFenceValue;
+    CHECK_HR(m_pd3dCommandQueue->Signal(m_pd3dFence.Get(), nFence));
 
-	// 리소스 배리어: PRESENT -> RENDER_TARGET
-	D3D12_RESOURCE_BARRIER barrier{};
-	barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-	barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
-	barrier.Transition.pResource = m_renderTargets[m_frameIndex].Get();
-	barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-	barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_PRESENT;
-	barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
-	m_cmdList->ResourceBarrier(1, &barrier);
-
-	// RTV 핸들 계산
-	D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = m_rtvHeap->GetCPUDescriptorHandleForHeapStart();
-	rtvHandle.ptr += static_cast<SIZE_T>(m_frameIndex) * m_rtvDescriptorSize;
-
-	// 렌더 타겟 바인딩/클리어
-	m_cmdList->RSSetViewports(1, &m_viewport);
-	m_cmdList->RSSetScissorRects(1, &m_scissorRect);
-	m_cmdList->OMSetRenderTargets(1, &rtvHandle, FALSE, nullptr);
-
-	const FLOAT clearColor[4] = { 0.10f, 0.10f, 0.30f, 1.0f };
-	m_cmdList->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
-
-	// 리소스 배리어: RENDER_TARGET -> PRESENT
-	barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
-	barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;
-	m_cmdList->ResourceBarrier(1, &barrier);
-
-	// 제출
-	CHECK_HR(m_cmdList->Close());
-	ID3D12CommandList* lists[] = { m_cmdList.Get() };
-	m_cmdQueue->ExecuteCommandLists(1, lists);
-
-	// 표시
-	CHECK_HR(m_swapChain->Present(1, 0));
-
-	// 다음 프레임
-	MoveToNextFrame();
+    if (m_pd3dFence->GetCompletedValue() < nFence)
+    {
+        CHECK_HR(m_pd3dFence->SetEventOnCompletion(nFence, m_hFenceEvent));
+        WaitForSingleObject(m_hFenceEvent, INFINITE);
+    }
 }
 
-void Dx12App::Resize(UINT width, UINT height)
+void Dx12App::ToggleFullscreen()
 {
-	if (width == 0 || height == 0 || !m_swapChain)
-		return;
+    WaitForGpuComplete();
 
-	m_width = width;
-	m_height = height;
+    m_bIsFullscreen = !m_bIsFullscreen;
 
-	// GPU 멈춤
-	WaitForGPU();
+    CHECK_HR(m_pdxgiSwapChain->SetFullscreenState(m_bIsFullscreen, NULL));
 
-	// 기존 RT 해제
-	for (UINT i = 0; i < FrameCount; ++i)
-	{
-		m_renderTargets[i].Reset();
-	}
-	m_rtvHeap.Reset();
+    // Release the old buffers
+    for (int i = 0; i < kFrameCount; ++i)
+        m_pd3dRenderTargetBuffers[i].Reset();
+    m_pd3dDepthStencilBuffer.Reset();
 
-	// 버퍼 리사이즈
-	CHECK_HR(m_swapChain->ResizeBuffers(
-		FrameCount,
-		m_width, m_height,
-		DXGI_FORMAT_R8G8B8A8_UNORM,
-		0));
+    DXGI_SWAP_CHAIN_DESC1 dxgiSwapChainDesc;
+    CHECK_HR(m_pdxgiSwapChain->GetDesc1(&dxgiSwapChainDesc));
 
-	m_frameIndex = m_swapChain->GetCurrentBackBufferIndex();
+    CHECK_HR(m_pdxgiSwapChain->ResizeBuffers(kFrameCount, 0, 0, dxgiSwapChainDesc.Format, dxgiSwapChainDesc.Flags));
 
-	// RTV 재생성
-	CreateRTVs();
+    m_nSwapChainBufferIndex = m_pdxgiSwapChain->GetCurrentBackBufferIndex();
 
-	// 뷰포트/시저 갱신
-	m_viewport.Width = static_cast<float>(m_width);
-	m_viewport.Height = static_cast<float>(m_height);
-	m_scissorRect.right = static_cast<LONG>(m_width);
-	m_scissorRect.bottom = static_cast<LONG>(m_height);
+    CreateRenderTargetViews();
+    CreateDepthStencilView();
+
+    DXGI_SWAP_CHAIN_DESC1 newDesc;
+    CHECK_HR(m_pdxgiSwapChain->GetDesc1(&newDesc));
+    m_nWndClientWidth = newDesc.Width;
+    m_nWndClientHeight = newDesc.Height;
 }
 
-void Dx12App::InitTime()
+void Dx12App::UpdateFrameRate()
 {
-	// 고해상도 타이머 초기화
-	QueryPerformanceFrequency(&m_qpcFreq);
-	QueryPerformanceCounter(&m_qpcPrev);
-
-	m_deltaTime = 0.0;
-	m_elapsedTime = 0.0;
-	m_frameCount = 0;
-	m_fps = 0.0;
-	m_fpsAccTime = 0.0;
-	m_fpsAccFrames = 0;
+    m_GameTimer.Tick(0.0f);
+    WCHAR text[256];
+    m_GameTimer.GetFrameRate(text, 256);
+    ::SetWindowText(m_hWnd, text);
 }
 
-void Dx12App::Tick()
+void Dx12App::FrameAdvance()
 {
-	// 최소화 등으로 인해 비정상적으로 큰 dt를 방지하기 위한 상한(예: 100ms)
-	const double MaxDelta = 0.1;
+    WaitForGpuComplete();
 
-	LARGE_INTEGER now{};
-	QueryPerformanceCounter(&now);
+    CHECK_HR(m_pd3dCommandAllocator->Reset());
+    CHECK_HR(m_pd3dCommandList->Reset(m_pd3dCommandAllocator.Get(), NULL));
 
-	const double dt = static_cast<double>(now.QuadPart - m_qpcPrev.QuadPart)
-		/ static_cast<double>(m_qpcFreq.QuadPart);
+    D3D12_RESOURCE_BARRIER d3dResourceBarrier;
+    d3dResourceBarrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    d3dResourceBarrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+    d3dResourceBarrier.Transition.pResource = m_pd3dRenderTargetBuffers[m_nSwapChainBufferIndex].Get();
+    d3dResourceBarrier.Transition.StateBefore = D3D12_RESOURCE_STATE_PRESENT;
+    d3dResourceBarrier.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
+    d3dResourceBarrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+    m_pd3dCommandList->ResourceBarrier(1, &d3dResourceBarrier);
 
-	m_qpcPrev = now;
+    D3D12_CPU_DESCRIPTOR_HANDLE d3dRtvCPUDescriptorHandle = m_pd3dRtvDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
+    d3dRtvCPUDescriptorHandle.ptr += (m_nSwapChainBufferIndex * m_nRtvDescriptorIncrementSize);
 
-	// 너무 큰 dt는 클램프 (일시정지/중단 후 급격한 튐 방지)
-	m_deltaTime = (dt > MaxDelta) ? MaxDelta : dt;
+    float pfClearColor[4] = { 0.0f, 0.125f, 0.3f, 1.0f };
+    m_pd3dCommandList->ClearRenderTargetView(d3dRtvCPUDescriptorHandle, pfClearColor, 0, NULL);
 
-	m_elapsedTime += m_deltaTime;
-	++m_frameCount;
+    D3D12_CPU_DESCRIPTOR_HANDLE d3dDsvCPUDescriptorHandle = m_pd3dDsvDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
+    m_pd3dCommandList->ClearDepthStencilView(d3dDsvCPUDescriptorHandle, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, NULL);
 
-	// FPS 집계 (1초 주기 평균)
-	m_fpsAccTime += m_deltaTime;
-	++m_fpsAccFrames;
-	if (m_fpsAccTime >= 1.0)
-	{
-		m_fps = static_cast<double>(m_fpsAccFrames) / m_fpsAccTime;
-		m_fpsAccTime = 0.0;
-		m_fpsAccFrames = 0;
+    d3dResourceBarrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
+    d3dResourceBarrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;
+    m_pd3dCommandList->ResourceBarrier(1, &d3dResourceBarrier);
 
-		if (m_showFpsInTitle && m_hWnd)
-		{
-			wchar_t title[256];
-			swprintf_s(title, L"gaym - %.1f FPS (dt=%.3f ms)", m_fps, m_deltaTime * 1000.0);
-			SetWindowTextW(m_hWnd, title);
-		}
-	}
+    CHECK_HR(m_pd3dCommandList->Close());
+    ID3D12CommandList* ppd3dCommandLists[] = { m_pd3dCommandList.Get() };
+    m_pd3dCommandQueue->ExecuteCommandLists(_countof(ppd3dCommandLists), ppd3dCommandLists);
+
+    CHECK_HR(m_pdxgiSwapChain->Present(1, 0));
+
+    m_nSwapChainBufferIndex = m_pdxgiSwapChain->GetCurrentBackBufferIndex();
+
+    UpdateFrameRate();
+}
+
+void Dx12App::OnResize(UINT nWidth, UINT nHeight)
+{
+    if ((m_nWndClientWidth == nWidth && m_nWndClientHeight == nHeight) || nWidth == 0 || nHeight == 0)
+    {
+        return;
+    }
+
+    WaitForGpuComplete();
+
+    m_nWndClientWidth = nWidth;
+    m_nWndClientHeight = nHeight;
+
+    for (int i = 0; i < kFrameCount; ++i)
+        m_pd3dRenderTargetBuffers[i].Reset();
+    m_pd3dDepthStencilBuffer.Reset();
+
+    CHECK_HR(m_pdxgiSwapChain->ResizeBuffers(kFrameCount, m_nWndClientWidth, m_nWndClientHeight, DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH));
+
+    m_nSwapChainBufferIndex = 0;
+
+    CreateRenderTargetViews();
+    CreateDepthStencilView();
 }
