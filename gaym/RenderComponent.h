@@ -1,11 +1,7 @@
 #pragma once
 #include "Component.h"
-
-struct Vertex
-{
-    XMFLOAT3 pos;
-    XMFLOAT4 color;
-};
+#include "Mesh.h"
+#include <memory>
 
 class RenderComponent : public Component
 {
@@ -17,17 +13,12 @@ public:
     virtual void Update(float deltaTime) override;
     virtual void Render(ID3D12GraphicsCommandList* pCommandList) override;
 
+    void SetMesh(std::shared_ptr<Mesh> pMesh) { m_pMesh = pMesh; }
+    std::shared_ptr<Mesh> GetMesh() { return m_pMesh; }
+
 private:
-    ComPtr<ID3D12Resource> m_pVertexBuffer;
-    ComPtr<ID3D12Resource> m_pIndexBuffer;
-    ComPtr<ID3D12Resource> m_pVertexUploadBuffer;
-    ComPtr<ID3D12Resource> m_pIndexUploadBuffer;
+    std::shared_ptr<Mesh> m_pMesh;
 
     ComPtr<ID3D12Resource> m_pConstantBuffer;
     void* m_pConstantBufferWO = nullptr;
-
-    D3D12_VERTEX_BUFFER_VIEW m_VertexBufferView;
-    D3D12_INDEX_BUFFER_VIEW m_IndexBufferView;
-
-    UINT m_nIndexCount;
 };

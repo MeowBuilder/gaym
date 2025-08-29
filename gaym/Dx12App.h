@@ -24,7 +24,7 @@ private:
     void CreateRtvAndDsvDescriptorHeaps();
     void CreateRenderTargetViews();
     void CreateDepthStencilView();
-    void CreatePipeline();
+    
     void WaitForGpuComplete();
     void UpdateFrameRate();
 
@@ -59,6 +59,6 @@ private:
 
     std::unique_ptr<Scene> m_pScene;
 
-    ComPtr<ID3D12PipelineState> m_pd3dPipelineState;
-    ComPtr<ID3D12RootSignature> m_pd3dRootSignature;
+    
+    
 };

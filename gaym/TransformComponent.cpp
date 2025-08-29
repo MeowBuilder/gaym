@@ -12,9 +12,6 @@ TransformComponent::TransformComponent(GameObject* pOwner)
 
 void TransformComponent::Update(float deltaTime)
 {
-    m_rotation.y += 90.f * deltaTime;
-    if (m_rotation.y > 360.f) m_rotation.y -= 360.f;
-
     XMMATRIX matScale = XMMatrixScaling(m_scale.x, m_scale.y, m_scale.z);
     XMMATRIX matRotation = XMMatrixRotationRollPitchYaw(XMConvertToRadians(m_rotation.x), XMConvertToRadians(m_rotation.y), XMConvertToRadians(m_rotation.z));
     XMMATRIX matTranslate = XMMatrixTranslation(m_position.x, m_position.y, m_position.z);
