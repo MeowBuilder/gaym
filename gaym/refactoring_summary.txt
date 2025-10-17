@@ -1,0 +1,75 @@
+## 리팩토링 요약: 3인칭 플레이어 및 카메라 구현
+
+**전체 목표:** 카메라 방향에 따라 상대적으로 움직이는 3인칭 플레이어 캐릭터와, 플레이어를 따라다니며 궤도를 도는 카메라 시스템을 구현합니다.
+
+**주요 아키텍처 결정:**
+*   **컴포넌트 기반 디자인:** 플레이어 기능에 대해 기존의 컴포넌트 기반 아키텍처를 고수합니다.
+*   **싱글톤이 아닌 InputSystem:** `InputSystem`은 일반 클래스로 설계되었으며, `Dx12App`이 관리하고 `CScene`에 의존성 주입으로 전달하여 전역 상태를 피합니다.
+*   **카메라 기준 플레이어 이동:** 플레이어 이동(WASD)은 카메라의 앞쪽 및 오른쪽 벡터를 기준으로 계산되어 직관적인 조작을 제공합니다.
+*   **관심사 분리:** 일반 `GameObject` 및 `Component` 업데이트는 `InputSystem*`를 직접 받지 않습니다. 오직 플레이어 관련 로직(`PlayerComponent::PlayerUpdate`)만이 `InputSystem` 및 `CCamera`와 상호 작용합니다.
+
+---
+
+### **1. 카메라 시스템 구현**
+
+*   **`Camera.h` & `Camera.cpp` 생성:**
+    *   카메라 위치, 회전, 뷰 및 투영 행렬을 관리하기 위해 `CCamera` 클래스를 생성했습니다.
+    *   초기 구현에는 `SetLens`, `Update`(마우스 입력 및 궤도 계산용), `UpdateViewMatrix`가 포함되었습니다.
+    *   **수정:** `Camera.h`의 전방 선언에서 `CGameObject`를 `GameObject`로 변경하여 유형 불일치 오류를 해결했습니다.
+    *   **개선:** `CCamera.h`에 `GetLookDirection()` 및 `GetRightDirection()` 메서드를 추가하고 `CCamera.cpp`에서 구현하여 뷰 행렬에서 카메라의 방향 벡터를 추출했습니다.
+
+### **2. 입력 시스템 구현**
+
+*   **`InputSystem.h` & `InputSystem.cpp` 생성:**
+    *   키보드(`IsKeyDown`, `OnKeyDown`, `OnKeyUp`) 및 마우스 입력(`OnMouseMove`, `OnMouseWheel`, `GetMouseDeltaX/Y`, `GetMouseWheelDelta`)을 캡처하고 관리하기 위해 `InputSystem` 클래스(싱글톤 아님)를 생성했습니다.
+    *   매 프레임마다 입력 델타를 지우는 `Reset()` 메서드를 포함합니다.
+
+### **3. Dx12App에 InputSystem 통합**
+
+*   **`Dx12App.h` 수정:**
+    *   `InputSystem.h`를 포함시켰습니다.
+    *   `InputSystem m_inputSystem;`을 private 멤버로 추가했습니다.
+    *   `InputSystem& GetInputSystem() { return m_inputSystem; }`을 public getter로 추가했습니다.
+*   **`gaym.cpp` 수정 (WndProc):**
+    *   전역 `WndProc` 함수를 수정하여 `WM_KEYDOWN`, `WM_KEYUP`, `WM_MOUSEMOVE`, `WM_MOUSEWHEEL` 메시지를 캡처하도록 했습니다.
+    *   이 메시지들은 이제 처리를 위해 `g_pDx12App->GetInputSystem().On...()` 메서드로 전달됩니다.
+*   **`Dx12App.cpp` 수정:**
+    *   다음 프레임을 위해 입력 델타를 지우기 위해 `Dx12App::FrameAdvance()` 끝에 `m_inputSystem.Reset();`을 추가했습니다.
+
+### **4. CScene에 카메라 및 InputSystem 통합**
+
+*   **`CScene.h` 수정:**
+    *   `Camera.h` 및 `InputSystem.h`를 포함시켰습니다.
+    *   `std::unique_ptr<CCamera> m_pCamera;`를 멤버로 추가했습니다.
+    *   `CCamera* GetCamera() const { return m_pCamera.get(); }`를 getter로 추가했습니다.
+    *   이전의 `XMFLOAT4X4 m_xmf4x4View` 및 `m_xmf4x4Projection` 멤버를 제거했습니다.
+    *   `void Update(float deltaTime);`를 `void Update(float deltaTime, InputSystem* pInputSystem);`으로 변경하여 씬의 업데이트 로직에 입력을 전달하도록 했습니다.
+    *   플레이어 객체에 대한 포인터를 저장하기 위해 `GameObject* m_pPlayerGameObject = nullptr;`를 추가했습니다.
+*   **`CScene.cpp` 수정:**
+    *   **생성자:** `m_pCamera = std::make_unique<CCamera>();`를 초기화했습니다.
+    *   **`Init()`:**
+        *   투영 행렬을 설정하기 위해 `m_pCamera->SetLens()`를 호출했습니다.
+        *   **플레이어 생성:** 플레이어를 위한 새 `GameObject`를 만들고, `RenderComponent`와 `PlayerComponent`를 추가한 다음, `m_pPlayerGameObject`에 할당했습니다.
+        *   카메라가 플레이어를 따라가도록 `m_pCamera->SetTarget(m_pPlayerGameObject);`를 설정했습니다.
+    *   **`Update()`:**
+        *   `pInputSystem`의 마우스 델타와 스크롤 델타로 `m_pCamera->Update()`를 호출했습니다.
+        *   `m_pCamera->GetViewMatrix()` 및 `m_pCamera->GetProjectionMatrix()`로 `PassConstants`를 업데이트했습니다.
+        *   **플레이어 업데이트:** 플레이어별 입력 및 이동을 처리하기 위해 `m_pPlayerGameObject->GetComponent<PlayerComponent>()->PlayerUpdate(deltaTime, pInputSystem, m_pCamera.get());`에 대한 특정 호출을 추가했습니다.
+*   **`Dx12App.cpp` 수정:**
+    *   `Dx12App::FrameAdvance()`에서 `m_pScene->Update()` 호출을 수정하여 `&m_inputSystem`을 전달하도록 했습니다.
+
+### **5. 플레이어 컴포넌트 및 이동 로직**
+
+*   **`Component.h` 복원:** 더 깔끔한 디자인을 위한 사용자 요청에 따라 `virtual void Update(float deltaTime, InputSystem* pInputSystem) {}`를 `virtual void Update(float deltaTime) {}`로 되돌렸습니다.
+*   **`GameObject.h` & `GameObject.cpp` 복원:** 모든 객체에 `InputSystem*`을 전달하지 않도록 `Update` 메서드 서명과 컴포넌트 업데이트 호출을 `Update(float deltaTime)`으로 되돌렸습니다.
+*   **`PlayerComponent.h` 수정:**
+    *   `class CCamera;` 전방 선언을 추가했습니다.
+    *   플레이어별 입력 기반 업데이트를 위해 `void PlayerUpdate(float deltaTime, InputSystem* pInputSystem, CCamera* pCamera);` 메서드를 추가했습니다.
+*   **`PlayerComponent.cpp` 구현:**
+    *   `PlayerUpdate` 메서드를 구현했습니다.
+    *   **카메라 기준 이동:** `pCamera->GetLookDirection()` 및 `pCamera->GetRightDirection()`을 사용하여 카메라 방향에 상대적인 이동 변위를 계산했습니다.
+    *   **수평 이동 제한:** 카메라의 `forward` 및 `right` 벡터의 Y 구성 요소를 0으로 만들고 다시 정규화하여 플레이어 이동이 X-Z 평면으로 제한되도록 했습니다.
+    *   마우스 X 입력을 기반으로 플레이어 회전(yaw)을 처리하고 플레이어의 `TransformComponent`에 적용했습니다.
+*   **`TransformComponent.h` & `TransformComponent.cpp` 수정:**
+    *   `TransformComponent.h`에 `XMVECTOR GetLook() const;`, `XMVECTOR GetRight() const;`, `XMVECTOR GetUp() const;` 메서드를 추가하고 `TransformComponent.cpp`에서 구현하여 월드 행렬에서 방향 벡터를 추출했습니다.
+    *   `TransformComponent.h`에 `void Rotate(float pitch, float yaw, float roll);` 메서드를 추가하고 `TransformComponent.cpp`에서 구현하여 오일러 각도를 업데이트하고 월드 행렬을 다시 빌드하도록 했습니다.

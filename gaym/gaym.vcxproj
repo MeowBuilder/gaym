@@ -137,12 +137,16 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="Camera.h" />
     <ClInclude Include="ColliderComponent.h" />
     <ClInclude Include="Component.h" />
+    <ClInclude Include="DescriptorHeap.h" />
     <ClInclude Include="Dx12App.h" />
     <ClInclude Include="GameObject.h" />
     <ClInclude Include="gaym.h" />
+    <ClInclude Include="InputSystem.h" />
     <ClInclude Include="Mesh.h" />
+    <ClInclude Include="PlayerComponent.h" />
     <ClInclude Include="RenderComponent.h" />
     <ClInclude Include="Resource.h" />
     <ClInclude Include="RotatorComponent.h" />
@@ -154,11 +158,15 @@
     <ClInclude Include="TransformComponent.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="Camera.cpp" />
     <ClCompile Include="ColliderComponent.cpp" />
+    <ClCompile Include="DescriptorHeap.cpp" />
     <ClCompile Include="Dx12App.cpp" />
     <ClCompile Include="GameObject.cpp" />
     <ClCompile Include="gaym.cpp" />
+    <ClCompile Include="InputSystem.cpp" />
     <ClCompile Include="Mesh.cpp" />
+    <ClCompile Include="PlayerComponent.cpp" />
     <ClCompile Include="RenderComponent.cpp" />
     <ClCompile Include="RotatorComponent.cpp" />
     <ClCompile Include="Scene.cpp" />

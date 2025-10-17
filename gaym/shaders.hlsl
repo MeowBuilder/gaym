@@ -1,6 +1,14 @@
-cbuffer cbMatrix : register(b0)
+// Per-Object Constant Buffer
+cbuffer cbGameObject : register(b0)
 {
-    matrix matWVP;
+    matrix World;
+    uint MaterialIndex;
+};
+
+// Per-Pass Constant Buffer
+cbuffer cbPass : register(b1)
+{
+    matrix ViewProj;
 };
 
 struct VS_INPUT
@@ -18,7 +26,10 @@ struct PS_INPUT
 PS_INPUT VS(VS_INPUT input)
 {
     PS_INPUT output;
-    output.position = mul(float4(input.position, 1.0f), matWVP);
+    // Transform the position from object space to clip space
+    output.position = mul(float4(input.position, 1.0f), World);
+    output.position = mul(output.position, ViewProj);
+
     output.color = input.color;
     return output;
 }
