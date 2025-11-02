@@ -4,6 +4,7 @@
 #include "TransformComponent.h"
 
 GameObject::GameObject()
+    : m_xmf4BaseColor(0.5f, 0.5f, 0.5f, 1.0f) // Default to gray
 {
     m_pTransform = AddComponent<TransformComponent>();
 }
@@ -34,7 +35,12 @@ void GameObject::Update(float deltaTime)
         XMMATRIX worldMatrix = XMLoadFloat4x4(&m_pTransform->GetWorldMatrix());
         XMStoreFloat4x4(&m_pcbMappedGameObject->m_xmf4x4World, XMMatrixTranspose(worldMatrix));
         m_pcbMappedGameObject->m_nMaterialIndex = m_nMaterialIndex;
+        m_pcbMappedGameObject->m_xmf4BaseColor = m_xmf4BaseColor;
     }
+
+    // Recurse for children and siblings
+    if (m_pChild) m_pChild->Update(deltaTime);
+    if (m_pSibling) m_pSibling->Update(deltaTime);
 }
 
 void GameObject::Render(ID3D12GraphicsCommandList* pCommandList)
@@ -46,6 +52,47 @@ void GameObject::Render(ID3D12GraphicsCommandList* pCommandList)
     {
         component->Render(pCommandList);
     }
+
+    if (m_pMesh) m_pMesh->Render(pCommandList, 0);
+
+	if (m_pSibling) m_pSibling->Render(pCommandList);
+	if (m_pChild) m_pChild->Render(pCommandList);
+}
+
+void GameObject::SetMesh(Mesh* pMesh)
+{
+	if (m_pMesh) m_pMesh->Release();
+	m_pMesh = pMesh;
+	if (m_pMesh) m_pMesh->AddRef();
+}
+
+void GameObject::SetChild(GameObject* pChild)
+{
+    if (pChild)
+    {
+        pChild->m_pParent = this;
+
+        if (m_pChild) // If this object already has a first child
+        {
+            // Find the last sibling in the current child list
+            GameObject* pSibling = m_pChild;
+            while (pSibling->m_pSibling)
+            {
+                pSibling = pSibling->m_pSibling;
+            }
+            // Add the new child as the next sibling
+            pSibling->m_pSibling = pChild;
+        }
+        else // This is the first child
+        {
+            m_pChild = pChild;
+        }
+    }
+}
+
+void GameObject::SetTransform(const XMFLOAT4X4& transform)
+{
+	GetTransform()->SetLocalMatrix(transform);
 }
 
 void GameObject::CreateConstantBuffer(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList, UINT nBufferSize, D3D12_CPU_DESCRIPTOR_HANDLE d3dCbvCPUDescriptorHandle)

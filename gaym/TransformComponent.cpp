@@ -1,5 +1,6 @@
 #include "stdafx.h"
 #include "TransformComponent.h"
+#include "GameObject.h" // Added for full GameObject definition
 
 TransformComponent::TransformComponent(GameObject* pOwner) 
     : Component(pOwner)
@@ -8,15 +9,30 @@ TransformComponent::TransformComponent(GameObject* pOwner)
     , m_scale(1.0f, 1.0f, 1.0f)
 {
     XMStoreFloat4x4(&m_matWorld, XMMatrixIdentity());
+    XMStoreFloat4x4(&m_matLocal, XMMatrixIdentity());
 }
 
 void TransformComponent::Update(float deltaTime)
 {
     XMMATRIX matScale = XMMatrixScaling(m_scale.x, m_scale.y, m_scale.z);
-    XMMATRIX matRotation = XMMatrixRotationRollPitchYaw(XMConvertToRadians(m_rotation.x), XMConvertToRadians(m_rotation.y), XMConvertToRadians(m_rotation.z));
+    XMMATRIX matRotation = XMMatrixRotationRollPitchYaw(XMConvertToRadians(m_rotation.x),
+        XMConvertToRadians(m_rotation.y), XMConvertToRadians(m_rotation.z));
     XMMATRIX matTranslate = XMMatrixTranslation(m_position.x, m_position.y, m_position.z);
+    XMMATRIX matLocal = XMLoadFloat4x4(&m_matLocal);
 
-    XMStoreFloat4x4(&m_matWorld, matScale * matRotation * matTranslate);
+    XMMATRIX matWorld = matScale * matRotation * matTranslate * matLocal;
+
+    // Get parent's world matrix and multiply it
+    if (m_pOwner && m_pOwner->m_pParent)
+    {
+        TransformComponent* pParentTransform = m_pOwner->m_pParent->GetTransform();
+        if (pParentTransform)
+        {
+            matWorld *= XMLoadFloat4x4(&pParentTransform->GetWorldMatrix());
+        }
+    }
+
+    XMStoreFloat4x4(&m_matWorld, matWorld);
 }
 
 XMVECTOR TransformComponent::GetLook() const

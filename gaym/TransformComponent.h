@@ -1,6 +1,8 @@
 #pragma once
 #include "Component.h"
-#include <DirectXMath.h> // Needed for XMVECTOR, XMFLOAT3, etc.
+#include <DirectXMath.h>
+
+class GameObject; // Forward declaration
 
 using namespace DirectX; // Added for convenience
 
@@ -36,8 +38,11 @@ public:
     // Rotation
     void Rotate(float pitch, float yaw, float roll);
 
+    void SetLocalMatrix(const XMFLOAT4X4& matLocal) { m_matLocal = matLocal; }
+
 private:
     XMFLOAT4X4 m_matWorld;
+    XMFLOAT4X4 m_matLocal;
     XMFLOAT3 m_position;
     XMFLOAT3 m_rotation; // Euler angles
     XMFLOAT3 m_scale;

@@ -1,8 +1,11 @@
 #include "stdafx.h"
 #include "Dx12App.h"
 
+Dx12App* Dx12App::s_pInstance = nullptr;
+
 Dx12App::Dx12App()
 {
+    s_pInstance = this;
     m_nWndClientWidth = kWindowWidth;
     m_nWndClientHeight = kWindowHeight;
     m_nSwapChainBufferIndex = 0;
@@ -299,4 +302,79 @@ void Dx12App::OnResize(UINT nWidth, UINT nHeight)
 
     CreateRenderTargetViews();
     CreateDepthStencilView();
+}
+
+ComPtr<ID3D12Resource> Dx12App::CreateBufferResource(const void* pData, UINT nBytes, D3D12_HEAP_TYPE d3dHeapType, D3D12_RESOURCE_STATES d3dResourceStates, ComPtr<ID3D12Resource>* ppd3dUploadBuffer)
+{
+    ComPtr<ID3D12Resource> pd3dBuffer;
+
+    D3D12_HEAP_PROPERTIES d3dHeapProperties;
+    ::ZeroMemory(&d3dHeapProperties, sizeof(D3D12_HEAP_PROPERTIES));
+    d3dHeapProperties.Type = d3dHeapType;
+    d3dHeapProperties.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
+    d3dHeapProperties.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
+    d3dHeapProperties.CreationNodeMask = 1;
+    d3dHeapProperties.VisibleNodeMask = 1;
+
+    D3D12_RESOURCE_DESC d3dResourceDesc;
+    ::ZeroMemory(&d3dResourceDesc, sizeof(D3D12_RESOURCE_DESC));
+    d3dResourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+    d3dResourceDesc.Alignment = 0;
+    d3dResourceDesc.Width = nBytes;
+    d3dResourceDesc.Height = 1;
+    d3dResourceDesc.DepthOrArraySize = 1;
+    d3dResourceDesc.MipLevels = 1;
+    d3dResourceDesc.Format = DXGI_FORMAT_UNKNOWN;
+    d3dResourceDesc.SampleDesc.Count = 1;
+    d3dResourceDesc.SampleDesc.Quality = 0;
+    d3dResourceDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+    d3dResourceDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
+
+    D3D12_RESOURCE_STATES d3dResourceInitialStates = D3D12_RESOURCE_STATE_COPY_DEST;
+    if (d3dHeapType == D3D12_HEAP_TYPE_UPLOAD) d3dResourceInitialStates = D3D12_RESOURCE_STATE_GENERIC_READ;
+
+    CHECK_HR(s_pInstance->m_pd3dDevice->CreateCommittedResource(&d3dHeapProperties, D3D12_HEAP_FLAG_NONE, &d3dResourceDesc, d3dResourceInitialStates, NULL, __uuidof(ID3D12Resource), (void**)&pd3dBuffer));
+
+    if (pData)
+    {
+        if (d3dHeapType == D3D12_HEAP_TYPE_UPLOAD)
+        {
+            D3D12_RANGE d3dRange = { 0, 0 };
+            UINT8* pBufferData = NULL;
+            CHECK_HR(pd3dBuffer->Map(0, &d3dRange, (void**)&pBufferData));
+            memcpy(pBufferData, pData, nBytes);
+            pd3dBuffer->Unmap(0, NULL);
+        }
+        else
+        {
+            D3D12_HEAP_PROPERTIES d3dUploadHeapProperties;
+            ::ZeroMemory(&d3dUploadHeapProperties, sizeof(D3D12_HEAP_PROPERTIES));
+            d3dUploadHeapProperties.Type = D3D12_HEAP_TYPE_UPLOAD;
+            d3dUploadHeapProperties.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
+            d3dUploadHeapProperties.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
+            d3dUploadHeapProperties.CreationNodeMask = 1;
+            d3dUploadHeapProperties.VisibleNodeMask = 1;
+
+            CHECK_HR(s_pInstance->m_pd3dDevice->CreateCommittedResource(&d3dUploadHeapProperties, D3D12_HEAP_FLAG_NONE, &d3dResourceDesc, D3D12_RESOURCE_STATE_GENERIC_READ, NULL, __uuidof(ID3D12Resource), (void**)ppd3dUploadBuffer));
+
+            D3D12_RANGE d3dRange = { 0, 0 };
+            UINT8* pBufferData = NULL;
+            CHECK_HR((*ppd3dUploadBuffer)->Map(0, &d3dRange, (void**)&pBufferData));
+            memcpy(pBufferData, pData, nBytes);
+            (*ppd3dUploadBuffer)->Unmap(0, NULL);
+
+            s_pInstance->m_pd3dCommandList->CopyResource(pd3dBuffer.Get(), (*ppd3dUploadBuffer).Get());
+
+            D3D12_RESOURCE_BARRIER d3dResourceBarrier;
+            ::ZeroMemory(&d3dResourceBarrier, sizeof(D3D12_RESOURCE_BARRIER));
+            d3dResourceBarrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+            d3dResourceBarrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+            d3dResourceBarrier.Transition.pResource = pd3dBuffer.Get();
+            d3dResourceBarrier.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
+            d3dResourceBarrier.Transition.StateAfter = d3dResourceStates;
+            d3dResourceBarrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+            s_pInstance->m_pd3dCommandList->ResourceBarrier(1, &d3dResourceBarrier);
+        }
+    }
+    return pd3dBuffer;
 }

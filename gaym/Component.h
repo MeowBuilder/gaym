@@ -16,7 +16,6 @@ public:
     virtual void Render(ID3D12GraphicsCommandList* pCommandList) {}
 
     GameObject* GetOwner() { return m_pOwner; }
-
 protected:
     GameObject* m_pOwner;
 };

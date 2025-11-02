@@ -24,13 +24,15 @@ public:
     ~Scene();
 
     void Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList);
+    void LoadSceneFromFile(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList, const char* pstrFileName);
     void Update(float deltaTime, InputSystem* pInputSystem);
     void Render(ID3D12GraphicsCommandList* pCommandList);
 
     CCamera* GetCamera() const { return m_pCamera.get(); } // Added getter for CCamera
 
-private:
     GameObject* CreateGameObject(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList);
+
+private:
 
     std::vector<std::unique_ptr<GameObject>> m_vGameObjects;
     std::vector<std::unique_ptr<Shader>> m_vShaders;
@@ -45,6 +47,8 @@ private:
     std::unique_ptr<CCamera> m_pCamera; // Added CCamera member
     GameObject* m_pPlayerGameObject = nullptr; // Added player GameObject pointer
 
+    void AddRenderComponentsToHierarchy(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList, GameObject* pGameObject, Shader* pShader);
+    void PrintHierarchy(GameObject* pGameObject, int nDepth);
 public:
     D3D12_GPU_VIRTUAL_ADDRESS GetPassCBVAddress() const { if(m_pd3dcbPass) return m_pd3dcbPass->GetGPUVirtualAddress(); return 0; }
 };

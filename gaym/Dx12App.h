@@ -10,6 +10,8 @@ public:
     Dx12App();
     ~Dx12App();
 
+    static Dx12App* GetInstance() { return s_pInstance; }
+
     void OnCreate(HINSTANCE hInstance, HWND hMainWnd);
     void OnDestroy();
     void FrameAdvance();
@@ -18,7 +20,11 @@ public:
 
     InputSystem& GetInputSystem() { return m_inputSystem; } // Added getter for InputSystem
 
+    static ComPtr<ID3D12Resource> CreateBufferResource(const void* pData, UINT nBytes, D3D12_HEAP_TYPE d3dHeapType = D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATES d3dResourceStates = D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER, ComPtr<ID3D12Resource>* ppd3dUploadBuffer = NULL);
+
 private:
+    static Dx12App* s_pInstance;
+
     void CreateDirect3DDevice();
     void CreateCommandQueueAndList();
     void CreateSwapChain(HINSTANCE hInstance, HWND hMainWnd);

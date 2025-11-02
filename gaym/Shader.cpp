@@ -46,7 +46,7 @@ void Shader::Build(ID3D12Device* pDevice)
     d3dRootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
     d3dRootParameters[0].DescriptorTable.NumDescriptorRanges = 1;
     d3dRootParameters[0].DescriptorTable.pDescriptorRanges = &d3dDescriptorRange;
-    d3dRootParameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
+    d3dRootParameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
 
     // Parameter 1: Root CBV for the per-pass constant buffer (b1)
     d3dRootParameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
@@ -76,8 +76,7 @@ void Shader::Build(ID3D12Device* pDevice)
 
     D3D12_INPUT_ELEMENT_DESC inputElementDescs[] =
     {
-        { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-        { "COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
+        { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
     };
 
     D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};

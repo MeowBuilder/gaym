@@ -30,11 +30,5 @@ void RenderComponent::Render(ID3D12GraphicsCommandList* pCommandList)
     // Set the per-object descriptor table to root parameter 0
     pCommandList->SetGraphicsRootDescriptorTable(0, m_pOwner->GetGpuDescriptorHandle());
 
-    pCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-    
-    const auto& vbv = m_pMesh->GetVertexBufferView();
-    const auto& ibv = m_pMesh->GetIndexBufferView();
-    pCommandList->IASetVertexBuffers(0, 1, &vbv);
-    pCommandList->IASetIndexBuffer(&ibv);
-    pCommandList->DrawIndexedInstanced(m_pMesh->GetIndexCount(), 1, 0, 0, 0);
+    m_pMesh->Render(pCommandList, 0);
 }

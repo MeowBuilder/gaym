@@ -1,0 +1,96 @@
+
+#pragma once
+
+
+
+#include "GameObject.h"
+
+#include "Mesh.h"
+
+
+
+class Scene; // Forward declaration
+
+
+
+class MeshLoadInfo
+
+{
+
+public:
+
+    MeshLoadInfo() { }
+
+    ~MeshLoadInfo();
+
+
+
+public:
+
+    char                            m_pstrMeshName[256] = { 0 };
+
+
+
+    UINT                            m_nType = 0x00;
+
+
+
+    XMFLOAT3                        m_xmf3AABBCenter = XMFLOAT3(0.0f, 0.0f, 0.0f);
+
+    XMFLOAT3                        m_xmf3AABBExtents = XMFLOAT3(0.0f, 0.0f, 0.0f);
+
+
+
+    int                             m_nVertices = 0;
+
+    XMFLOAT3* m_pxmf3Positions = NULL;
+
+    XMFLOAT4* m_pxmf4Colors = NULL;
+
+    XMFLOAT3* m_pxmf3Normals = NULL;
+
+
+
+    int                             m_nIndices = 0;
+
+    UINT* m_pnIndices = NULL;
+
+
+
+    int                             m_nSubMeshes = 0;
+
+    int* m_pnSubSetIndices = NULL;
+
+    UINT** m_ppnSubSetIndices = NULL;
+
+};
+
+
+
+class MeshLoader
+
+{
+
+public:
+
+    static GameObject* LoadGeometryFromFile(Scene* pScene, ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature, const char* pstrFileName);
+
+
+
+private:
+
+
+
+    static GameObject* LoadFrameHierarchyFromFile(Scene* pScene, ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature, FILE* pInFile);
+
+
+
+    static MeshLoadInfo* LoadMeshInfoFromFile(FILE* pInFile);
+
+
+
+    static void LoadMaterialsInfoFromFile(FILE* pInFile);
+
+};
+
+

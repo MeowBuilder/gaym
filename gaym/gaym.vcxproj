@@ -146,6 +146,7 @@
     <ClInclude Include="gaym.h" />
     <ClInclude Include="InputSystem.h" />
     <ClInclude Include="Mesh.h" />
+    <ClInclude Include="MeshLoader.h" />
     <ClInclude Include="PlayerComponent.h" />
     <ClInclude Include="RenderComponent.h" />
     <ClInclude Include="Resource.h" />
@@ -166,6 +167,7 @@
     <ClCompile Include="gaym.cpp" />
     <ClCompile Include="InputSystem.cpp" />
     <ClCompile Include="Mesh.cpp" />
+    <ClCompile Include="MeshLoader.cpp" />
     <ClCompile Include="PlayerComponent.cpp" />
     <ClCompile Include="RenderComponent.cpp" />
     <ClCompile Include="RotatorComponent.cpp" />

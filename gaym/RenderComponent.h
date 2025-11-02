@@ -13,9 +13,9 @@ public:
     virtual void Update(float deltaTime) override;
     virtual void Render(ID3D12GraphicsCommandList* pCommandList) override;
 
-    void SetMesh(std::shared_ptr<Mesh> pMesh) { m_pMesh = pMesh; }
-    std::shared_ptr<Mesh> GetMesh() { return m_pMesh; }
+    void SetMesh(Mesh* pMesh) { m_pMesh = pMesh; }
+    Mesh* GetMesh() { return m_pMesh; }
 
 private:
-    std::shared_ptr<Mesh> m_pMesh;
+    Mesh* m_pMesh = nullptr;
 };

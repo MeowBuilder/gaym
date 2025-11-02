@@ -18,6 +18,8 @@ Scene::~Scene()
     if (m_pd3dcbPass) m_pd3dcbPass->Unmap(0, NULL);
 }
 
+#include "MeshLoader.h"
+
 void Scene::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList)
 {
     // Create Descriptor Heap
@@ -32,50 +34,57 @@ void Scene::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList)
     // Set up camera projection
     m_pCamera->SetLens(XMConvertToRadians(60.0f), (float)kWindowWidth / (float)kWindowHeight, 0.1f, 100.0f);
 
-    // Temporarily set the first cube as the camera target for testing
-    // This will be replaced with the player GameObject later
-    if (!m_vGameObjects.empty())
-    {
-        m_pCamera->SetTarget(m_vGameObjects[0].get());
-    }
-
-
     // Create Shader
     auto pShader = std::make_unique<Shader>();
     pShader->Build(pDevice);
 
-    // Create Mesh
-    auto pCubeMesh = std::make_shared<Mesh>();
-    pCubeMesh->BuildCube(pDevice, pCommandList);
-
-    // --- Create GameObjects and add Components ---
-
     // Player GameObject
     GameObject* pPlayer = CreateGameObject(pDevice, pCommandList);
-    pPlayer->GetTransform()->SetPosition(0.0f, 0.0f, 0.0f);
-    pPlayer->AddComponent<RenderComponent>()->SetMesh(pCubeMesh);
+    m_vGameObjects.push_back(std::unique_ptr<GameObject>(pPlayer));
+    pPlayer->GetTransform()->SetPosition(0.0f, 0.0f, 20.0f);
     pPlayer->AddComponent<PlayerComponent>();
     m_pPlayerGameObject = pPlayer;
-    pShader->AddRenderComponent(pPlayer->GetComponent<RenderComponent>());
+
+    // Load Apache model for the player
+    GameObject* pPlayerModel = MeshLoader::LoadGeometryFromFile(this, pDevice, pCommandList, NULL, "Model/Apache.bin");
+    if (pPlayerModel)
+    { 
+        OutputDebugString(L"Model loaded successfully!\n");
+        pPlayer->SetChild(pPlayerModel);
+        AddRenderComponentsToHierarchy(pDevice, pCommandList, pPlayerModel, pShader.get());
+    }
+    else
+    {
+        OutputDebugString(L"Failed to load model!\n");
+    }
 
     // Set camera target to player
     m_pCamera->SetTarget(m_pPlayerGameObject);
 
-    // Cube 1 (Rotates, has a collider)
-    GameObject* pCube1 = CreateGameObject(pDevice, pCommandList);
-    pCube1->GetTransform()->SetPosition(-1.5f, 0.0f, 0.0f);
-    pCube1->AddComponent<RenderComponent>()->SetMesh(pCubeMesh);
-    pCube1->AddComponent<RotatorComponent>(); // Add rotator
-    pCube1->AddComponent<ColliderComponent>(); // Add collider
-    pShader->AddRenderComponent(pCube1->GetComponent<RenderComponent>());
+    // Add two static Apache models for testing
+    {
+        GameObject* pStaticApache1 = CreateGameObject(pDevice, pCommandList);
+        m_vGameObjects.push_back(std::unique_ptr<GameObject>(pStaticApache1));
+        pStaticApache1->GetTransform()->SetPosition(-30.0f, 0.0f, 0.0f);
+        GameObject* pStaticModel1 = MeshLoader::LoadGeometryFromFile(this, pDevice, pCommandList, NULL, "Model/Apache.bin");
+        if (pStaticModel1)
+        {
+            pStaticApache1->SetChild(pStaticModel1);
+            AddRenderComponentsToHierarchy(pDevice, pCommandList, pStaticModel1, pShader.get());
+        }
 
-    // Cube 2 (Stays still, has a collider)
-    GameObject* pCube2 = CreateGameObject(pDevice, pCommandList);
-    pCube2->GetTransform()->SetPosition(3.5f, 0.0f, 0.0f);
-    pCube2->AddComponent<RenderComponent>()->SetMesh(pCubeMesh);
-    pCube2->AddComponent<ColliderComponent>(); // Add collider
-    pCube2->AddComponent<RotatorComponent>();
-    pShader->AddRenderComponent(pCube2->GetComponent<RenderComponent>());
+        GameObject* pStaticApache2 = CreateGameObject(pDevice, pCommandList);
+        m_vGameObjects.push_back(std::unique_ptr<GameObject>(pStaticApache2));
+        pStaticApache2->GetTransform()->SetPosition(30.0f, 0.0f, 0.0f);
+        GameObject* pStaticModel2 = MeshLoader::LoadGeometryFromFile(this, pDevice, pCommandList, NULL, "Model/Apache.bin");
+        if (pStaticModel2)
+        {
+            pStaticApache2->SetChild(pStaticModel2);
+            AddRenderComponentsToHierarchy(pDevice, pCommandList, pStaticModel2, pShader.get());
+        }
+    }
+
+    // Store the shader
 
     // Store the shader
     m_vShaders.push_back(std::move(pShader));
@@ -92,6 +101,39 @@ void Scene::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList)
     {
         m_pCamera->SetTarget(m_vGameObjects[0].get());
     }
+}
+
+void Scene::LoadSceneFromFile(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList, const char* pstrFileName)
+{
+    // This function is now primarily for loading other scene elements, not the player.
+    // The player is loaded directly in Init.
+    // If we want to load other objects, we can use this.
+    // For now, it's empty as the player is handled separately.
+}
+
+void Scene::AddRenderComponentsToHierarchy(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList,
+	GameObject* pGameObject, Shader* pShader)
+{
+	if (!pGameObject)
+	{
+		OutputDebugString(L"AddRenderComponentsToHierarchy called with a NULL game object!\n");
+		return;
+	}
+
+	if (pGameObject->GetMesh())
+	{
+		pGameObject->AddComponent<RenderComponent>()->SetMesh(pGameObject->GetMesh());
+		pShader->AddRenderComponent(pGameObject->GetComponent<RenderComponent>());
+	}
+
+	if (pGameObject->m_pChild)
+	{
+		AddRenderComponentsToHierarchy(pDevice, pCommandList, pGameObject->m_pChild, pShader);
+	}
+	if (pGameObject->m_pSibling)
+	{
+		AddRenderComponentsToHierarchy(pDevice, pCommandList, pGameObject->m_pSibling, pShader);
+	}
 }
 
 void Scene::Update(float deltaTime, InputSystem* pInputSystem)
@@ -139,20 +181,47 @@ void Scene::Render(ID3D12GraphicsCommandList* pCommandList)
 
 GameObject* Scene::CreateGameObject(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList)
 {
-    auto newGameObject = std::make_unique<GameObject>();
-    GameObject* rawPtr = newGameObject.get();
+    GameObject* newGameObject = new GameObject();
 
     // Create the constant buffer and its view
     D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle = m_pDescriptorHeap->GetCPUHandle(m_nNextDescriptorIndex);
-    rawPtr->CreateConstantBuffer(pDevice, pCommandList, sizeof(ObjectConstants), cpuHandle);
+    newGameObject->CreateConstantBuffer(pDevice, pCommandList, sizeof(ObjectConstants), cpuHandle);
 
     // Set the GPU handle for rendering
     D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle = m_pDescriptorHeap->GetGPUHandle(m_nNextDescriptorIndex);
-    rawPtr->SetGpuDescriptorHandle(gpuHandle);
+    newGameObject->SetGpuDescriptorHandle(gpuHandle);
 
     // Increment for the next object
     m_nNextDescriptorIndex++;
 
-    m_vGameObjects.push_back(std::move(newGameObject));
-    return rawPtr;
+    return newGameObject;
+}
+
+void Scene::PrintHierarchy(GameObject* pGameObject, int nDepth)
+{
+	if (!pGameObject) return;
+
+	// Indent for hierarchy visualization
+	std::wstring indent(nDepth * 2, ' ');
+
+	// Prepare debug string
+	wchar_t buffer[256];
+	swprintf_s(buffer, 256, L"%sFrame: %hs, Has Mesh: %s, Has RenderComponent: %s\n",
+		indent.c_str(),
+		pGameObject->m_pstrFrameName,
+		pGameObject->GetMesh() ? L"Yes" : L"No",
+		pGameObject->GetComponent<RenderComponent>() ? L"Yes" : L"No"
+	);
+
+	OutputDebugString(buffer);
+
+	// Recurse for children and siblings
+	if (pGameObject->m_pChild)
+	{
+		PrintHierarchy(pGameObject->m_pChild, nDepth + 1);
+	}
+	if (pGameObject->m_pSibling)
+	{
+		PrintHierarchy(pGameObject->m_pSibling, nDepth);
+	}
 }

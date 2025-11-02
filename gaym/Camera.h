@@ -45,9 +45,9 @@ private:
     DirectX::XMFLOAT3 m_lookAtOffset = { 0.0f, 1.0f, 0.0f };
 
     // Camera orbit parameters
-    float m_distance = 10.0f;
+    float m_distance = 50.0f;
     float m_minDistance = 2.0f;
-    float m_maxDistance = 20.0f;
+    float m_maxDistance = 100.0f;
     float m_pitch = 20.0f; // Angle in degrees
     float m_yaw = 0.0f;   // Angle in degrees
 
