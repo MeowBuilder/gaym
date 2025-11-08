@@ -23,6 +23,9 @@ public:
     const DirectX::XMFLOAT4X4& GetViewMatrix() const { return m_viewMatrix; }
     const DirectX::XMFLOAT4X4& GetProjectionMatrix() const { return m_projectionMatrix; }
 
+    // Get camera position
+    DirectX::XMFLOAT3 GetPosition() const { return m_position; }
+
     // Camera direction vectors
     DirectX::XMVECTOR GetLookDirection() const;
     DirectX::XMVECTOR GetRightDirection() const;

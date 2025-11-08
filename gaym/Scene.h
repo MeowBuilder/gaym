@@ -15,6 +15,13 @@ struct ID3D12GraphicsCommandList;
 struct PassConstants
 {
     XMFLOAT4X4 m_xmf4x4ViewProj;
+    XMFLOAT4 m_xmf4LightColor;
+    XMFLOAT3 m_xmf3LightDirection; float m_fPad0;
+    XMFLOAT4 m_xmf4PointLightColor;
+    XMFLOAT3 m_xmf3PointLightPosition; float m_fPad1;
+    float m_fPointLightRange; float m_fPad2; float m_fPad3; float m_fPad4;
+    XMFLOAT4 m_xmf4AmbientLight;
+    XMFLOAT3 m_xmf3CameraPosition; float m_fPadCam; // Camera World Position
 };
 
 class Scene

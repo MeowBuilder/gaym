@@ -10,6 +10,14 @@ class Component;                   // 전방 선언
 class TransformComponent;          // 전방 선언
 class InputSystem;                 // 전방 선언 for InputSystem
 
+struct MATERIAL
+{
+    XMFLOAT4 m_cAmbient;
+    XMFLOAT4 m_cDiffuse;
+    XMFLOAT4 m_cSpecular; // a = power
+    XMFLOAT4 m_cEmissive;
+};
+
 struct ObjectConstants
 {
 	XMFLOAT4X4 m_xmf4x4World;
@@ -17,7 +25,7 @@ struct ObjectConstants
     float pad1; // 4 bytes
     float pad2; // 4 bytes
     float pad3; // 4 bytes
-	XMFLOAT4 m_xmf4BaseColor;
+	MATERIAL mMaterial;
 };
 
 
@@ -47,7 +55,7 @@ public:
 	void SetChild(GameObject* pChild);
 	void SetTransform(const XMFLOAT4X4& transform);
 
-	void SetBaseColor(XMFLOAT4 color) { m_xmf4BaseColor = color; }
+	void SetMaterial(const MATERIAL& material); // New method for setting material
 
 public:
 	char			m_pstrFrameName[64];
@@ -64,9 +72,8 @@ private:
 	ObjectConstants* m_pcbMappedGameObject = nullptr;
 	D3D12_GPU_DESCRIPTOR_HANDLE m_cbvGPUDescriptorHandle;
 	UINT m_nMaterialIndex = 0;
-	XMFLOAT4 m_xmf4BaseColor = XMFLOAT4(0.5f, 0.5f, 0.5f, 1.0f); // Default to gray
-
-	Mesh* m_pMesh = nullptr;
+	MATERIAL m_Material; // New material member
+	Mesh* m_pMesh = nullptr; // Re-added m_pMesh member
 };
 
 #include "GameObject.inl"

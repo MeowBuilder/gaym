@@ -32,7 +32,7 @@ void Scene::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList)
     m_pd3dcbPass->Map(0, NULL, (void**)&m_pcbMappedPass);
 
     // Set up camera projection
-    m_pCamera->SetLens(XMConvertToRadians(60.0f), (float)kWindowWidth / (float)kWindowHeight, 0.1f, 100.0f);
+    m_pCamera->SetLens(XMConvertToRadians(60.0f), (float)kWindowWidth / (float)kWindowHeight, 0.1f, 500.0f);
 
     // Create Shader
     auto pShader = std::make_unique<Shader>();
@@ -46,7 +46,7 @@ void Scene::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList)
     m_pPlayerGameObject = pPlayer;
 
     // Load Apache model for the player
-    GameObject* pPlayerModel = MeshLoader::LoadGeometryFromFile(this, pDevice, pCommandList, NULL, "Model/Apache.bin");
+    GameObject* pPlayerModel = MeshLoader::LoadGeometryFromFile(this, pDevice, pCommandList, NULL, "Model/M26.bin");
     if (pPlayerModel)
     { 
         OutputDebugString(L"Model loaded successfully!\n");
@@ -149,6 +149,29 @@ void Scene::Update(float deltaTime, InputSystem* pInputSystem)
     XMMATRIX mProjection = XMLoadFloat4x4(&m_pCamera->GetProjectionMatrix());
     XMMATRIX mViewProj = mView * mProjection;
     XMStoreFloat4x4(&m_pcbMappedPass->m_xmf4x4ViewProj, XMMatrixTranspose(mViewProj));
+
+    // Set lighting parameters for a more realistic look
+    m_pcbMappedPass->m_xmf4LightColor = XMFLOAT4(0.9f, 0.85f, 0.75f, 1.0f); // Slightly warm white directional light (sun)
+    XMVECTOR lightDir = XMVector3Normalize(XMVectorSet(-0.5f, -1.0f, 0.5f, 0.0f)); // Sun angle
+    XMStoreFloat3(&m_pcbMappedPass->m_xmf3LightDirection, lightDir);
+    m_pcbMappedPass->m_fPad0 = 0.0f; // Padding for directional light
+
+    m_pcbMappedPass->m_xmf4PointLightColor = XMFLOAT4(0.7f, 0.5f, 0.3f, 1.0f); // Subtle warm point light
+    m_pcbMappedPass->m_xmf3PointLightPosition = XMFLOAT3(10.0f, 5.0f, -10.0f); // Off to the side
+    m_pcbMappedPass->m_fPad1 = 0.0f; // Padding for point light position
+
+    m_pcbMappedPass->m_fPointLightRange = 50.0f; // Smaller range
+    m_pcbMappedPass->m_fPad2 = 0.0f; // Padding
+    m_pcbMappedPass->m_fPad3 = 0.0f; // Padding
+    m_pcbMappedPass->m_fPad4 = 0.0f; // Padding
+
+    m_pcbMappedPass->m_xmf4AmbientLight = XMFLOAT4(0.05f, 0.07f, 0.1f, 1.0f); // Darker, slightly bluish ambient (indirect sky light)
+
+    // Set Camera Position for Specular Calculation
+    XMFLOAT3 cameraPosition = m_pCamera->GetPosition();
+    m_pcbMappedPass->m_xmf3CameraPosition = cameraPosition;
+    m_pcbMappedPass->m_fPadCam = 0.0f; // Padding
+
 
     // 1. Update all components (e.g., rotator, transform)
     for (auto& gameObject : m_vGameObjects)

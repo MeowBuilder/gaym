@@ -4,7 +4,10 @@
 #include "TransformComponent.h"
 
 GameObject::GameObject()
-    : m_xmf4BaseColor(0.5f, 0.5f, 0.5f, 1.0f) // Default to gray
+    : m_Material({XMFLOAT4(0.1f, 0.1f, 0.1f, 1.0f), // Ambient
+                  XMFLOAT4(0.7f, 0.7f, 0.7f, 1.0f), // Diffuse
+                  XMFLOAT4(1.0f, 1.0f, 1.0f, 10.0f), // Specular (power 10.0f in alpha)
+                  XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f)}) // Emissive
 {
     m_pTransform = AddComponent<TransformComponent>();
 }
@@ -35,7 +38,7 @@ void GameObject::Update(float deltaTime)
         XMMATRIX worldMatrix = XMLoadFloat4x4(&m_pTransform->GetWorldMatrix());
         XMStoreFloat4x4(&m_pcbMappedGameObject->m_xmf4x4World, XMMatrixTranspose(worldMatrix));
         m_pcbMappedGameObject->m_nMaterialIndex = m_nMaterialIndex;
-        m_pcbMappedGameObject->m_xmf4BaseColor = m_xmf4BaseColor;
+        m_pcbMappedGameObject->mMaterial = m_Material; // Copy the new material struct
     }
 
     // Recurse for children and siblings
@@ -93,6 +96,11 @@ void GameObject::SetChild(GameObject* pChild)
 void GameObject::SetTransform(const XMFLOAT4X4& transform)
 {
 	GetTransform()->SetLocalMatrix(transform);
+}
+
+void GameObject::SetMaterial(const MATERIAL& material)
+{
+    m_Material = material;
 }
 
 void GameObject::CreateConstantBuffer(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList, UINT nBufferSize, D3D12_CPU_DESCRIPTOR_HANDLE d3dCbvCPUDescriptorHandle)
