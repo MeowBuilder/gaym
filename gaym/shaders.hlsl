@@ -26,6 +26,12 @@ cbuffer cbPass : register(b1)
     float g_PointLightRange; float pad2; float pad3; float pad4; // Point Light Range and padding
     float4 g_AmbientLight; // Ambient Light Color
     float3 g_CameraPosition; float pad_cam; // Camera World Position for specular
+
+    // SpotLight
+    float4 g_SpotLightColor;
+    float3 g_SpotLightPosition; float g_SpotLightRange;
+    float3 g_SpotLightDirection; float g_SpotLightInnerCone;
+    float g_SpotLightOuterCone; float pad5; float pad6; float pad7;
 };
 
 struct VS_INPUT
@@ -91,5 +97,33 @@ float4 PS(PS_INPUT input) : SV_TARGET
     float4 ambient = g_AmbientLight * gMaterial.m_cAmbient;
     
     // Final color is the sum of all light components + emissive
-    return directionalTotal + pointTotal + ambient + gMaterial.m_cEmissive;
+    float4 finalColor = directionalTotal + pointTotal + ambient + gMaterial.m_cEmissive;
+
+    // --- Spot Light Calculation ---
+    float3 spotLightVec = g_SpotLightPosition - input.worldPosition;
+    float spotDist = length(spotLightVec);
+    float3 spotLightDir = normalize(spotLightVec);
+
+    // Distance attenuation
+    float spotAttenuation = saturate(1.0f - spotDist / g_SpotLightRange);
+
+    // Cone attenuation
+    float cosTheta = dot(-spotLightDir, normalize(g_SpotLightDirection));
+    float coneAttenuation = saturate((cosTheta - g_SpotLightOuterCone) / (g_SpotLightInnerCone - g_SpotLightOuterCone));
+
+    spotAttenuation *= coneAttenuation;
+
+    if (spotAttenuation > 0.0f)
+    {
+        float spotDiffuseFactor = saturate(dot(normal, spotLightDir));
+        float3 vHalfSpot = normalize(vToCamera + spotLightDir);
+        float spotSpecularFactor = pow(max(dot(vHalfSpot, normal), 0.0f), gMaterial.m_cSpecular.a);
+
+        float4 spotDiffuse = spotDiffuseFactor * g_SpotLightColor * gMaterial.m_cDiffuse * spotAttenuation;
+        float4 spotSpecular = spotSpecularFactor * g_SpotLightColor * gMaterial.m_cSpecular * spotAttenuation;
+        float4 spotTotal = spotDiffuse + spotSpecular;
+        finalColor += spotTotal;
+    }
+
+    return finalColor;
 }

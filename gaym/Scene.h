@@ -12,6 +12,14 @@
 struct ID3D12Device;
 struct ID3D12GraphicsCommandList;
 
+struct SpotLight
+{
+    XMFLOAT4 m_xmf4SpotLightColor;
+    XMFLOAT3 m_xmf3SpotLightPosition; float m_fSpotLightRange;
+    XMFLOAT3 m_xmf3SpotLightDirection; float m_fSpotLightInnerCone;
+    float m_fSpotLightOuterCone; float m_fPad5; float m_fPad6; float m_fPad7;
+};
+
 struct PassConstants
 {
     XMFLOAT4X4 m_xmf4x4ViewProj;
@@ -22,6 +30,7 @@ struct PassConstants
     float m_fPointLightRange; float m_fPad2; float m_fPad3; float m_fPad4;
     XMFLOAT4 m_xmf4AmbientLight;
     XMFLOAT3 m_xmf3CameraPosition; float m_fPadCam; // Camera World Position
+    SpotLight m_SpotLight;
 };
 
 class Scene

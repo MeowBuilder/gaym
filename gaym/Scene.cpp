@@ -101,6 +101,14 @@ void Scene::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList)
     {
         m_pCamera->SetTarget(m_vGameObjects[0].get());
     }
+
+    // Initialize SpotLight parameters
+    m_pcbMappedPass->m_SpotLight.m_xmf4SpotLightColor = XMFLOAT4(0.5f, 0.0f, 0.0f, 1.0f); // Red spotlight
+    m_pcbMappedPass->m_SpotLight.m_fSpotLightRange = 100.0f;
+    m_pcbMappedPass->m_SpotLight.m_fSpotLightInnerCone = cosf(XMConvertToRadians(20.0f)); // Inner cone angle
+    m_pcbMappedPass->m_SpotLight.m_fSpotLightOuterCone = cosf(XMConvertToRadians(30.0f)); // Outer cone angle
+    m_pcbMappedPass->m_SpotLight.m_fPad5 = 0.0f;
+    m_pcbMappedPass->m_SpotLight.m_fPad6 = 0.0f;
 }
 
 void Scene::LoadSceneFromFile(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList, const char* pstrFileName)
@@ -171,6 +179,23 @@ void Scene::Update(float deltaTime, InputSystem* pInputSystem)
     XMFLOAT3 cameraPosition = m_pCamera->GetPosition();
     m_pcbMappedPass->m_xmf3CameraPosition = cameraPosition;
     m_pcbMappedPass->m_fPadCam = 0.0f; // Padding
+
+    // Update SpotLight parameters based on player position
+    if (m_pPlayerGameObject)
+    {
+        XMFLOAT3 playerPosition = m_pPlayerGameObject->GetTransform()->GetPosition();
+        XMVECTOR playerForward = m_pPlayerGameObject->GetTransform()->GetLook();
+        XMVECTOR spotlightOffset = XMVectorScale(playerForward, 5.0f); // 5 units in front of the player
+        XMVECTOR spotlightPosition = XMLoadFloat3(&playerPosition) + spotlightOffset;
+        XMStoreFloat3(&m_pcbMappedPass->m_SpotLight.m_xmf3SpotLightPosition, spotlightPosition);
+    }
+    else
+    {
+        // Fallback to camera position if player not available
+        m_pcbMappedPass->m_SpotLight.m_xmf3SpotLightPosition = cameraPosition;
+    }
+    XMVECTOR look = m_pCamera->GetLookDirection();
+    XMStoreFloat3(&m_pcbMappedPass->m_SpotLight.m_xmf3SpotLightDirection, look);
 
 
     // 1. Update all components (e.g., rotator, transform)
