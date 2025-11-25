@@ -25,6 +25,7 @@ public:
     float GetMouseDeltaX() const { return m_mouseDeltaX; }
     float GetMouseDeltaY() const { return m_mouseDeltaY; }
     float GetMouseWheelDelta() const { return m_mouseWheelDelta; }
+    DirectX::XMFLOAT2 GetMousePosition() const { return DirectX::XMFLOAT2((float)m_mouseX, (float)m_mouseY); }
 
 private:
     bool m_keyState[MAX_KEYS];

@@ -1,4 +1,4 @@
-#include "stdafx.h"
+﻿#include "stdafx.h"
 #include "PlayerComponent.h"
 #include "InputSystem.h" // Needed for InputSystem
 #include "GameObject.h" // Needed for GameObject
@@ -17,22 +17,62 @@ void PlayerComponent::PlayerUpdate(float deltaTime, InputSystem* pInputSystem, C
     TransformComponent* pTransform = m_pOwner->GetTransform();
     if (!pTransform) return;
 
-    // Movement speed
-    float moveSpeed = 5.0f; // Units per second
-    float rotationSpeed = 90.0f; // Degrees per second
+    // --- Aim-at-cursor Rotation Logic ---
 
-    // Get current forward and right vectors from camera
-    XMVECTOR forward = pCamera->GetLookDirection();
-    XMVECTOR right = pCamera->GetRightDirection();
+    // 1. Get mouse position in screen space
+    XMFLOAT2 mousePos = pInputSystem->GetMousePosition();
 
-    // Zero out Y component and re-normalize for horizontal movement
-    forward = XMVectorSetY(forward, 0.0f);
-    forward = XMVector3Normalize(forward);
+    // 2. Convert to Normalized Device Coordinates (NDC)
+    float ndcX = (2.0f * mousePos.x / kWindowWidth) - 1.0f;
+    float ndcY = 1.0f - (2.0f * mousePos.y / kWindowHeight);
 
-    right = XMVectorSetY(right, 0.0f);
-    right = XMVector3Normalize(right);
+    // 3. Unproject from NDC to World Space to form a ray
+    XMMATRIX viewMatrix = XMLoadFloat4x4(&pCamera->GetViewMatrix());
+    XMMATRIX projMatrix = XMLoadFloat4x4(&pCamera->GetProjectionMatrix());
+    XMMATRIX viewProjMatrix = viewMatrix * projMatrix;
+    XMMATRIX invViewProjMatrix = XMMatrixInverse(nullptr, viewProjMatrix);
 
-    XMVECTOR up = pTransform->GetUp(); // Assuming Y is up
+    XMVECTOR rayOrigin = XMVector3TransformCoord(XMVectorSet(ndcX, ndcY, 0.0f, 1.0f), invViewProjMatrix); // Near plane
+    XMVECTOR rayEnd = XMVector3TransformCoord(XMVectorSet(ndcX, ndcY, 1.0f, 1.0f), invViewProjMatrix);    // Far plane
+    XMVECTOR rayDir = XMVector3Normalize(rayEnd - rayOrigin);
+
+    // 4. Define the ground plane (Y=0)
+    XMVECTOR groundPlane = XMPlaneFromPointNormal(XMVectorSet(0.0f, 0.0f, 0.0f, 0.0f), XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f));
+
+    // 5. Find intersection of the ray and the ground plane
+	// XMPlaneIntersectLine requires two points on the line, not a point and a direction.
+    XMVECTOR intersectionPoint = XMPlaneIntersectLine(groundPlane, rayOrigin, rayOrigin + rayDir * 1000.0f);
+
+
+    // 6. Make the player look at the intersection point
+    XMVECTOR playerPos = XMLoadFloat3(&pTransform->GetPosition());
+    XMVECTOR lookDir = intersectionPoint - playerPos;
+    
+    // Set Y-component of look direction to 0 to prevent character from tilting up/down
+    lookDir = XMVectorSetY(lookDir, 0.0f); 
+    lookDir = XMVector3Normalize(lookDir);
+
+	// Check if the look direction is valid before setting it, to prevent generating NaNs
+	if (XMVectorGetX(XMVector3LengthSq(lookDir)) > 0.001f)
+	{
+		// Convert look direction to a yaw angle
+        float yawRad = atan2f(XMVectorGetX(lookDir), XMVectorGetZ(lookDir));
+        float yawDeg = XMConvertToDegrees(yawRad);
+
+        // Get current rotation, only overwrite yaw
+        const XMFLOAT3& currentRot = pTransform->GetRotation();
+        pTransform->SetRotation(currentRot.x, yawDeg, currentRot.z);
+	}
+
+
+    // --- Movement Logic (Player-relative) ---
+
+    float moveSpeed = 10.0f; // Increased speed for better feel
+
+    // Get player's local axes after rotation
+    XMVECTOR forward = pTransform->GetLook();
+    XMVECTOR right = pTransform->GetRight();
+    // No need to flatten, they are already on the XZ plane
 
     XMVECTOR currentPosition = XMLoadFloat3(&pTransform->GetPosition());
     XMVECTOR displacement = XMVectorZero();
@@ -58,12 +98,4 @@ void PlayerComponent::PlayerUpdate(float deltaTime, InputSystem* pInputSystem, C
     // Apply displacement
     currentPosition += displacement;
     pTransform->SetPosition(XMFLOAT3(XMVectorGetX(currentPosition), XMVectorGetY(currentPosition), XMVectorGetZ(currentPosition)));
-
-    // Mouse input for rotation (Yaw)
-    float mouseDeltaX = pInputSystem->GetMouseDeltaX();
-    if (mouseDeltaX != 0.0f)
-    {
-        float yawDelta = mouseDeltaX * rotationSpeed * deltaTime * 0.01f; // Adjust sensitivity
-        pTransform->Rotate(0.0f, yawDelta, 0.0f); // Rotate around Y-axis
-    }
 }

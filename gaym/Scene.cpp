@@ -38,24 +38,33 @@ void Scene::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList)
     auto pShader = std::make_unique<Shader>();
     pShader->Build(pDevice);
 
-    // Player GameObject
-    GameObject* pPlayer = CreateGameObject(pDevice, pCommandList);
-    m_vGameObjects.push_back(std::unique_ptr<GameObject>(pPlayer));
-    pPlayer->GetTransform()->SetPosition(0.0f, 0.0f, 20.0f);
-    pPlayer->AddComponent<PlayerComponent>();
-    m_pPlayerGameObject = pPlayer;
+    // Player GameObject - Refactored to prevent orbiting issue
+    GameObject* pPlayer = MeshLoader::LoadGeometryFromFile(this, pDevice, pCommandList, NULL, "Model/M26.bin");
+    if (pPlayer)
+    {
+        // The loaded model is now the player object.
+        // Add it to the main list to manage its memory.
+        m_vGameObjects.push_back(std::unique_ptr<GameObject>(pPlayer));
 
-    // Load Apache model for the player
-    GameObject* pPlayerModel = MeshLoader::LoadGeometryFromFile(this, pDevice, pCommandList, NULL, "Model/M26.bin");
-    if (pPlayerModel)
-    { 
-        OutputDebugString(L"Model loaded successfully!\n");
-        pPlayer->SetChild(pPlayerModel);
-        AddRenderComponentsToHierarchy(pDevice, pCommandList, pPlayerModel, pShader.get());
+        OutputDebugString(L"Player model loaded successfully!\n");
+
+        // Configure this object as the player
+        pPlayer->GetTransform()->SetPosition(0.0f, 0.0f, 20.0f);
+        pPlayer->AddComponent<PlayerComponent>();
+        m_pPlayerGameObject = pPlayer;
+
+        // Add render components to the new player object and its children
+        AddRenderComponentsToHierarchy(pDevice, pCommandList, pPlayer, pShader.get());
     }
     else
     {
-        OutputDebugString(L"Failed to load model!\n");
+        OutputDebugString(L"Failed to load player model!\n");
+        // Create a fallback empty game object so the game doesn't crash
+        pPlayer = CreateGameObject(pDevice, pCommandList);
+        m_vGameObjects.push_back(std::unique_ptr<GameObject>(pPlayer));
+        pPlayer->GetTransform()->SetPosition(0.0f, 0.0f, 20.0f);
+        pPlayer->AddComponent<PlayerComponent>();
+        m_pPlayerGameObject = pPlayer;
     }
 
     // Set camera target to player

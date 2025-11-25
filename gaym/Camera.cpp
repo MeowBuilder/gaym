@@ -28,8 +28,8 @@ void CCamera::SetLens(float fovY, float aspect, float zn, float zf)
 void CCamera::Update(float mouseDeltaX, float mouseDeltaY, float scrollDelta)
 {
     // Update yaw and pitch from mouse input
-    m_yaw += mouseDeltaX * m_rotationSpeed;
-    m_pitch += mouseDeltaY * m_rotationSpeed;
+    //m_yaw += mouseDeltaX * m_rotationSpeed;
+    //m_pitch += mouseDeltaY * m_rotationSpeed;
 
     // Clamp pitch to avoid flipping
     m_pitch = max(-89.0f, min(89.0f, m_pitch));

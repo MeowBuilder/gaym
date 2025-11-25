@@ -51,8 +51,8 @@ private:
     float m_distance = 50.0f;
     float m_minDistance = 2.0f;
     float m_maxDistance = 100.0f;
-    float m_pitch = 20.0f; // Angle in degrees
-    float m_yaw = 0.0f;   // Angle in degrees
+    float m_pitch = 60.0f; // Angle in degrees
+    float m_yaw = 45.0f;   // Angle in degrees
 
     // Mouse sensitivity
     float m_rotationSpeed = 0.2f;
