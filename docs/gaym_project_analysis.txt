@@ -1,0 +1,105 @@
+# GAYM 프로젝트 분석
+
+## 프로젝트 개요
+이 프로젝트는 DirectX 12를 사용하여 3D 렌더링을 구현한 C++ 애플리케이션입니다. 컴포넌트 기반 게임 오브젝트 시스템, 계층적 씬 그래프(Scene Graph), 그리고 물리 기반 렌더링(PBR) 요소가 포함된 머티리얼 구조를 갖춘 커스텀 게임 엔진 아키텍처를 구현하고 있습니다. 3D 모델 로딩, 사용자 입력 처리, 동적 카메라를 통한 씬 렌더링을 지원합니다.
+
+## 디렉토리 구조
+(파일 목록 및 분석 기반)
+```
+gaym/
+├── .vs/                    # Visual Studio 구성 파일
+├── .vscode/                # VS Code 구성 파일
+├── Animation/              # 애니메이션 데이터 파일
+├── docs/                   # 문서 폴더
+├── gaym/                   # 소스 코드 및 리소스
+│   ├── 소스 파일 (.cpp, .h)
+│   ├── 셰이더 (.hlsl)
+│   ├── 리소스 (.rc, .ico)
+│   └── x64/                # 빌드 출력물
+├── Model/                  # 3D 모델 에셋 (.bin, .fbx)
+└── x64/                    # 전역 빌드 출력물
+```
+
+## 핵심 아키텍처
+
+### 1. 애플리케이션 진입 및 수명 주기 (`Dx12App`)
+애플리케이션의 진입점은 표준 Win32 (`wWinMain`)입니다. `Dx12App` 클래스는 DirectX 12 런타임 환경을 캡슐화합니다.
+- **초기화 (Initialization)**: D3D12 장치(Device), 명령 큐(Command Queue), 스왑 체인(Swap Chain), 디스크립터 힙(RTV, DSV), 프레임 리소스를 설정합니다.
+- **게임 루프 (Game Loop)**: `FrameAdvance()` 함수가 프레임별 업데이트 및 렌더링 주기를 관리합니다.
+- **입력 통합 (Input Integration)**: 윈도우 메시지(WM_KEYDOWN, WM_MOUSEMOVE 등)를 `InputSystem`으로 전달합니다.
+- **씬 관리 (Scene Management)**: `Scene` 인스턴스를 소유하고 업데이트합니다.
+
+### 2. 게임 오브젝트 시스템
+이 프로젝트는 게임 엔티티에 대해 상속보다는 구성(Composition) 패턴을 사용합니다.
+- **GameObject**: 주요 엔티티 클래스입니다.
+    - **컴포넌트**: `Component` 객체들의 리스트를 보유합니다.
+    - **계층 구조**: 부모-자식 관계(`m_pParent`, `m_pChild`, `m_pSibling`)를 지원하여 복잡한 변환(Transform)을 가능하게 합니다.
+    - **트랜스폼**: 공간 조작을 위해 항상 `TransformComponent`를 보유합니다.
+    - **렌더링**: 렌더링 속성을 위한 머티리얼 데이터와 상수 버퍼(`ObjectConstants`)를 저장합니다.
+- **Component**: GameObject에 부착되는 모든 동작(Behavior)의 기본 클래스입니다.
+    - **수명 주기**: `Init`, `Update`, `Render`.
+    - **접근**: 소유자(`GameObject`)에 접근할 수 있습니다.
+
+### 3. 씬 관리 (`Scene`)
+`Scene` 클래스는 게임 월드의 컨테이너 역할을 합니다.
+- **엔티티**: `GameObject`들의 컬렉션을 관리합니다.
+- **렌더링 데이터**: `Shader` 인스턴스와 뷰-프로젝션 행렬 및 조명 데이터와 같은 전역 렌더링 상수(`PassConstants`)를 관리합니다.
+- **카메라**: 뷰 관리를 위해 `CCamera` 인스턴스를 소유합니다.
+- **로딩**: `LoadSceneFromFile` 함수는 외부 파일로부터 씬 정의를 로드할 수 있는 기능을 시사합니다.
+
+### 4. 렌더링 파이프라인
+- **Shader**: D3D12 루트 시그니처(Root Signature)와 파이프라인 상태 객체(PSO)를 래핑합니다. 효율적인 배치 렌더링을 위해 `RenderComponent`들을 그룹화합니다.
+- **Mesh**: 기하학적 형태를 위한 추상 기본 클래스입니다.
+    - `MeshFromFile`: 파일에서 로드된 정점/인덱스 버퍼를 처리합니다.
+    - `MeshIlluminatedFromFile`: 조명 계산을 위한 법선(Normal) 벡터를 포함하도록 `MeshFromFile`을 확장합니다.
+- **RenderComponent**: `GameObject`를 `Mesh`와 연결합니다. 렌더 패스(Render Pass) 동안 그려지기 위해 `Shader`에 등록됩니다.
+
+## 주요 클래스 및 기능
+
+### `Dx12App`
+- `OnCreate`: D3D12 파이프라인을 초기화합니다.
+- `FrameAdvance`: 씬의 `Update`를 호출하고, `Render`를 호출한 뒤 스왑 체인을 프레젠트(Present)합니다.
+- `CreateBufferResource`: D3D12 버퍼(Vertex, Index, Constant)를 생성하는 유틸리티입니다.
+
+### `GameObject`
+- `Update`: 컴포넌트를 업데이트하고 트랜스폼 계층 구조를 관리합니다.
+- `Render`: 그리기(Draw) 전에 객체의 상수 버퍼(월드 행렬, 머티리얼)를 업데이트합니다.
+- `AddComponent<T>`: 템플릿 메서드를 사용하여 동적으로 컴포넌트를 부착합니다.
+- `SetMaterial`: 머티리얼 속성(Ambient, Diffuse, Specular, Emissive)을 업데이트합니다.
+
+### `TransformComponent`
+- `SetPosition/Rotation/Scale`: 로컬 트랜스폼 속성을 수정합니다.
+- `Update`: 로컬 및 월드 행렬을 다시 계산합니다.
+- `GetLook/Right/Up`: 현재 회전값을 기반으로 방향 벡터를 반환합니다.
+
+### `CCamera`
+- **오빗 컨트롤 (Orbit Control)**: 3인칭/오빗 카메라 스타일을 구현합니다.
+- `Update`: 마우스 입력을 처리하여 타겟 `GameObject`나 지점을 중심으로 회전합니다.
+- `SetLens`: 프로젝션 행렬(FOV, 종횡비, 근/원 평면)을 설정합니다.
+- `GetViewMatrix/GetProjectionMatrix`: 렌더링 파이프라인에 필요한 행렬을 제공합니다.
+
+### `Mesh` & `MeshLoader`
+- 원본 기하학 데이터를 처리합니다.
+- 커스텀 바이너리 포맷(FBX에서 추출된 것으로 추정) 로딩을 지원합니다.
+- D3D12 정점 및 인덱스 버퍼를 관리합니다.
+
+## 구현된 기능
+1.  **DirectX 12 렌더링**: 명령 리스트(Command Lists), 할당자(Allocators), 동기화를 위한 펜스(Fences), 디스크립터 힙(Descriptor Heaps)을 포함한 완전한 D3D12 구현.
+2.  **조명 (Lighting)**: `PassConstants` 구조체는 다음을 지원함을 나타냅니다:
+    - 방향성 조명 (Directional Light)
+    - 포인트 조명 (Point Light)
+    - 스포트 조명 (Spot Light)
+    - 주변광 (Ambient Light)
+3.  **머티리얼 시스템**: `MATERIAL` 구조체는 Ambient, Diffuse, Specular (파워 포함), Emissive 속성을 지원합니다.
+4.  **입력 시스템**: 키보드 및 마우스 처리를 캡슐화한 입력 시스템.
+5.  **타이머**: 프레임 속도에 독립적인 업데이트를 위한 고해상도 게임 타이머.
+6.  **씬 그래프**: 부모-자식 변환 전파 (Parent-child transformation propagation).
+
+## 분석된 파일
+- `gaym.cpp`, `Dx12App.h/cpp`: 앱 프레임워크.
+- `GameObject.h/cpp`: 엔티티 시스템.
+- `Scene.h/cpp`: 월드 관리.
+- `Component.h`, `TransformComponent.h`, `RenderComponent.h`: 컴포넌트 시스템.
+- `Camera.h`: 카메라 로직.
+- `Mesh.h`, `Shader.h`: 렌더링 리소스.
+- `InputSystem.h`: 입력 추상화.
