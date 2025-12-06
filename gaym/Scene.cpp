@@ -39,7 +39,7 @@ void Scene::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList)
     pShader->Build(pDevice);
 
     // Player GameObject - Refactored to prevent orbiting issue
-    GameObject* pPlayer = MeshLoader::LoadGeometryFromFile(this, pDevice, pCommandList, NULL, "Model/M26.bin");
+    GameObject* pPlayer = MeshLoader::LoadGeometryFromFile(this, pDevice, pCommandList, NULL, "Vampire A Lusth/.bin");
     if (pPlayer)
     {
         // The loaded model is now the player object.
