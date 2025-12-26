@@ -50,7 +50,7 @@ void Scene::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList)
 
         // Configure this object as the player
         pPlayer->GetTransform()->SetPosition(0.0f, 0.0f, 20.0f);
-        pPlayer->GetTransform()->SetScale(5.0f, 5.0f, 5.0f);
+        pPlayer->GetTransform()->SetScale(10.0f, 10.0f, 10.0f);
         pPlayer->AddComponent<PlayerComponent>();
         m_pPlayerGameObject = pPlayer;
 

@@ -271,6 +271,34 @@ MeshLoadInfo* MeshLoader::LoadMeshInfoFromFile(FILE* pInFile)
 				nReads = (UINT)::fread(pMeshInfo->m_pxmf3Normals, sizeof(XMFLOAT3), nNormals, pInFile);
 			}
 		}
+		else if (!strcmp(pstrToken, "<BoneWeights>:"))
+		{
+			int nBoneWeights = ::ReadIntegerFromFile(pInFile);
+			if (nBoneWeights > 0)
+			{
+				fseek(pInFile, nBoneWeights * 4 * (sizeof(int) + sizeof(float)), SEEK_CUR);
+			}
+		}
+		else if (!strcmp(pstrToken, "<BindPoses>:"))
+		{
+			int nBindPoses = ::ReadIntegerFromFile(pInFile);
+			if (nBindPoses > 0)
+			{
+				fseek(pInFile, nBindPoses * 16 * sizeof(float), SEEK_CUR);
+			}
+		}
+		else if (!strcmp(pstrToken, "<BoneNames>:"))
+		{
+			int nBoneNames = ::ReadIntegerFromFile(pInFile);
+			if (nBoneNames > 0)
+			{
+				char pstrDummy[64] = { 0 };
+				for (int i = 0; i < nBoneNames; i++)
+				{
+					::ReadStringFromFile(pInFile, pstrDummy, 64);
+				}
+			}
+		}
 		else if (!strcmp(pstrToken, "<Indices>:"))
 		{
 			nIndices = ::ReadIntegerFromFile(pInFile);
