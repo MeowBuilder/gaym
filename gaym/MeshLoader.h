@@ -49,6 +49,8 @@ public:
 
     XMFLOAT3* m_pxmf3Normals = NULL;
 
+    XMFLOAT2* m_pxmf2TextureCoords0 = NULL;
+
 
 
     int                             m_nIndices = 0;
@@ -89,7 +91,7 @@ private:
 
 
 
-    static void LoadMaterialsInfoFromFile(FILE* pInFile);
+    static void LoadMaterialsInfoFromFile(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, FILE* pInFile, GameObject* pGameObject, Scene* pScene);
 
 };
 

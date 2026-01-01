@@ -253,6 +253,7 @@ public class MeshExporterBin : Editor
         WriteVectors("<Positions>:", mesh.vertices);
         WriteColors("<Colors>:", mesh.colors);
         WriteVectors("<Normals>:", mesh.normals);
+        WriteVectors("<TexCoords>:", mesh.uv);
 
         if (bones != null && mesh.boneWeights.Length > 0)
         {
@@ -280,6 +281,15 @@ public class MeshExporterBin : Editor
         {
             WriteInteger("<Material>:", i);
             if (materials[i].HasProperty("_Color")) WriteColor("<AlbedoColor>:", materials[i].GetColor("_Color"));
+            if (materials[i].HasProperty("_MainTex"))
+            {
+                Texture pTexture = materials[i].GetTexture("_MainTex");
+                if (pTexture)
+                {
+                    string path = AssetDatabase.GetAssetPath(pTexture);
+                    WriteString("<AlbedoMap>:", Path.GetFileName(path));
+                }
+            }
             if (materials[i].HasProperty("_EmissionColor")) WriteColor("<EmissiveColor>:", materials[i].GetColor("_EmissionColor"));
             if (materials[i].HasProperty("_SpecColor")) WriteColor("<SpecularColor>:", materials[i].GetColor("_SpecColor"));
             if (materials[i].HasProperty("_Glossiness")) WriteFloat("<Glossiness>:", materials[i].GetFloat("_Glossiness"));
@@ -306,13 +316,13 @@ public class MeshExporterBin : Editor
             if (meshFilter && meshRenderer)
             {
                 WriteMeshInfo(meshFilter.sharedMesh);
-                Material[] materials = meshRenderer.materials;
+                Material[] materials = meshRenderer.sharedMaterials;
                 if (materials.Length > 0) WriteMaterials(materials);
             }
             else if (skinnedMeshRenderer)
             {
                 WriteMeshInfo(skinnedMeshRenderer.sharedMesh, skinnedMeshRenderer.bones);
-                Material[] materials = skinnedMeshRenderer.materials;
+                Material[] materials = skinnedMeshRenderer.sharedMaterials;
                 if (materials.Length > 0) WriteMaterials(materials);
             }
         }

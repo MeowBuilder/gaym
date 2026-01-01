@@ -31,9 +31,8 @@ void Shader::Render(ID3D12GraphicsCommandList* pCommandList, D3D12_GPU_VIRTUAL_A
 
 void Shader::Build(ID3D12Device* pDevice)
 {
-    // Create a root signature with two parameters: a descriptor table for the object CBV 
-    // and a root CBV for the pass CBV.
-    D3D12_ROOT_PARAMETER d3dRootParameters[2];
+    // Create a root signature with 3 parameters: Object CBV, Pass CBV, Texture SRV
+    D3D12_ROOT_PARAMETER d3dRootParameters[3];
 
     // Parameter 0: Descriptor table for the per-object constant buffer (b0)
     D3D12_DESCRIPTOR_RANGE d3dDescriptorRange;
@@ -52,13 +51,42 @@ void Shader::Build(ID3D12Device* pDevice)
     d3dRootParameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
     d3dRootParameters[1].Descriptor.ShaderRegister = 1; // b1
     d3dRootParameters[1].Descriptor.RegisterSpace = 0;
-    d3dRootParameters[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL; // Or VERTEX
+    d3dRootParameters[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+
+    // Parameter 2: Descriptor table for the texture SRV (t0)
+    D3D12_DESCRIPTOR_RANGE d3dTextureRange;
+    d3dTextureRange.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+    d3dTextureRange.NumDescriptors = 1;
+    d3dTextureRange.BaseShaderRegister = 0; // t0
+    d3dTextureRange.RegisterSpace = 0;
+    d3dTextureRange.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+
+    d3dRootParameters[2].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+    d3dRootParameters[2].DescriptorTable.NumDescriptorRanges = 1;
+    d3dRootParameters[2].DescriptorTable.pDescriptorRanges = &d3dTextureRange;
+    d3dRootParameters[2].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+
+    // Static Sampler (s0)
+    D3D12_STATIC_SAMPLER_DESC sampler = {};
+    sampler.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
+    sampler.AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+    sampler.AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+    sampler.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+    sampler.MipLODBias = 0;
+    sampler.MaxAnisotropy = 1;
+    sampler.ComparisonFunc = D3D12_COMPARISON_FUNC_ALWAYS;
+    sampler.BorderColor = D3D12_STATIC_BORDER_COLOR_TRANSPARENT_BLACK;
+    sampler.MinLOD = 0.0f;
+    sampler.MaxLOD = D3D12_FLOAT32_MAX;
+    sampler.ShaderRegister = 0;
+    sampler.RegisterSpace = 0;
+    sampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
     D3D12_ROOT_SIGNATURE_DESC d3dRootSignatureDesc;
-    d3dRootSignatureDesc.NumParameters = 2;
+    d3dRootSignatureDesc.NumParameters = 3;
     d3dRootSignatureDesc.pParameters = d3dRootParameters;
-    d3dRootSignatureDesc.NumStaticSamplers = 0;
-    d3dRootSignatureDesc.pStaticSamplers = NULL;
+    d3dRootSignatureDesc.NumStaticSamplers = 1;
+    d3dRootSignatureDesc.pStaticSamplers = &sampler;
     d3dRootSignatureDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
 
     ComPtr<ID3DBlob> pd3dSignatureBlob;
@@ -77,7 +105,8 @@ void Shader::Build(ID3D12Device* pDevice)
     D3D12_INPUT_ELEMENT_DESC inputElementDescs[] =
     {
         { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-        { "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
+        { "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 1, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 2, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
     };
 
     D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};

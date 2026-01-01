@@ -40,6 +40,7 @@ public:
 #define VERTEXT_POSITION			0x01
 #define VERTEXT_COLOR				0x02
 #define VERTEXT_NORMAL				0x04
+#define VERTEXT_TEXTURE_COORD0		0x08
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //
@@ -82,6 +83,10 @@ protected:
 	ComPtr<ID3D12Resource>				m_pd3dNormalBuffer;
 	ComPtr<ID3D12Resource>				m_pd3dNormalUploadBuffer;
 	D3D12_VERTEX_BUFFER_VIEW		m_d3dNormalBufferView;
+
+	ComPtr<ID3D12Resource>				m_pd3dTextureCoord0Buffer;
+	ComPtr<ID3D12Resource>				m_pd3dTextureCoord0UploadBuffer;
+	D3D12_VERTEX_BUFFER_VIEW		m_d3dTextureCoord0BufferView;
 
 public:
 	virtual void Render(ID3D12GraphicsCommandList *pd3dCommandList, int nSubSet);

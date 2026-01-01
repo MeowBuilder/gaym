@@ -11,10 +11,13 @@ Dx12App::Dx12App()
     m_nSwapChainBufferIndex = 0;
     m_nFenceValue = 0;
     m_bIsFullscreen = false;
+
+    CoInitializeEx(nullptr, COINIT_MULTITHREADED);
 }
 
 Dx12App::~Dx12App()
 {
+    CoUninitialize();
 }
 
 void Dx12App::OnCreate(HINSTANCE hInstance, HWND hMainWnd)

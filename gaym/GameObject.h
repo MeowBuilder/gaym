@@ -2,6 +2,7 @@
 #include "stdafx.h"
 #include <vector>
 #include <memory>
+#include <string>
 #include "Mesh.h"
 
 struct ID3D12GraphicsCommandList; // 전방 선언
@@ -56,6 +57,15 @@ public:
 	void SetTransform(const XMFLOAT4X4& transform);
 
 	void SetMaterial(const MATERIAL& material); // New method for setting material
+	void SetTextureName(const std::string& strName) { m_strTextureName = strName; }
+	std::string GetTextureName() const { return m_strTextureName; }
+
+	void LoadTexture(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, D3D12_CPU_DESCRIPTOR_HANDLE srvCpuHandle);
+    void SetSrvGpuDescriptorHandle(D3D12_GPU_DESCRIPTOR_HANDLE handle) { m_srvGPUDescriptorHandle = handle; }
+    D3D12_GPU_DESCRIPTOR_HANDLE GetSrvDescriptorHandle() const { return m_srvGPUDescriptorHandle; }
+    bool HasTexture() const { return m_pd3dTexture != nullptr; }
+
+	void ReleaseUploadBuffers();
 
 public:
 	char			m_pstrFrameName[64];
@@ -71,8 +81,15 @@ private:
 	ComPtr<ID3D12Resource> m_pd3dcbGameObject = nullptr;
 	ObjectConstants* m_pcbMappedGameObject = nullptr;
 	D3D12_GPU_DESCRIPTOR_HANDLE m_cbvGPUDescriptorHandle;
+    D3D12_GPU_DESCRIPTOR_HANDLE m_srvGPUDescriptorHandle; // Handle for Texture SRV in Main Heap
+
 	UINT m_nMaterialIndex = 0;
 	MATERIAL m_Material; // New material member
+	std::string m_strTextureName;
+	
+	ComPtr<ID3D12Resource> m_pd3dTexture = nullptr;
+	ComPtr<ID3D12Resource> m_pd3dTextureUploadBuffer = nullptr;
+
 	Mesh* m_pMesh = nullptr; // Re-added m_pMesh member
 };
 

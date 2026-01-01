@@ -2,6 +2,8 @@
 #include "GameObject.h"
 #include "Component.h"
 #include "TransformComponent.h"
+#include "WICTextureLoader12.h"
+#include "D3dx12.h"
 
 GameObject::GameObject()
     : m_Material({XMFLOAT4(0.1f, 0.1f, 0.1f, 1.0f), // Ambient
@@ -50,6 +52,11 @@ void GameObject::Render(ID3D12GraphicsCommandList* pCommandList)
 {
     // Set the descriptor table for this object
     pCommandList->SetGraphicsRootDescriptorTable(0, m_cbvGPUDescriptorHandle);
+
+    if (HasTexture())
+    {
+        pCommandList->SetGraphicsRootDescriptorTable(2, m_srvGPUDescriptorHandle);
+    }
 
     for (auto& component : m_vComponents)
     {
@@ -114,4 +121,47 @@ void GameObject::CreateConstantBuffer(ID3D12Device* pDevice, ID3D12GraphicsComma
     d3dcbvDesc.BufferLocation = m_pd3dcbGameObject->GetGPUVirtualAddress();
     d3dcbvDesc.SizeInBytes = nConstantBufferSize;
     pDevice->CreateConstantBufferView(&d3dcbvDesc, d3dCbvCPUDescriptorHandle);
+}
+
+void GameObject::LoadTexture(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, D3D12_CPU_DESCRIPTOR_HANDLE srvCpuHandle)
+{
+    if (m_strTextureName.empty()) return;
+
+    // Prepend "Animation/" directory
+    std::string fullPath = "Animation/" + m_strTextureName;
+    std::wstring wstrTextureName(fullPath.begin(), fullPath.end());
+
+    std::unique_ptr<uint8_t[]> decodedData;
+    D3D12_SUBRESOURCE_DATA subresource;
+
+    HRESULT hr = DirectX::LoadWICTextureFromFile(pd3dDevice, wstrTextureName.c_str(), m_pd3dTexture.GetAddressOf(), decodedData, subresource);
+    if (FAILED(hr))
+    {
+        char buffer[256];
+        sprintf_s(buffer, "Failed to load texture: %s\n", m_strTextureName.c_str());
+        OutputDebugStringA(buffer);
+        return;
+    }
+
+    UINT64 nBytes = GetRequiredIntermediateSize(m_pd3dTexture.Get(), 0, 1);
+
+    m_pd3dTextureUploadBuffer = CreateBufferResource(pd3dDevice, pd3dCommandList, NULL, nBytes, D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATE_GENERIC_READ, NULL);
+
+    UpdateSubresources(pd3dCommandList, m_pd3dTexture.Get(), m_pd3dTextureUploadBuffer.Get(), 0, 0, 1, &subresource);
+
+    D3D12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition(m_pd3dTexture.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+    pd3dCommandList->ResourceBarrier(1, &barrier);
+
+    // Create Shader Resource View (SRV) at the specified handle
+    D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+    srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    srvDesc.Format = m_pd3dTexture->GetDesc().Format;
+    srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+    srvDesc.Texture2D.MipLevels = m_pd3dTexture->GetDesc().MipLevels;
+    pd3dDevice->CreateShaderResourceView(m_pd3dTexture.Get(), &srvDesc, srvCpuHandle);
+}
+
+void GameObject::ReleaseUploadBuffers()
+{
+    if (m_pd3dTextureUploadBuffer) m_pd3dTextureUploadBuffer = nullptr;
 }

@@ -48,6 +48,13 @@ public:
 
     GameObject* CreateGameObject(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList);
 
+    void AllocateDescriptor(D3D12_CPU_DESCRIPTOR_HANDLE* pCpuHandle, D3D12_GPU_DESCRIPTOR_HANDLE* pGpuHandle)
+    {
+        *pCpuHandle = m_pDescriptorHeap->GetCPUHandle(m_nNextDescriptorIndex);
+        *pGpuHandle = m_pDescriptorHeap->GetGPUHandle(m_nNextDescriptorIndex);
+        m_nNextDescriptorIndex++;
+    }
+
 private:
 
     std::vector<std::unique_ptr<GameObject>> m_vGameObjects;

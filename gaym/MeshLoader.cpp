@@ -9,6 +9,7 @@ MeshLoadInfo::~MeshLoadInfo()
 	if (m_pxmf3Positions) delete[] m_pxmf3Positions;
 	if (m_pxmf4Colors) delete[] m_pxmf4Colors;
 	if (m_pxmf3Normals) delete[] m_pxmf3Normals;
+	if (m_pxmf2TextureCoords0) delete[] m_pxmf2TextureCoords0;
 
 	if (m_pnIndices) delete[] m_pnIndices;
 	
@@ -40,79 +41,71 @@ float ReadFloatFromFile(FILE* pInFile)
 BYTE ReadStringFromFile(FILE* pInFile, char* pstrToken, int nBufferSize)
 {
 	if (!pInFile) return 0;
-	BYTE nStrLength = 0;
-	UINT nReads = 0;
-	nReads = (UINT)::fread(&nStrLength, sizeof(BYTE), 1, pInFile);
+
+	// Read 7-bit encoded integer for string length (compatible with C# BinaryWriter)
+	int nStrLength = 0;
+	int shift = 0;
+	BYTE byteRead = 0;
+	do {
+		if (fread(&byteRead, sizeof(BYTE), 1, pInFile) != 1) return 0;
+		nStrLength |= (byteRead & 0x7F) << shift;
+		shift += 7;
+	} while (byteRead & 0x80);
 
 	if (nStrLength >= nBufferSize)
 	{
+		// String is too long for buffer, skip it
 		fseek(pInFile, nStrLength, SEEK_CUR);
-		return 0;
+		return 0; // Or return nStrLength but indicate truncation? For now return 0 to indicate error/skip.
 	}
 
-	nReads = (UINT)::fread(pstrToken, sizeof(char), nStrLength, pInFile);
+	UINT nReads = (UINT)::fread(pstrToken, sizeof(char), nStrLength, pInFile);
 	pstrToken[nStrLength] = '\0';
 
-	return(nStrLength);
+	return (BYTE)nStrLength;
 }
 
-void MeshLoader::LoadMaterialsInfoFromFile(FILE* pInFile)
+void MeshLoader::LoadMaterialsInfoFromFile(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, FILE* pInFile, GameObject* pGameObject, Scene* pScene)
 {
-    char pstrToken[64] = { '\0' };
-    int nMaterials = ReadIntegerFromFile(pInFile);
+	char pstrToken[64] = { '\0' };
+	int nMaterials = ReadIntegerFromFile(pInFile);
 
-    for ( ; ; )
-    {
-        if (ReadStringFromFile(pInFile, pstrToken, 64) == 0) break;
-        if (!strcmp(pstrToken, "</Materials>")) break;
-        // This is a dummy implementation. We just need to parse it.
-        // In a real implementation, we would read the material properties.
-        if (!strcmp(pstrToken, "<Material>:"))
-        {
-            int nMaterial = ReadIntegerFromFile(pInFile);
-        }
-        else if (!strcmp(pstrToken, "<AlbedoColor>:"))
-        {
-            XMFLOAT4 xmf4AlbedoColor;
-            fread(&xmf4AlbedoColor, sizeof(float), 4, pInFile);
-        }
-        else if (!strcmp(pstrToken, "<EmissiveColor>:"))
-        {
-            XMFLOAT4 xmf4EmissiveColor;
-            fread(&xmf4EmissiveColor, sizeof(float), 4, pInFile);
-        }
-        else if (!strcmp(pstrToken, "<SpecularColor>:"))
-        {
-            XMFLOAT4 xmf4SpecularColor;
-            fread(&xmf4SpecularColor, sizeof(float), 4, pInFile);
-        }
-        else if (!strcmp(pstrToken, "<Glossiness>:"))
-        {
-            float fGlossiness;
-            fread(&fGlossiness, sizeof(float), 1, pInFile);
-        }
-        else if (!strcmp(pstrToken, "<Smoothness>:"))
-        {
-            float fSmoothness;
-            fread(&fSmoothness, sizeof(float), 1, pInFile);
-        }
-        else if (!strcmp(pstrToken, "<Metallic>:"))
-        {
-            float fMetallic;
-            fread(&fMetallic, sizeof(float), 1, pInFile);
-        }
-        else if (!strcmp(pstrToken, "<SpecularHighlight>:"))
-        {
-            float fSpecularHighlight;
-            fread(&fSpecularHighlight, sizeof(float), 1, pInFile);
-        }
-        else if (!strcmp(pstrToken, "<GlossyReflection>:"))
-        {
-            float fGlossyReflection;
-            fread(&fGlossyReflection, sizeof(float), 1, pInFile);
-        }
-    }
+	MATERIAL xmf4Material;
+	ZeroMemory(&xmf4Material, sizeof(MATERIAL));
+
+	for (; ; )
+	{
+		if (ReadStringFromFile(pInFile, pstrToken, 64) == 0) break;
+		if (!strcmp(pstrToken, "</Materials>")) break;
+
+		if (!strcmp(pstrToken, "<Material>:"))
+		{
+			int nMaterial = ReadIntegerFromFile(pInFile);
+		}
+		else if (!strcmp(pstrToken, "<AlbedoColor>:"))
+		{
+			fread(&xmf4Material.m_cDiffuse, sizeof(float), 4, pInFile);
+			if (pGameObject) pGameObject->SetMaterial(xmf4Material);
+		}
+		else if (!strcmp(pstrToken, "<AlbedoMap>:"))
+		{
+			char pstrTextureName[64] = { 0 };
+			ReadStringFromFile(pInFile, pstrTextureName, 64);
+			if (pGameObject && pScene)
+			{
+				pGameObject->SetTextureName(pstrTextureName);
+
+				D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle;
+				D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle;
+				pScene->AllocateDescriptor(&cpuHandle, &gpuHandle);
+
+				pGameObject->LoadTexture(pd3dDevice, pd3dCommandList, cpuHandle);
+				pGameObject->SetSrvGpuDescriptorHandle(gpuHandle);
+			}
+		}
+	}
 }
+
 
 
 GameObject* MeshLoader::LoadGeometryFromFile(Scene* pScene, ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature, const char* pstrFileName)
@@ -200,7 +193,7 @@ GameObject* MeshLoader::LoadFrameHierarchyFromFile(Scene* pScene, ID3D12Device* 
         }
         else if (!strcmp(pstrToken, "<Materials>:"))
         {
-            LoadMaterialsInfoFromFile(pInFile);
+            LoadMaterialsInfoFromFile(pd3dDevice, pd3dCommandList, pInFile, pGameObject, pScene);
         }
         else if (!strcmp(pstrToken, "<Children>:"))
         {
@@ -269,6 +262,20 @@ MeshLoadInfo* MeshLoader::LoadMeshInfoFromFile(FILE* pInFile)
 				pMeshInfo->m_nType |= VERTEXT_NORMAL;
 				pMeshInfo->m_pxmf3Normals = new XMFLOAT3[nNormals];
 				nReads = (UINT)::fread(pMeshInfo->m_pxmf3Normals, sizeof(XMFLOAT3), nNormals, pInFile);
+			}
+		}
+		else if (!strcmp(pstrToken, "<TexCoords>:"))
+		{
+			int nTextureCoords = ::ReadIntegerFromFile(pInFile);
+			if (nTextureCoords > 0)
+			{
+				pMeshInfo->m_nType |= VERTEXT_TEXTURE_COORD0;
+				pMeshInfo->m_pxmf2TextureCoords0 = new XMFLOAT2[nTextureCoords];
+				for (int i = 0; i < nTextureCoords; i++)
+				{
+					::fread(&pMeshInfo->m_pxmf2TextureCoords0[i], sizeof(XMFLOAT2), 1, pInFile);
+					pMeshInfo->m_pxmf2TextureCoords0[i].y = 1.0f - pMeshInfo->m_pxmf2TextureCoords0[i].y;
+				}
 			}
 		}
 		else if (!strcmp(pstrToken, "<BoneWeights>:"))
