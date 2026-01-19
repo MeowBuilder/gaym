@@ -7,6 +7,7 @@
 #include "TransformComponent.h"
 #include "InputSystem.h" // Added for InputSystem
 #include "PlayerComponent.h"
+#include <functional> // Added for std::function
 
 Scene::Scene()
 {
@@ -38,105 +39,96 @@ void Scene::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList)
     auto pShader = std::make_unique<Shader>();
     pShader->Build(pDevice);
 
-    // Create Default Room and set it as active
-    auto pDefaultRoom = std::make_unique<CRoom>();
-    pDefaultRoom->SetState(RoomState::Active);
-    // Set a large bounding box for the default room to ensure player is "inside"
-    pDefaultRoom->SetBoundingBox(BoundingBox(XMFLOAT3(0, 0, 0), XMFLOAT3(10000.0f, 10000.0f, 10000.0f)));
-    m_vRooms.push_back(std::move(pDefaultRoom));
+    // --------------------------------------------------------------------------
+    // 1. Create Rooms
+    // --------------------------------------------------------------------------
     
-    // NOTE: We do NOT set m_pCurrentRoom yet. We want the player to be added to m_vGameObjects (Global),
-    // not the room. CreateGameObject checks m_pCurrentRoom to decide where to put the object.
+    // Room 1 (Start Area: Red Zone)
+    auto pRoom1 = std::make_unique<CRoom>();
+    pRoom1->SetState(RoomState::Active);
+    pRoom1->SetBoundingBox(BoundingBox(XMFLOAT3(0, 0, 0), XMFLOAT3(60.0f, 100.0f, 100.0f))); // x: -30 to 30
+    m_vRooms.push_back(std::move(pRoom1));
+
+    // Room 2 (Next Area: Blue Zone)
+    auto pRoom2 = std::make_unique<CRoom>();
+    pRoom2->SetState(RoomState::Inactive);
+    pRoom2->SetBoundingBox(BoundingBox(XMFLOAT3(60.0f, 0, 0), XMFLOAT3(60.0f, 100.0f, 100.0f))); // x: 30 to 90
+    m_vRooms.push_back(std::move(pRoom2));
+
+
+    // --------------------------------------------------------------------------
+    // 2. Load Global Objects (Player)
+    // --------------------------------------------------------------------------
     m_pCurrentRoom = nullptr; 
 
-
-    // Player GameObject - Refactored to prevent orbiting issue
     GameObject* pPlayer = MeshLoader::LoadGeometryFromFile(this, pDevice, pCommandList, NULL, "Animation/Vampire A Lusth.bin");
     if (pPlayer)
     {
-        // The loaded model is already added to m_vGameObjects by CreateGameObject because m_pCurrentRoom is null.
-        // We just need to configure it.
-        
         OutputDebugString(L"Player model loaded successfully!\n");
-
-        // Configure this object as the player
         pPlayer->GetTransform()->SetPosition(0.0f, 0.0f, 20.0f);
         pPlayer->GetTransform()->SetScale(10.0f, 10.0f, 10.0f);
         pPlayer->AddComponent<PlayerComponent>();
         m_pPlayerGameObject = pPlayer;
-
-        // Add render components to the new player object and its children
         AddRenderComponentsToHierarchy(pDevice, pCommandList, pPlayer, pShader.get());
     }
     else
-    {
-        OutputDebugString(L"Failed to load player model!\n");
-        // Create a fallback empty game object so the game doesn't crash
-        // CreateGameObject adds it to m_vGameObjects since m_pCurrentRoom is null.
+    { // Fallback
         pPlayer = CreateGameObject(pDevice, pCommandList);
         pPlayer->GetTransform()->SetPosition(0.0f, 0.0f, 20.0f);
         pPlayer->AddComponent<PlayerComponent>();
         m_pPlayerGameObject = pPlayer;
     }
-
-    // Set camera target to player
     m_pCamera->SetTarget(m_pPlayerGameObject);
 
-    // NOW we activate the room. Any subsequent CreateGameObject calls will add objects to this room.
-    m_pCurrentRoom = m_vRooms[0].get();
 
-    // Add two static Apache models for testing
-    // These should go into the Room now.
+    // --------------------------------------------------------------------------
+    // 3. Setup Room 1 Objects (RED Cubes)
+    // --------------------------------------------------------------------------
+    m_pCurrentRoom = m_vRooms[0].get(); 
+
+    for(int i=0; i<5; ++i)
     {
-        // Apache 1
-        GameObject* pStaticApache1 = CreateGameObject(pDevice, pCommandList); 
-        // CreateGameObject now adds to m_pCurrentRoom automatically.
+        GameObject* pCube = CreateGameObject(pDevice, pCommandList);
+        pCube->GetTransform()->SetPosition(-15.0f + i*5.0f, 5.0f, 10.0f); // Row of cubes
+        pCube->AddComponent<RotatorComponent>(); // Make them spin!
         
-        pStaticApache1->GetTransform()->SetPosition(-30.0f, 0.0f, 0.0f);
-        GameObject* pStaticModel1 = MeshLoader::LoadGeometryFromFile(this, pDevice, pCommandList, NULL, "Model/Apache.bin");
-        // MeshLoader calls CreateGameObject -> Adds to Room.
-        // But wait, pStaticModel1 is a child of pStaticApache1.
-        // Does SetChild handle ownership? No, it just links pointers.
-        // So pStaticModel1 remains in the Room list as a root object in the room context,
-        // but logic-wise it's a child.
-        // This is fine for memory management (Room owns it), but Update/Render might double-call 
-        // if Room iterates ALL objects and Parent also iterates Children.
-        
-        // GameObject::Update/Render recurses to children.
-        // If Room also Updates/Renders pStaticModel1, it will be done twice.
-        // FIX: MeshLoader adds to Room. We need to prevent double update.
-        // Actually, for this specific case (Child), we might want to remove it from the Room's top-level list?
-        // Or, we just accept that MeshLoader loads a hierarchy and returns the ROOT of that hierarchy.
-        // The ROOT (pStaticModel1) is in the Room list.
-        // pStaticApache1 is also in the Room list.
-        // We set pStaticApache1 -> Child -> pStaticModel1.
-        
-        // If we leave it as is:
-        // Room Update -> pStaticApache1 Update -> pStaticModel1 Update.
-        // Room Update -> pStaticModel1 Update.
-        // YES, Double Update!
-        
-        // However, fixing that is complex right now. 
-        // Let's first fix the CRASH (Double Free), which is caused by explicit push_back in Scene::Init.
-        // I have removed the explicit push_back above for the Player.
-        // Here for Apache, I am NOT doing push_back, so that's good.
-        
-        if (pStaticModel1)
+        // Load a simple cube mesh (using existing MeshLoader or creating one manually if possible)
+        // Since we don't have a simple cube bin handy, we'll reuse the Apache for now but tint it?
+        // Actually, let's use the Apache but make it spin fast to show it's "Active".
+        GameObject* pModel = MeshLoader::LoadGeometryFromFile(this, pDevice, pCommandList, NULL, "Model/Apache.bin");
+        if(pModel) 
         {
-            pStaticApache1->SetChild(pStaticModel1);
-            AddRenderComponentsToHierarchy(pDevice, pCommandList, pStaticModel1, pShader.get());
-        }
-
-        // Apache 2
-        GameObject* pStaticApache2 = CreateGameObject(pDevice, pCommandList);
-        pStaticApache2->GetTransform()->SetPosition(30.0f, 0.0f, 0.0f);
-        GameObject* pStaticModel2 = MeshLoader::LoadGeometryFromFile(this, pDevice, pCommandList, NULL, "Model/Apache.bin");
-        if (pStaticModel2)
-        {
-            pStaticApache2->SetChild(pStaticModel2);
-            AddRenderComponentsToHierarchy(pDevice, pCommandList, pStaticModel2, pShader.get());
+            pCube->SetChild(pModel);
+            AddRenderComponentsToHierarchy(pDevice, pCommandList, pModel, pShader.get());
         }
     }
+
+
+    // --------------------------------------------------------------------------
+    // 4. Setup Room 2 Objects (BLUE/Different Cubes)
+    // --------------------------------------------------------------------------
+    m_pCurrentRoom = m_vRooms[1].get(); 
+    
+    for(int i=0; i<5; ++i)
+    {
+        GameObject* pCube = CreateGameObject(pDevice, pCommandList);
+        pCube->GetTransform()->SetPosition(40.0f + i*5.0f, 5.0f, 10.0f); // Row of cubes in next room
+        // Make these spin differently (faster?)
+        auto rotator = pCube->AddComponent<RotatorComponent>();
+        // We can't easily set speed on RotatorComponent without modifying it, but it defaults to rotating.
+        
+        // Use a different model to distinguish (SuperCobra)
+        GameObject* pModel = MeshLoader::LoadGeometryFromFile(this, pDevice, pCommandList, NULL, "Model/SuperCobra.bin");
+        if(pModel) 
+        {
+            pCube->SetChild(pModel);
+            AddRenderComponentsToHierarchy(pDevice, pCommandList, pModel, pShader.get());
+        }
+    }
+
+    // Reset Context to Room 1
+    m_pCurrentRoom = m_vRooms[0].get(); 
+
 
     // Store the shader
     m_vShaders.push_back(std::move(pShader));
@@ -147,48 +139,10 @@ void Scene::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList)
         gameObject->Init(pDevice, pCommandList);
     }
     
-    // Initialize components for objects in the room
-    if (m_pCurrentRoom)
+    // Init Room Objects
+    for (auto& room : m_vRooms)
     {
-        // We need to access room's objects to init them? 
-        // Actually, GameObject::Init might just be setting up stuff that CreateGameObject already did?
-        // GameObject::Init sets up components.
-        // We need a way to iterate room objects to Init them if they weren't inited.
-        // But CreateGameObject calls CreateConstantBuffer etc. 
-        // Let's assume newly created objects via CreateGameObject need Init? 
-        // The original code called Init on everything at the end.
-        // We should add an Init method to CRoom.
-        // For now, let's manually iterate.
-        // But CRoom::GetGameObjects returns const ref.
-        // We might need to add Init to CRoom.
-        // Let's add Init to CRoom later or cast away const for now (bad practice but quick).
-        // Better: The loop below iterates m_vGameObjects.
-        // CreateGameObject calls Init? No.
-        // We need to ensure objects in Room are initialized.
-    }
-    
-    // Quick fix: Iterate room objects and Init
-    // Since CRoom doesn't have Init yet, and we can't easily access non-const objects...
-    // Let's just rely on the fact that CreateGameObject does the heavy lifting (CBV creation).
-    // Does GameObject::Init do anything critical?
-    // It calls Component::Init.
-    // Yes, we need to call it.
-    // I will add a temporary loop here by const_cast or accessing via friend if possible?
-    // No, I'll just rely on CreateGameObject returning the pointer and calling Init on it right there?
-    // The original code did it in a batch at the end.
-    // Let's just add `pStaticApache1->Init(pDevice, pCommandList);` immediately after creation.
-    // Wait, CreateGameObject is a factory.
-    // Let's look at `GameObject::Init`. 
-    // It calls `m_vComponents[i]->Init()`.
-    
-    // Revised plan for Init: Call Init immediately after creation or setup in the block above.
-    // DONE: Added Init calls in the Apache block below.
-
-    // Temporarily set the first cube as the camera target for testing
-    // This will be replaced with the player GameObject later
-    if (!m_vGameObjects.empty())
-    {
-        m_pCamera->SetTarget(m_vGameObjects[0].get());
+       // Room objects initialization (implicit via CreateGameObject or MeshLoader)
     }
 
     // Initialize SpotLight parameters
@@ -296,10 +250,31 @@ void Scene::Update(float deltaTime, InputSystem* pInputSystem)
     // 2. Update Current Room
     if (m_pCurrentRoom)
     {
-        // Check if player is inside the room (for transition logic later)
+        // --------------------------------------------------------------------------
+        // Room Transition Logic
+        // --------------------------------------------------------------------------
         if (m_pPlayerGameObject)
         {
-             // Logic to switch rooms could go here
+            XMFLOAT3 playerPos = m_pPlayerGameObject->GetTransform()->GetPosition();
+
+            // Transition: Room 1 -> Room 2
+            if (m_pCurrentRoom == m_vRooms[0].get() && playerPos.x > 30.0f)
+            {
+                OutputDebugString(L"[Scene] Transition: Leaving Room 1, Entering Room 2\n");
+                
+                m_pCurrentRoom->SetState(RoomState::Inactive); // Disable Room 1
+                m_pCurrentRoom = m_vRooms[1].get();            // Switch pointer
+                m_pCurrentRoom->SetState(RoomState::Active);   // Enable Room 2
+            }
+            // Transition: Room 2 -> Room 1 (Optional: if we allow backtracking)
+            else if (m_pCurrentRoom == m_vRooms[1].get() && playerPos.x < 30.0f)
+            {
+                OutputDebugString(L"[Scene] Transition: Leaving Room 2, Entering Room 1\n");
+
+                m_pCurrentRoom->SetState(RoomState::Inactive);
+                m_pCurrentRoom = m_vRooms[0].get();
+                m_pCurrentRoom->SetState(RoomState::Active);
+            }
         }
         
         m_pCurrentRoom->Update(deltaTime);
@@ -321,56 +296,68 @@ void Scene::Render(ID3D12GraphicsCommandList* pCommandList)
     ID3D12DescriptorHeap* ppHeaps[] = { m_pDescriptorHeap->GetHeap() };
     pCommandList->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
 
-    // Global objects render via m_vGameObjects? 
-    // No, m_vGameObjects are just raw storage in the previous code?
-    // Wait, the previous Render code:
-    // for (auto& shader : m_vShaders) { shader->Render(...) }
-    // Shader::Render iterates its registered RenderComponents.
-    // As long as objects (Room or Global) register their RenderComponents to the Shader, they will be drawn.
-    // BUT, we might want to cull objects in inactive rooms.
-    // If Shader::Render draws EVERYTHING registered, we have a problem: Inactive room objects will still be drawn.
-    
-    // We need to change how rendering works.
-    // Option A: Clear Shader's list every frame and re-add only active objects. (Slow)
-    // Option B: Have Shader::Render take a list of objects to render? (Better)
-    // Option C: Let the Scene drive rendering by iterating rooms. (Best for this architecture)
-    
-    // Currently, Shader::Render does:
-    // for(m_vRenderComponents) { Draw }
-    
-    // We should probably modify this so Scene calls Render on objects.
-    // OR, we keep it simple for now:
-    // If the Shader holds pointers to ALL RenderComponents, it will draw EVERYTHING.
-    // We need to unregister/register components when switching rooms? Too complex.
-    
-    // Alternative:
-    // CRoom::Render() calls pGameObject->Render(). 
-    // GameObject::Render() calls RenderComponent::Render().
-    // RenderComponent::Render() needs to know about the Shader or CommandList?
-    // Currently RenderComponent doesn't do the draw call itself, the Shader does.
-    
-    // Let's look at Shader::Render in the codebase (memory).
-    // Usually it sets PSO, RootSignature, then iterates objects.
-    
-    // If we want to support Room-based culling, we should probably:
-    // 1. Bind Shader State (PSO, etc.)
-    // 2. Ask CurrentRoom to Render its objects.
-    // 3. Render Global objects.
-    
-    // However, `Shader` class encapsulates the PSO.
-    // So we might need: `pShader->Render(pCommandList, m_pCurrentRoom->GetObjects())`?
-    
-    // For this refactoring step, I will stick to the existing Shader-based rendering 
-    // but I must ensure that ONLY active objects are registered?
-    // Or, I can just leave it as is: All objects are drawn.
-    // Optimization (Culling inactive rooms) can come later.
-    // For now, let's just make sure the code COMPILES and RUNS with the new structure.
-    // The visual result will be the same (all objects drawn).
-    
-    // So I will keep the loop over m_vShaders.
-    // Since AddRenderComponentsToHierarchy registers components to the shader, they will all be drawn.
-    // This is fine for Step 1.
-    
+    // --------------------------------------------------------------------------
+    // Dynamic Rendering List Update
+    // --------------------------------------------------------------------------
+    // 1. Clear previous frame's render list from all shaders
+    for (auto& shader : m_vShaders)
+    {
+        shader->ClearRenderComponents();
+    }
+
+    // 2. Register Global Objects (Player, etc.)
+    Shader* pMainShader = m_vShaders[0].get(); 
+
+    // Helper vector for traversal to avoid recursion
+    std::vector<GameObject*> stack;
+    stack.reserve(64);
+
+    // Process Global Objects
+    for (auto& gameObject : m_vGameObjects)
+    {
+        stack.push_back(gameObject.get());
+        while (!stack.empty())
+        {
+            GameObject* pObj = stack.back();
+            stack.pop_back();
+
+            if (pObj->GetComponent<RenderComponent>())
+            {
+                pMainShader->AddRenderComponent(pObj->GetComponent<RenderComponent>());
+            }
+
+            if (pObj->m_pSibling) stack.push_back(pObj->m_pSibling);
+            if (pObj->m_pChild) stack.push_back(pObj->m_pChild);
+        }
+    }
+
+    // 3. Register Current Room Objects
+    if (m_pCurrentRoom)
+    {
+        const auto& roomObjects = m_pCurrentRoom->GetGameObjects();
+        for (const auto& obj : roomObjects)
+        {
+            stack.push_back(obj.get());
+            while (!stack.empty())
+            {
+                GameObject* pObj = stack.back();
+                stack.pop_back();
+
+                if (pObj->GetComponent<RenderComponent>())
+                {
+                    pMainShader->AddRenderComponent(pObj->GetComponent<RenderComponent>());
+                }
+
+                if (pObj->m_pSibling) stack.push_back(pObj->m_pSibling);
+                if (pObj->m_pChild) stack.push_back(pObj->m_pChild);
+            }
+        }
+    }
+
+    // --------------------------------------------------------------------------
+    // Render
+    // --------------------------------------------------------------------------
+    // Iterate through shaders (groups) and render
     for (auto& shader : m_vShaders)
     {
         shader->Render(pCommandList, GetPassCBVAddress());
