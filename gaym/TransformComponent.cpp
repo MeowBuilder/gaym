@@ -15,8 +15,18 @@ TransformComponent::TransformComponent(GameObject* pOwner)
 void TransformComponent::Update(float deltaTime)
 {
     XMMATRIX matScale = XMMatrixScaling(m_scale.x, m_scale.y, m_scale.z);
-    XMMATRIX matRotation = XMMatrixRotationRollPitchYaw(XMConvertToRadians(m_rotation.x),
-        XMConvertToRadians(m_rotation.y), XMConvertToRadians(m_rotation.z));
+    
+    XMMATRIX matRotation;
+    if (m_bUseQuaternion)
+    {
+        matRotation = XMMatrixRotationQuaternion(XMLoadFloat4(&m_rotationQuaternion));
+    }
+    else
+    {
+        matRotation = XMMatrixRotationRollPitchYaw(XMConvertToRadians(m_rotation.x),
+            XMConvertToRadians(m_rotation.y), XMConvertToRadians(m_rotation.z));
+    }
+
     XMMATRIX matTranslate = XMMatrixTranslation(m_position.x, m_position.y, m_position.z);
     XMMATRIX matLocal = XMLoadFloat4x4(&m_matLocal);
 

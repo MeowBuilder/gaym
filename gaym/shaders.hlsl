@@ -12,7 +12,10 @@ cbuffer cbGameObject : register(b0)
 {
     matrix World;
     uint MaterialIndex;
+    uint bIsSkinned;
+    float2 pad;
     MATERIAL gMaterial; // Replaced BaseColor with full Material
+    matrix gBoneTransforms[96];
 };
 
 // Per-Pass Constant Buffer
@@ -42,6 +45,8 @@ struct VS_INPUT
     float3 position : POSITION;
     float3 normal : NORMAL;
     float2 uv : TEXCOORD;
+    int4 boneIndices : BONEINDICES;
+    float4 boneWeights : BONEWEIGHTS;
 };
 
 struct PS_INPUT
@@ -55,12 +60,34 @@ struct PS_INPUT
 PS_INPUT VS(VS_INPUT input)
 {
     PS_INPUT output;
+
+    float3 posL = input.position;
+    float3 normalL = input.normal;
+
+    if (bIsSkinned)
+    {
+        posL = float3(0.0f, 0.0f, 0.0f);
+        normalL = float3(0.0f, 0.0f, 0.0f);
+        
+        for(int i = 0; i < 4; ++i)
+        {
+            int idx = input.boneIndices[i];
+            float weight = input.boneWeights[i];
+            
+            if (weight > 0.0f)
+            {
+                posL += weight * mul(float4(input.position, 1.0f), gBoneTransforms[idx]).xyz;
+                normalL += weight * mul(input.normal, (float3x3)gBoneTransforms[idx]);
+            }
+        }
+    }
+
     // Transform the position from object space to clip space
-    float4 worldPos = mul(float4(input.position, 1.0f), World);
+    float4 worldPos = mul(float4(posL, 1.0f), World);
     output.position = mul(worldPos, ViewProj);
 
     // Transform the normal from object space to world space
-    output.worldNormal = mul(input.normal, (float3x3)World);
+    output.worldNormal = mul(normalL, (float3x3)World);
 
     // Pass world position for point light calculation
     output.worldPosition = worldPos.xyz;
@@ -136,5 +163,5 @@ float4 PS(PS_INPUT input) : SV_TARGET
         finalColor += spotTotal;
     }
 
-    return finalColor; // DEBUG: UV VISUALIZATION
+    return finalColor;
 }

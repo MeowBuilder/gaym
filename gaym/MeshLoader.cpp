@@ -10,6 +10,8 @@ MeshLoadInfo::~MeshLoadInfo()
 	if (m_pxmf4Colors) delete[] m_pxmf4Colors;
 	if (m_pxmf3Normals) delete[] m_pxmf3Normals;
 	if (m_pxmf2TextureCoords0) delete[] m_pxmf2TextureCoords0;
+    if (m_pxmn4BoneIndices) delete[] m_pxmn4BoneIndices;
+    if (m_pxmf4BoneWeights) delete[] m_pxmf4BoneWeights;
 
 	if (m_pnIndices) delete[] m_pnIndices;
 	
@@ -179,12 +181,19 @@ GameObject* MeshLoader::LoadFrameHierarchyFromFile(Scene* pScene, ID3D12Device* 
             if (pGameObject && pMeshInfo)
             {
                 Mesh *pMesh = NULL;
-                if (pMeshInfo->m_nType & VERTEXT_NORMAL)
+                if (pMeshInfo->m_nType & VERTEXT_BONE_INDEX_WEIGHT)
                 {
+                    OutputDebugStringA("MeshLoader: Creating SkinnedMesh\n");
+                    pMesh = new SkinnedMesh(pd3dDevice, pd3dCommandList, pMeshInfo);
+                }
+                else if (pMeshInfo->m_nType & VERTEXT_NORMAL)
+                {
+                    OutputDebugStringA("MeshLoader: Creating MeshIlluminatedFromFile (Static)\n");
                     pMesh = new MeshIlluminatedFromFile(pd3dDevice, pd3dCommandList, pMeshInfo);
                 }
                 else
                 {
+                    OutputDebugStringA("MeshLoader: Creating MeshFromFile (Basic)\n");
                     pMesh = new MeshFromFile(pd3dDevice, pd3dCommandList, pMeshInfo);
                 }
                 if (pMesh) pGameObject->SetMesh(pMesh);
@@ -283,7 +292,25 @@ MeshLoadInfo* MeshLoader::LoadMeshInfoFromFile(FILE* pInFile)
 			int nBoneWeights = ::ReadIntegerFromFile(pInFile);
 			if (nBoneWeights > 0)
 			{
-				fseek(pInFile, nBoneWeights * 4 * (sizeof(int) + sizeof(float)), SEEK_CUR);
+				pMeshInfo->m_nType |= 0x10; // VERTEXT_BONE_INDEX_WEIGHT
+				pMeshInfo->m_pxmn4BoneIndices = new XMINT4[nBoneWeights];
+				pMeshInfo->m_pxmf4BoneWeights = new XMFLOAT4[nBoneWeights];
+
+				for (int i = 0; i < nBoneWeights; i++)
+				{
+					int idx; float w;
+					fread(&idx, sizeof(int), 1, pInFile); fread(&w, sizeof(float), 1, pInFile);
+					pMeshInfo->m_pxmn4BoneIndices[i].x = idx; pMeshInfo->m_pxmf4BoneWeights[i].x = w;
+
+					fread(&idx, sizeof(int), 1, pInFile); fread(&w, sizeof(float), 1, pInFile);
+					pMeshInfo->m_pxmn4BoneIndices[i].y = idx; pMeshInfo->m_pxmf4BoneWeights[i].y = w;
+
+					fread(&idx, sizeof(int), 1, pInFile); fread(&w, sizeof(float), 1, pInFile);
+					pMeshInfo->m_pxmn4BoneIndices[i].z = idx; pMeshInfo->m_pxmf4BoneWeights[i].z = w;
+
+					fread(&idx, sizeof(int), 1, pInFile); fread(&w, sizeof(float), 1, pInFile);
+					pMeshInfo->m_pxmn4BoneIndices[i].w = idx; pMeshInfo->m_pxmf4BoneWeights[i].w = w;
+				}
 			}
 		}
 		else if (!strcmp(pstrToken, "<BindPoses>:"))
@@ -291,7 +318,12 @@ MeshLoadInfo* MeshLoader::LoadMeshInfoFromFile(FILE* pInFile)
 			int nBindPoses = ::ReadIntegerFromFile(pInFile);
 			if (nBindPoses > 0)
 			{
-				fseek(pInFile, nBindPoses * 16 * sizeof(float), SEEK_CUR);
+				for (int i = 0; i < nBindPoses; i++)
+				{
+					XMFLOAT4X4 mat;
+					fread(&mat, sizeof(float), 16, pInFile);
+					pMeshInfo->m_vBindPoses.push_back(mat);
+				}
 			}
 		}
 		else if (!strcmp(pstrToken, "<BoneNames>:"))
@@ -299,10 +331,11 @@ MeshLoadInfo* MeshLoader::LoadMeshInfoFromFile(FILE* pInFile)
 			int nBoneNames = ::ReadIntegerFromFile(pInFile);
 			if (nBoneNames > 0)
 			{
-				char pstrDummy[64] = { 0 };
+				char pstrBoneName[64] = { 0 };
 				for (int i = 0; i < nBoneNames; i++)
 				{
-					::ReadStringFromFile(pInFile, pstrDummy, 64);
+					::ReadStringFromFile(pInFile, pstrBoneName, 64);
+					pMeshInfo->m_vBoneNames.push_back(pstrBoneName);
 				}
 			}
 		}

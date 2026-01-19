@@ -51,7 +51,11 @@ public:
 
     XMFLOAT2* m_pxmf2TextureCoords0 = NULL;
 
-
+    // Skinning Data
+    XMINT4* m_pxmn4BoneIndices = NULL;
+    XMFLOAT4* m_pxmf4BoneWeights = NULL;
+    std::vector<std::string> m_vBoneNames;
+    std::vector<XMFLOAT4X4> m_vBindPoses;
 
     int                             m_nIndices = 0;
 

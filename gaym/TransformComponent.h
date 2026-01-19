@@ -21,9 +21,11 @@ public:
     const XMFLOAT3& GetPosition() const { return m_position; }
 
     // Rotation
-    void SetRotation(const XMFLOAT3& rotation) { m_rotation = rotation; }
-    void SetRotation(float x, float y, float z) { m_rotation = XMFLOAT3(x, y, z); }
+    void SetRotation(const XMFLOAT3& rotation) { m_rotation = rotation; m_bUseQuaternion = false; }
+    void SetRotation(float x, float y, float z) { m_rotation = XMFLOAT3(x, y, z); m_bUseQuaternion = false; }
     const XMFLOAT3& GetRotation() const { return m_rotation; }
+
+    void SetRotation(const XMFLOAT4& quaternion) { m_rotationQuaternion = quaternion; m_bUseQuaternion = true; }
 
     // Scale
     void SetScale(const XMFLOAT3& scale) { m_scale = scale; }
@@ -45,5 +47,7 @@ private:
     XMFLOAT4X4 m_matLocal;
     XMFLOAT3 m_position;
     XMFLOAT3 m_rotation; // Euler angles
+    XMFLOAT4 m_rotationQuaternion = XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f);
+    bool m_bUseQuaternion = false;
     XMFLOAT3 m_scale;
 };

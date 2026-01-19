@@ -39,7 +39,7 @@ MeshFromFile::MeshFromFile(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *
 			m_pd3dSubSetIndexBufferViews[i].SizeInBytes = sizeof(UINT) * pMeshInfo->m_pnSubSetIndices[i];
 		}
 	}
-}
+};
 
 MeshFromFile::~MeshFromFile()
 {
@@ -113,15 +113,70 @@ void MeshIlluminatedFromFile::Render(ID3D12GraphicsCommandList *pd3dCommandList,
 {
 	pd3dCommandList->IASetPrimitiveTopology(m_d3dPrimitiveTopology);
 	D3D12_VERTEX_BUFFER_VIEW pVertexBufferViews[3] = { m_d3dPositionBufferView, m_d3dNormalBufferView, m_d3dTextureCoord0BufferView };
-    int nBuffers = (m_nType & VERTEXT_TEXTURE_COORD0) ? 3 : 2;
-	pd3dCommandList->IASetVertexBuffers(m_nSlot, nBuffers, pVertexBufferViews);
-	if ((m_nSubMeshes > 0) && (nSubSet < m_nSubMeshes))
-	{
-		pd3dCommandList->IASetIndexBuffer(&(m_pd3dSubSetIndexBufferViews[nSubSet]));
-		pd3dCommandList->DrawIndexedInstanced(m_pnSubSetIndices[nSubSet], 1, 0, 0, 0);
-	}
-	else
-	{
-		pd3dCommandList->DrawInstanced(m_nVertices, 1, m_nOffset, 0);
-	}
-}
+    	if ((m_nSubMeshes > 0) && (nSubSet < m_nSubMeshes))
+    	{
+    		pd3dCommandList->IASetIndexBuffer(&(m_pd3dSubSetIndexBufferViews[nSubSet]));
+    		pd3dCommandList->DrawIndexedInstanced(m_pnSubSetIndices[nSubSet], 1, 0, 0, 0);
+    	}
+    	else
+    	{
+    		pd3dCommandList->DrawInstanced(m_nVertices, 1, m_nOffset, 0);
+    	}
+    }
+    
+    /////////////////////////////////////////////////////////////////////////////////////////////////
+    //
+    SkinnedMesh::SkinnedMesh(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *pd3dCommandList, MeshLoadInfo *pMeshInfo) : MeshIlluminatedFromFile(pd3dDevice, pd3dCommandList, pMeshInfo)
+    {
+        m_vBoneNames = pMeshInfo->m_vBoneNames;
+        m_vBindPoses = pMeshInfo->m_vBindPoses;
+    
+        m_pd3dBoneIndexBuffer = Dx12App::CreateBufferResource(pMeshInfo->m_pxmn4BoneIndices, sizeof(XMINT4) * m_nVertices, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER, &m_pd3dBoneIndexUploadBuffer);
+        m_d3dBoneIndexBufferView.BufferLocation = m_pd3dBoneIndexBuffer->GetGPUVirtualAddress();
+        m_d3dBoneIndexBufferView.StrideInBytes = sizeof(XMINT4);
+        m_d3dBoneIndexBufferView.SizeInBytes = sizeof(XMINT4) * m_nVertices;
+    
+        m_pd3dBoneWeightBuffer = Dx12App::CreateBufferResource(pMeshInfo->m_pxmf4BoneWeights, sizeof(XMFLOAT4) * m_nVertices, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER, &m_pd3dBoneWeightUploadBuffer);
+        m_d3dBoneWeightBufferView.BufferLocation = m_pd3dBoneWeightBuffer->GetGPUVirtualAddress();
+        m_d3dBoneWeightBufferView.StrideInBytes = sizeof(XMFLOAT4);
+        m_d3dBoneWeightBufferView.SizeInBytes = sizeof(XMFLOAT4) * m_nVertices;
+    }
+    
+    SkinnedMesh::~SkinnedMesh()
+    {
+    }
+    
+    void SkinnedMesh::ReleaseUploadBuffers()
+    {
+        MeshIlluminatedFromFile::ReleaseUploadBuffers();
+        if (m_pd3dBoneIndexUploadBuffer) m_pd3dBoneIndexUploadBuffer = nullptr;
+        if (m_pd3dBoneWeightUploadBuffer) m_pd3dBoneWeightUploadBuffer = nullptr;
+    }
+    
+    void SkinnedMesh::Render(ID3D12GraphicsCommandList *pd3dCommandList, int nSubSet)
+    {
+        pd3dCommandList->IASetPrimitiveTopology(m_d3dPrimitiveTopology);
+        
+        bool bHasTexCoord = (m_nType & VERTEXT_TEXTURE_COORD0);
+        
+        if (bHasTexCoord)
+        {
+            D3D12_VERTEX_BUFFER_VIEW pVertexBufferViews[5] = { m_d3dPositionBufferView, m_d3dNormalBufferView, m_d3dTextureCoord0BufferView, m_d3dBoneIndexBufferView, m_d3dBoneWeightBufferView };
+            pd3dCommandList->IASetVertexBuffers(m_nSlot, 5, pVertexBufferViews);
+        }
+        else
+        {
+            D3D12_VERTEX_BUFFER_VIEW pVertexBufferViews[4] = { m_d3dPositionBufferView, m_d3dNormalBufferView, m_d3dBoneIndexBufferView, m_d3dBoneWeightBufferView };
+            pd3dCommandList->IASetVertexBuffers(m_nSlot, 4, pVertexBufferViews);
+        }
+    
+        if ((m_nSubMeshes > 0) && (nSubSet < m_nSubMeshes))
+        {
+            pd3dCommandList->IASetIndexBuffer(&(m_pd3dSubSetIndexBufferViews[nSubSet]));
+            pd3dCommandList->DrawIndexedInstanced(m_pnSubSetIndices[nSubSet], 1, 0, 0, 0);
+        }
+        else
+        {
+            pd3dCommandList->DrawInstanced(m_nVertices, 1, m_nOffset, 0);
+        }
+    }

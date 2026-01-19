@@ -7,6 +7,7 @@
 #include "TransformComponent.h"
 #include "InputSystem.h" // Added for InputSystem
 #include "PlayerComponent.h"
+#include "AnimationComponent.h"
 #include <functional> // Added for std::function
 
 Scene::Scene()
@@ -65,10 +66,16 @@ void Scene::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList)
     if (pPlayer)
     {
         OutputDebugString(L"Player model loaded successfully!\n");
-        pPlayer->GetTransform()->SetPosition(0.0f, 0.0f, 20.0f);
-        pPlayer->GetTransform()->SetScale(10.0f, 10.0f, 10.0f);
+        pPlayer->GetTransform()->SetPosition(0.0f, 0.0f, 0.0f);
+        pPlayer->GetTransform()->SetScale(5.0f, 5.0f, 5.0f);
         pPlayer->AddComponent<PlayerComponent>();
         m_pPlayerGameObject = pPlayer;
+
+        // Add Animation Component
+        pPlayer->AddComponent<AnimationComponent>();
+        pPlayer->GetComponent<AnimationComponent>()->LoadAnimation("Animation/Walking_Anim.bin");
+        pPlayer->GetComponent<AnimationComponent>()->Play("mixamo.com");
+
         AddRenderComponentsToHierarchy(pDevice, pCommandList, pPlayer, pShader.get());
     }
     else

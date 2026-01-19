@@ -149,6 +149,7 @@ namespace
         // We don't support n-channel formats
     };
 
+    //---------------------------------------------------------------------------------
     IWICImagingFactory2* _GetWIC()
     {
         static INIT_ONCE s_initOnce = INIT_ONCE_STATIC_INIT;
@@ -168,7 +169,7 @@ namespace
         return factory;
     }
 
-    //---------------------------------------------------------------------------------
+    //-------------------------------------------------------------------------------------
     template<UINT TNameLength>
     inline void SetDebugObjectName(_In_ ID3D12DeviceChild* resource, _In_z_ const wchar_t(&name)[TNameLength])
     {
@@ -196,7 +197,7 @@ namespace
     }
 
     //--------------------------------------------------------------------------------------
-    DXGI_FORMAT MakeSRGB(_In_ DXGI_FORMAT format)
+    DXGI_FORMAT MakeSRGB (_In_ DXGI_FORMAT format)
     {
         switch (format)
         {
@@ -268,14 +269,14 @@ namespace
     }
 
     //---------------------------------------------------------------------------------
-    HRESULT CreateTextureFromWIC(_In_ ID3D12Device* d3dDevice,
-        _In_ IWICBitmapFrameDecode *frame,
-        size_t maxsize,
-        D3D12_RESOURCE_FLAGS resFlags,
-        unsigned int loadFlags,
-        _Outptr_ ID3D12Resource** texture,
-        std::unique_ptr<uint8_t[]>& decodedData,
-        D3D12_SUBRESOURCE_DATA& subresource)
+    HRESULT CreateTextureFromWIC (_In_ ID3D12Device* d3dDevice,
+                                _In_ IWICBitmapFrameDecode *frame,
+                                size_t maxsize,
+                                D3D12_RESOURCE_FLAGS resFlags,
+                                unsigned int loadFlags,
+                                _Outptr_ ID3D12Resource** texture,
+                                std::unique_ptr<uint8_t[]>& decodedData,
+                                D3D12_SUBRESOURCE_DATA& subresource)
     {
         UINT width, height;
         HRESULT hr = frame->GetSize(&width, &height);
@@ -528,7 +529,7 @@ namespace
         *texture = tex;
         return hr;
     }
-} // anonymous namespace
+}
 
 
 //--------------------------------------------------------------------------------------
@@ -539,14 +540,13 @@ HRESULT DirectX::LoadWICTextureFromMemory(
     size_t wicDataSize,
     ID3D12Resource** texture,
     std::unique_ptr<uint8_t[]>& decodedData,
-    D3D12_SUBRESOURCE_DATA& subresource,
-    size_t maxsize)
+    D3D12_SUBRESOURCE_DATA& subresource)
 {
     return LoadWICTextureFromMemoryEx(
         d3dDevice,
         wicData,
         wicDataSize,
-        maxsize,
+        0,
         D3D12_RESOURCE_FLAG_NONE,
         WIC_LOADER_DEFAULT,
         texture,
@@ -685,7 +685,7 @@ HRESULT DirectX::LoadWICTextureFromFileEx(
 #if !defined(NO_D3D12_DEBUG_NAME) && ( defined(_DEBUG) || defined(PROFILE) )
     if ( SUCCEEDED(hr) )
     {
-        const wchar_t* pstrName = wcsrchr(fileName, '\\' );
+        const wchar_t* pstrName = wcsrchr(fileName, '\' );
         if (!pstrName)
         {
             pstrName = fileName;

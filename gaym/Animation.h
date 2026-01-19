@@ -1,173 +1,46 @@
 #pragma once
 #include "stdafx.h"
-#include "GameObject.h"
+#include <string>
+#include <vector>
+#include <map>
+#include <memory>
 
-class GameObject;
-class SkinnedMesh;
-
-struct CALLBACKKEY
+struct Keyframe
 {
-    float  							m_fTime = 0.0f;
-    void  							*m_pCallbackData = NULL;
+    int m_nFrameIndex;
+    XMFLOAT3 m_xmf3Position;
+    XMFLOAT4 m_xmf4Rotation;
+    XMFLOAT3 m_xmf3Scale;
 };
 
-#define _WITH_ANIMATION_INTERPOLATION
-#define ANIMATION_CALLBACK_EPSILON 0.0165f
-#define ANIMATION_TYPE_ONCE 0
-#define ANIMATION_TYPE_LOOP 1
-#define ANIMATION_TYPE_PINGPONG 2
+struct BoneTrack
+{
+    std::string m_strBoneName;
+    std::vector<Keyframe> m_vKeyframes;
+};
 
-class AnimationCallbackHandler
+class AnimationClip
 {
 public:
-    AnimationCallbackHandler() { }
-    ~AnimationCallbackHandler() { }
-
-public:
-    virtual void HandleCallback(void *pCallbackData, float fTrackPosition) { }
+    std::string m_strName;
+    float m_fDuration;
+    float m_fFrameRate;
+    int m_nTotalFrames;
+    
+    std::vector<BoneTrack> m_vBoneTracks;
 };
 
 class AnimationSet
 {
 public:
-    AnimationSet(float fLength, int nFramesPerSecond, int nKeyFrameTransforms, int nSkinningBones, char *pstrName);
-    ~AnimationSet();
+    AnimationSet() {}
+    ~AnimationSet() {}
 
-public:
-    char							m_pstrAnimationSetName[64];
+    bool LoadAnimationFromFile(const char* pstrFileName);
+    
+    AnimationClip* GetClip(const std::string& strName);
+    AnimationClip* GetClip(int index);
 
-    float							m_fLength = 0.0f;
-    int								m_nFramesPerSecond = 0;
-
-    int								m_nKeyFrames = 0;
-    float							*m_pfKeyFrameTimes = NULL;
-    XMFLOAT4X4						**m_ppxmf4x4KeyFrameTransforms = NULL;
-
-public:
-    XMFLOAT4X4 GetSRT(int nBone, float fPosition);
-};
-
-class AnimationSets
-{
-public:
-    AnimationSets(int nAnimationSets);
-    ~AnimationSets();
-
-private:
-    int								m_nReferences = 0;
-
-public:
-    void AddRef() { m_nReferences++; }
-    void Release() { if (--m_nReferences <= 0) delete this; }
-
-public:
-    int								m_nAnimationSets = 0;
-    AnimationSet					**m_pAnimationSets = NULL;
-
-    int								m_nBoneFrames = 0; 
-    GameObject						**m_ppBoneFrameCaches = NULL; //[m_nBoneFrames]
-};
-
-class AnimationTrack
-{
-public:
-    AnimationTrack() { }
-    ~AnimationTrack();
-
-public:
-    BOOL 							m_bEnable = true;
-    float 							m_fSpeed = 1.0f;
-    float 							m_fPosition = -ANIMATION_CALLBACK_EPSILON;
-    float 							m_fWeight = 1.0f;
-
-    int 							m_nAnimationSet = 0; //AnimationSet Index
-
-    int 							m_nType = ANIMATION_TYPE_LOOP; //Once, Loop, PingPong
-
-    int 							m_nCallbackKeys = 0;
-    CALLBACKKEY*					m_pCallbackKeys = NULL;
-
-    AnimationCallbackHandler*		m_pAnimationCallbackHandler = NULL;
-
-public:
-    void SetAnimationSet(int nAnimationSet) { m_nAnimationSet = nAnimationSet; }
-
-    void SetEnable(bool bEnable) { m_bEnable = bEnable; }
-    void SetSpeed(float fSpeed) { m_fSpeed = fSpeed; }
-    void SetWeight(float fWeight) { m_fWeight = fWeight; }
-
-    void SetPosition(float fPosition) { m_fPosition = fPosition; }
-    float UpdatePosition(float fTrackPosition, float fTrackElapsedTime, float fAnimationLength);
-
-    void SetCallbackKeys(int nCallbackKeys);
-    void SetCallbackKey(int nKeyIndex, float fTime, void* pData);
-    void SetAnimationCallbackHandler(AnimationCallbackHandler* pCallbackHandler);
-
-    void HandleCallback();
-};
-
-class LoadedModelInfo
-{
-public:
-    LoadedModelInfo() { }
-    ~LoadedModelInfo();
-
-    GameObject						*m_pModelRootObject = NULL;
-
-    int 							m_nSkinnedMeshes = 0;
-    SkinnedMesh					    **m_ppSkinnedMeshes = NULL; //[SkinnedMeshes], Skinned Mesh Cache
-
-    AnimationSets					*m_pAnimationSets = NULL;
-
-public:
-    void PrepareSkinning();
-};
-
-class AnimationController 
-{
-public:
-    AnimationController(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *pd3dCommandList, int nAnimationTracks, LoadedModelInfo *pModel);
-    ~AnimationController();
-
-public:
-    float 							m_fTime = 0.0f;
-
-    int 							m_nAnimationTracks = 0;
-    AnimationTrack 				    *m_pAnimationTracks = NULL;
-
-    AnimationSets					*m_pAnimationSets = NULL;
-
-    int 							m_nSkinnedMeshes = 0;
-    SkinnedMesh					    **m_ppSkinnedMeshes = NULL; //[SkinnedMeshes], Skinned Mesh Cache
-
-    ID3D12Resource					**m_ppd3dcbSkinningBoneTransforms = NULL; //[SkinnedMeshes]
-    XMFLOAT4X4						**m_ppcbxmf4x4MappedSkinningBoneTransforms = NULL; //[SkinnedMeshes]
-
-public:
-    void UpdateShaderVariables(ID3D12GraphicsCommandList *pd3dCommandList);
-
-    void SetTrackAnimationSet(int nAnimationTrack, int nAnimationSet);
-
-    void SetTrackEnable(int nAnimationTrack, bool bEnable);
-    void SetTrackPosition(int nAnimationTrack, float fPosition);
-    void SetTrackSpeed(int nAnimationTrack, float fSpeed);
-    void SetTrackWeight(int nAnimationTrack, float fWeight);
-
-    void SetCallbackKeys(int nAnimationTrack, int nCallbackKeys);
-    void SetCallbackKey(int nAnimationTrack, int nKeyIndex, float fTime, void *pData);
-    void SetAnimationCallbackHandler(int nAnimationTrack, AnimationCallbackHandler *pCallbackHandler);
-
-    void AdvanceTime(float fElapsedTime, GameObject *pRootGameObject);
-
-public:
-    bool							m_bRootMotion = false;
-    GameObject*					    m_pModelRootObject = NULL;
-
-    GameObject*					    m_pRootMotionObject = NULL;
-    XMFLOAT3						m_xmf3FirstRootMotionPosition = XMFLOAT3(0.0f, 0.0f, 0.0f);
-
-    void SetRootMotion(bool bRootMotion) { m_bRootMotion = bRootMotion; }
-
-    virtual void OnRootMotion(GameObject* pRootGameObject) { }
-    virtual void OnAnimationIK(GameObject* pRootGameObject) { }
+    std::vector<std::shared_ptr<AnimationClip>> m_vClips;
+    std::map<std::string, std::shared_ptr<AnimationClip>> m_mapClips;
 };

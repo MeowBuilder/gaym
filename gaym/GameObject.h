@@ -23,10 +23,11 @@ struct ObjectConstants
 {
 	XMFLOAT4X4 m_xmf4x4World;
 	UINT m_nMaterialIndex = 0;
-    float pad1; // 4 bytes
+    UINT m_bIsSkinned = 0; // 0: Static, 1: Skinned
     float pad2; // 4 bytes
     float pad3; // 4 bytes
 	MATERIAL mMaterial;
+    XMFLOAT4X4 m_xmf4x4BoneTransforms[96];
 };
 
 
@@ -64,6 +65,21 @@ public:
     void SetSrvGpuDescriptorHandle(D3D12_GPU_DESCRIPTOR_HANDLE handle) { m_srvGPUDescriptorHandle = handle; }
     D3D12_GPU_DESCRIPTOR_HANDLE GetSrvDescriptorHandle() const { return m_srvGPUDescriptorHandle; }
     bool HasTexture() const { return m_pd3dTexture != nullptr; }
+
+    void SetBoneTransform(int index, const XMFLOAT4X4& matrix)
+    {
+        if (m_pcbMappedGameObject && index < 96)
+        {
+            m_pcbMappedGameObject->m_xmf4x4BoneTransforms[index] = matrix;
+        }
+    }
+    void SetSkinned(bool bSkinned)
+    {
+        if (m_pcbMappedGameObject)
+        {
+            m_pcbMappedGameObject->m_bIsSkinned = bSkinned ? 1 : 0;
+        }
+    }
 
 	void ReleaseUploadBuffers();
 
