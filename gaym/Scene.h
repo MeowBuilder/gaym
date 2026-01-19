@@ -7,7 +7,8 @@
 #include "Mesh.h"
 #include "DescriptorHeap.h"
 #include "InputSystem.h"
-#include "Camera.h" // Added Camera.h include
+#include "Camera.h"
+#include "Room.h" // Added Room.h include
 
 struct ID3D12Device;
 struct ID3D12GraphicsCommandList;
@@ -57,7 +58,10 @@ public:
 
 private:
 
-    std::vector<std::unique_ptr<GameObject>> m_vGameObjects;
+    std::vector<std::unique_ptr<GameObject>> m_vGameObjects; // Global Objects (Player, etc.)
+    std::vector<std::unique_ptr<CRoom>> m_vRooms; // Room List
+    CRoom* m_pCurrentRoom = nullptr; // Pointer to the current active room
+
     std::vector<std::unique_ptr<Shader>> m_vShaders;
 
     std::unique_ptr<CDescriptorHeap> m_pDescriptorHeap;

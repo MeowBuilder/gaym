@@ -65,34 +65,36 @@ void PlayerComponent::PlayerUpdate(float deltaTime, InputSystem* pInputSystem, C
 	}
 
 
-    // --- Movement Logic (Player-relative) ---
+    // --- Movement Logic (Camera-Relative) ---
 
-    float moveSpeed = 10.0f; // Increased speed for better feel
+    float moveSpeed = 20.0f; // Increased speed for better feel
 
-    // Get player's local axes after rotation
-    XMVECTOR forward = pTransform->GetLook();
-    XMVECTOR right = pTransform->GetRight();
-    // No need to flatten, they are already on the XZ plane
+    // Get camera's axes and flatten them to the XZ plane (ground)
+    // This makes WASD movement relative to the screen/camera view.
+    XMVECTOR camLook = pCamera->GetLookDirection();
+    XMVECTOR camRight = pCamera->GetRightDirection();
+
+    camLook = XMVectorSetY(camLook, 0.0f);
+    camRight = XMVectorSetY(camRight, 0.0f);
+
+    camLook = XMVector3Normalize(camLook);
+    camRight = XMVector3Normalize(camRight);
 
     XMVECTOR currentPosition = XMLoadFloat3(&pTransform->GetPosition());
     XMVECTOR displacement = XMVectorZero();
 
-    // Keyboard input for movement
-    if (pInputSystem->IsKeyDown('W')) // Forward
+    // Keyboard input for movement (Camera-relative)
+    XMVECTOR moveDir = XMVectorZero();
+    if (pInputSystem->IsKeyDown('W')) moveDir += camLook;
+    if (pInputSystem->IsKeyDown('S')) moveDir -= camLook;
+    if (pInputSystem->IsKeyDown('A')) moveDir -= camRight;
+    if (pInputSystem->IsKeyDown('D')) moveDir += camRight;
+
+    // Normalize movement direction to keep speed consistent (even diagonally)
+    if (XMVectorGetX(XMVector3LengthSq(moveDir)) > 0.001f)
     {
-        displacement += forward * moveSpeed * deltaTime;
-    }
-    if (pInputSystem->IsKeyDown('S')) // Backward
-    {
-        displacement -= forward * moveSpeed * deltaTime;
-    }
-    if (pInputSystem->IsKeyDown('A')) // Left
-    {
-        displacement -= right * moveSpeed * deltaTime;
-    }
-    if (pInputSystem->IsKeyDown('D')) // Right
-    {
-        displacement += right * moveSpeed * deltaTime;
+        moveDir = XMVector3Normalize(moveDir);
+        displacement = moveDir * moveSpeed * deltaTime;
     }
 
     // Apply displacement

@@ -151,6 +151,7 @@
     <ClInclude Include="PlayerComponent.h" />
     <ClInclude Include="RenderComponent.h" />
     <ClInclude Include="Resource.h" />
+    <ClInclude Include="Room.h" />
     <ClInclude Include="RotatorComponent.h" />
     <ClInclude Include="Scene.h" />
     <ClInclude Include="Shader.h" />
@@ -172,6 +173,7 @@
     <ClCompile Include="MeshLoader.cpp" />
     <ClCompile Include="PlayerComponent.cpp" />
     <ClCompile Include="RenderComponent.cpp" />
+    <ClCompile Include="Room.cpp" />
     <ClCompile Include="RotatorComponent.cpp" />
     <ClCompile Include="Scene.cpp" />
     <ClCompile Include="Shader.cpp" />
