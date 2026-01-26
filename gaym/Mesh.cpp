@@ -156,9 +156,9 @@ void MeshIlluminatedFromFile::Render(ID3D12GraphicsCommandList *pd3dCommandList,
     void SkinnedMesh::Render(ID3D12GraphicsCommandList *pd3dCommandList, int nSubSet)
     {
         pd3dCommandList->IASetPrimitiveTopology(m_d3dPrimitiveTopology);
-        
+
         bool bHasTexCoord = (m_nType & VERTEXT_TEXTURE_COORD0);
-        
+
         if (bHasTexCoord)
         {
             D3D12_VERTEX_BUFFER_VIEW pVertexBufferViews[5] = { m_d3dPositionBufferView, m_d3dNormalBufferView, m_d3dTextureCoord0BufferView, m_d3dBoneIndexBufferView, m_d3dBoneWeightBufferView };
@@ -169,7 +169,7 @@ void MeshIlluminatedFromFile::Render(ID3D12GraphicsCommandList *pd3dCommandList,
             D3D12_VERTEX_BUFFER_VIEW pVertexBufferViews[4] = { m_d3dPositionBufferView, m_d3dNormalBufferView, m_d3dBoneIndexBufferView, m_d3dBoneWeightBufferView };
             pd3dCommandList->IASetVertexBuffers(m_nSlot, 4, pVertexBufferViews);
         }
-    
+
         if ((m_nSubMeshes > 0) && (nSubSet < m_nSubMeshes))
         {
             pd3dCommandList->IASetIndexBuffer(&(m_pd3dSubSetIndexBufferViews[nSubSet]));
@@ -180,3 +180,124 @@ void MeshIlluminatedFromFile::Render(ID3D12GraphicsCommandList *pd3dCommandList,
             pd3dCommandList->DrawInstanced(m_nVertices, 1, m_nOffset, 0);
         }
     }
+
+/////////////////////////////////////////////////////////////////////////////////////////////////
+// CubeMesh - Procedural cube mesh
+CubeMesh::CubeMesh(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, float fWidth, float fHeight, float fDepth)
+{
+    m_nVertices = 24; // 6 faces * 4 vertices
+    m_nIndices = 36;  // 6 faces * 2 triangles * 3 vertices
+    m_nType = VERTEXT_POSITION | VERTEXT_NORMAL | VERTEXT_TEXTURE_COORD0;
+
+    float hw = fWidth * 0.5f;
+    float hh = fHeight * 0.5f;
+    float hd = fDepth * 0.5f;
+
+    // Positions (24 vertices for proper normals per face)
+    XMFLOAT3 positions[24] = {
+        // Front face (Z+)
+        { -hw, -hh,  hd }, {  hw, -hh,  hd }, {  hw,  hh,  hd }, { -hw,  hh,  hd },
+        // Back face (Z-)
+        {  hw, -hh, -hd }, { -hw, -hh, -hd }, { -hw,  hh, -hd }, {  hw,  hh, -hd },
+        // Top face (Y+)
+        { -hw,  hh,  hd }, {  hw,  hh,  hd }, {  hw,  hh, -hd }, { -hw,  hh, -hd },
+        // Bottom face (Y-)
+        { -hw, -hh, -hd }, {  hw, -hh, -hd }, {  hw, -hh,  hd }, { -hw, -hh,  hd },
+        // Right face (X+)
+        {  hw, -hh,  hd }, {  hw, -hh, -hd }, {  hw,  hh, -hd }, {  hw,  hh,  hd },
+        // Left face (X-)
+        { -hw, -hh, -hd }, { -hw, -hh,  hd }, { -hw,  hh,  hd }, { -hw,  hh, -hd }
+    };
+
+    // Normals
+    XMFLOAT3 normals[24] = {
+        // Front
+        { 0, 0, 1 }, { 0, 0, 1 }, { 0, 0, 1 }, { 0, 0, 1 },
+        // Back
+        { 0, 0, -1 }, { 0, 0, -1 }, { 0, 0, -1 }, { 0, 0, -1 },
+        // Top
+        { 0, 1, 0 }, { 0, 1, 0 }, { 0, 1, 0 }, { 0, 1, 0 },
+        // Bottom
+        { 0, -1, 0 }, { 0, -1, 0 }, { 0, -1, 0 }, { 0, -1, 0 },
+        // Right
+        { 1, 0, 0 }, { 1, 0, 0 }, { 1, 0, 0 }, { 1, 0, 0 },
+        // Left
+        { -1, 0, 0 }, { -1, 0, 0 }, { -1, 0, 0 }, { -1, 0, 0 }
+    };
+
+    // Texture coordinates
+    XMFLOAT2 texCoords[24] = {
+        // Front
+        { 0, 1 }, { 1, 1 }, { 1, 0 }, { 0, 0 },
+        // Back
+        { 0, 1 }, { 1, 1 }, { 1, 0 }, { 0, 0 },
+        // Top
+        { 0, 1 }, { 1, 1 }, { 1, 0 }, { 0, 0 },
+        // Bottom
+        { 0, 1 }, { 1, 1 }, { 1, 0 }, { 0, 0 },
+        // Right
+        { 0, 1 }, { 1, 1 }, { 1, 0 }, { 0, 0 },
+        // Left
+        { 0, 1 }, { 1, 1 }, { 1, 0 }, { 0, 0 }
+    };
+
+    // Indices
+    UINT indices[36] = {
+        0, 1, 2, 0, 2, 3,       // Front
+        4, 5, 6, 4, 6, 7,       // Back
+        8, 9, 10, 8, 10, 11,    // Top
+        12, 13, 14, 12, 14, 15, // Bottom
+        16, 17, 18, 16, 18, 19, // Right
+        20, 21, 22, 20, 22, 23  // Left
+    };
+
+    // Create position buffer
+    m_pd3dPositionBuffer = Dx12App::CreateBufferResource(positions, sizeof(XMFLOAT3) * m_nVertices,
+        D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER, &m_pd3dPositionUploadBuffer);
+    m_d3dPositionBufferView.BufferLocation = m_pd3dPositionBuffer->GetGPUVirtualAddress();
+    m_d3dPositionBufferView.StrideInBytes = sizeof(XMFLOAT3);
+    m_d3dPositionBufferView.SizeInBytes = sizeof(XMFLOAT3) * m_nVertices;
+
+    // Create normal buffer
+    m_pd3dNormalBuffer = Dx12App::CreateBufferResource(normals, sizeof(XMFLOAT3) * m_nVertices,
+        D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER, &m_pd3dNormalUploadBuffer);
+    m_d3dNormalBufferView.BufferLocation = m_pd3dNormalBuffer->GetGPUVirtualAddress();
+    m_d3dNormalBufferView.StrideInBytes = sizeof(XMFLOAT3);
+    m_d3dNormalBufferView.SizeInBytes = sizeof(XMFLOAT3) * m_nVertices;
+
+    // Create texture coordinate buffer
+    m_pd3dTexCoordBuffer = Dx12App::CreateBufferResource(texCoords, sizeof(XMFLOAT2) * m_nVertices,
+        D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER, &m_pd3dTexCoordUploadBuffer);
+    m_d3dTexCoordBufferView.BufferLocation = m_pd3dTexCoordBuffer->GetGPUVirtualAddress();
+    m_d3dTexCoordBufferView.StrideInBytes = sizeof(XMFLOAT2);
+    m_d3dTexCoordBufferView.SizeInBytes = sizeof(XMFLOAT2) * m_nVertices;
+
+    // Create index buffer
+    m_pd3dIndexBuffer = Dx12App::CreateBufferResource(indices, sizeof(UINT) * m_nIndices,
+        D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_INDEX_BUFFER, &m_pd3dIndexUploadBuffer);
+    m_d3dIndexBufferView.BufferLocation = m_pd3dIndexBuffer->GetGPUVirtualAddress();
+    m_d3dIndexBufferView.Format = DXGI_FORMAT_R32_UINT;
+    m_d3dIndexBufferView.SizeInBytes = sizeof(UINT) * m_nIndices;
+}
+
+CubeMesh::~CubeMesh()
+{
+}
+
+void CubeMesh::ReleaseUploadBuffers()
+{
+    if (m_pd3dPositionUploadBuffer) m_pd3dPositionUploadBuffer = nullptr;
+    if (m_pd3dNormalUploadBuffer) m_pd3dNormalUploadBuffer = nullptr;
+    if (m_pd3dTexCoordUploadBuffer) m_pd3dTexCoordUploadBuffer = nullptr;
+    if (m_pd3dIndexUploadBuffer) m_pd3dIndexUploadBuffer = nullptr;
+}
+
+void CubeMesh::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nSubSet)
+{
+    pd3dCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+    D3D12_VERTEX_BUFFER_VIEW pVertexBufferViews[3] = { m_d3dPositionBufferView, m_d3dNormalBufferView, m_d3dTexCoordBufferView };
+    pd3dCommandList->IASetVertexBuffers(0, 3, pVertexBufferViews);
+    pd3dCommandList->IASetIndexBuffer(&m_d3dIndexBufferView);
+    pd3dCommandList->DrawIndexedInstanced(m_nIndices, 1, 0, 0, 0);
+}

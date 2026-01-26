@@ -8,11 +8,14 @@
 #include "InputSystem.h" // Added for InputSystem
 #include "PlayerComponent.h"
 #include "AnimationComponent.h"
+#include "CollisionManager.h"
+#include "CollisionLayer.h"
 #include <functional> // Added for std::function
 
 Scene::Scene()
 {
     m_pCamera = std::make_unique<CCamera>();
+    m_pCollisionManager = std::make_unique<CollisionManager>();
 }
 
 Scene::~Scene()
@@ -41,20 +44,12 @@ void Scene::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList)
     pShader->Build(pDevice);
 
     // --------------------------------------------------------------------------
-    // 1. Create Rooms
+    // 1. Create Room
     // --------------------------------------------------------------------------
-    
-    // Room 1 (Start Area: Red Zone)
-    auto pRoom1 = std::make_unique<CRoom>();
-    pRoom1->SetState(RoomState::Active);
-    pRoom1->SetBoundingBox(BoundingBox(XMFLOAT3(0, 0, 0), XMFLOAT3(60.0f, 100.0f, 100.0f))); // x: -30 to 30
-    m_vRooms.push_back(std::move(pRoom1));
-
-    // Room 2 (Next Area: Blue Zone)
-    auto pRoom2 = std::make_unique<CRoom>();
-    pRoom2->SetState(RoomState::Inactive);
-    pRoom2->SetBoundingBox(BoundingBox(XMFLOAT3(60.0f, 0, 0), XMFLOAT3(60.0f, 100.0f, 100.0f))); // x: 30 to 90
-    m_vRooms.push_back(std::move(pRoom2));
+    auto pRoom = std::make_unique<CRoom>();
+    pRoom->SetState(RoomState::Active);
+    pRoom->SetBoundingBox(BoundingBox(XMFLOAT3(0, 0, 0), XMFLOAT3(100.0f, 100.0f, 100.0f)));
+    m_vRooms.push_back(std::move(pRoom));
 
 
     // --------------------------------------------------------------------------
@@ -76,6 +71,22 @@ void Scene::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList)
         pPlayer->GetComponent<AnimationComponent>()->LoadAnimation("Animation/Walking_Anim.bin");
         pPlayer->GetComponent<AnimationComponent>()->Play("mixamo.com");
 
+        // Add Collider Component for Player
+        auto* pPlayerCollider = pPlayer->AddComponent<ColliderComponent>();
+        pPlayerCollider->SetExtents(1.0f, 2.0f, 1.0f);  // Player-sized box
+        pPlayerCollider->SetCenter(0.0f, 2.0f, 0.0f);   // Center at player's midsection
+        pPlayerCollider->SetLayer(CollisionLayer::Player);
+        pPlayerCollider->SetCollisionMask(CollisionMask::Player);
+        pPlayerCollider->SetOnCollisionEnter([](ColliderComponent* pOther) {
+            OutputDebugString(L"[Collision] Player ENTER collision!\n");
+        });
+        pPlayerCollider->SetOnCollisionStay([](ColliderComponent* pOther) {
+            OutputDebugString(L"[Collision] Player STAY collision...\n");
+        });
+        pPlayerCollider->SetOnCollisionExit([](ColliderComponent* pOther) {
+            OutputDebugString(L"[Collision] Player EXIT collision!\n");
+        });
+
         AddRenderComponentsToHierarchy(pDevice, pCommandList, pPlayer, pShader.get());
     }
     else
@@ -87,55 +98,41 @@ void Scene::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList)
     }
     m_pCamera->SetTarget(m_pPlayerGameObject);
 
-
     // --------------------------------------------------------------------------
-    // 3. Setup Room 1 Objects (RED Cubes)
+    // Collision Test Cube (Enemy) - Visible cube mesh
     // --------------------------------------------------------------------------
-    m_pCurrentRoom = m_vRooms[0].get(); 
-
-    for(int i=0; i<5; ++i)
     {
-        GameObject* pCube = CreateGameObject(pDevice, pCommandList);
-        pCube->GetTransform()->SetPosition(-15.0f + i*5.0f, 5.0f, 10.0f); // Row of cubes
-        pCube->AddComponent<RotatorComponent>(); // Make them spin!
-        
-        // Load a simple cube mesh (using existing MeshLoader or creating one manually if possible)
-        // Since we don't have a simple cube bin handy, we'll reuse the Apache for now but tint it?
-        // Actually, let's use the Apache but make it spin fast to show it's "Active".
-        GameObject* pModel = MeshLoader::LoadGeometryFromFile(this, pDevice, pCommandList, NULL, "Model/Apache.bin");
-        if(pModel) 
-        {
-            pCube->SetChild(pModel);
-            AddRenderComponentsToHierarchy(pDevice, pCommandList, pModel, pShader.get());
-        }
+        GameObject* pTestCube = CreateGameObject(pDevice, pCommandList);
+        pTestCube->GetTransform()->SetPosition(10.0f, 0.0f, 0.0f);  // 플레이어 근처
+
+        // Create and set cube mesh (6x6x6 size)
+        CubeMesh* pCubeMesh = new CubeMesh(pDevice, pCommandList, 6.0f, 6.0f, 6.0f);
+        pCubeMesh->AddRef();
+        pTestCube->SetMesh(pCubeMesh);
+
+        // Add RenderComponent
+        auto* pRenderComp = pTestCube->AddComponent<RenderComponent>();
+        pRenderComp->SetMesh(pCubeMesh);
+        pShader->AddRenderComponent(pRenderComp);
+
+        // Add Collider
+        auto* pCubeCollider = pTestCube->AddComponent<ColliderComponent>();
+        pCubeCollider->SetExtents(3.0f, 3.0f, 3.0f);  // 6x6x6 크기 (half extents)
+        pCubeCollider->SetCenter(0.0f, 0.0f, 0.0f);
+        pCubeCollider->SetLayer(CollisionLayer::Enemy);
+        pCubeCollider->SetCollisionMask(CollisionMask::Enemy);
+        pCubeCollider->SetOnCollisionEnter([](ColliderComponent* pOther) {
+            OutputDebugString(L"[Collision] TestCube ENTER collision with Player!\n");
+        });
+        pCubeCollider->SetOnCollisionExit([](ColliderComponent* pOther) {
+            OutputDebugString(L"[Collision] TestCube EXIT collision with Player!\n");
+        });
+
+        OutputDebugString(L"[Scene] Collision Test Cube created at (10, 0, 0)\n");
     }
 
-
-    // --------------------------------------------------------------------------
-    // 4. Setup Room 2 Objects (BLUE/Different Cubes)
-    // --------------------------------------------------------------------------
-    m_pCurrentRoom = m_vRooms[1].get(); 
-    
-    for(int i=0; i<5; ++i)
-    {
-        GameObject* pCube = CreateGameObject(pDevice, pCommandList);
-        pCube->GetTransform()->SetPosition(40.0f + i*5.0f, 5.0f, 10.0f); // Row of cubes in next room
-        // Make these spin differently (faster?)
-        auto rotator = pCube->AddComponent<RotatorComponent>();
-        // We can't easily set speed on RotatorComponent without modifying it, but it defaults to rotating.
-        
-        // Use a different model to distinguish (SuperCobra)
-        GameObject* pModel = MeshLoader::LoadGeometryFromFile(this, pDevice, pCommandList, NULL, "Model/SuperCobra.bin");
-        if(pModel) 
-        {
-            pCube->SetChild(pModel);
-            AddRenderComponentsToHierarchy(pDevice, pCommandList, pModel, pShader.get());
-        }
-    }
-
-    // Reset Context to Room 1
-    m_pCurrentRoom = m_vRooms[0].get(); 
-
+    // Set current room
+    m_pCurrentRoom = m_vRooms[0].get();
 
     // Store the shader
     m_vShaders.push_back(std::move(pShader));
@@ -257,33 +254,6 @@ void Scene::Update(float deltaTime, InputSystem* pInputSystem)
     // 2. Update Current Room
     if (m_pCurrentRoom)
     {
-        // --------------------------------------------------------------------------
-        // Room Transition Logic
-        // --------------------------------------------------------------------------
-        if (m_pPlayerGameObject)
-        {
-            XMFLOAT3 playerPos = m_pPlayerGameObject->GetTransform()->GetPosition();
-
-            // Transition: Room 1 -> Room 2
-            if (m_pCurrentRoom == m_vRooms[0].get() && playerPos.x > 30.0f)
-            {
-                OutputDebugString(L"[Scene] Transition: Leaving Room 1, Entering Room 2\n");
-                
-                m_pCurrentRoom->SetState(RoomState::Inactive); // Disable Room 1
-                m_pCurrentRoom = m_vRooms[1].get();            // Switch pointer
-                m_pCurrentRoom->SetState(RoomState::Active);   // Enable Room 2
-            }
-            // Transition: Room 2 -> Room 1 (Optional: if we allow backtracking)
-            else if (m_pCurrentRoom == m_vRooms[1].get() && playerPos.x < 30.0f)
-            {
-                OutputDebugString(L"[Scene] Transition: Leaving Room 2, Entering Room 1\n");
-
-                m_pCurrentRoom->SetState(RoomState::Inactive);
-                m_pCurrentRoom = m_vRooms[0].get();
-                m_pCurrentRoom->SetState(RoomState::Active);
-            }
-        }
-        
         m_pCurrentRoom->Update(deltaTime);
     }
 
@@ -294,7 +264,29 @@ void Scene::Update(float deltaTime, InputSystem* pInputSystem)
     }
 
     // 2. Check for collisions
-    // ... (collision code is unchanged)
+    if (m_pCollisionManager)
+    {
+        // Collect colliders from global objects
+        std::vector<ColliderComponent*> globalColliders;
+        for (auto& gameObject : m_vGameObjects)
+        {
+            CollectColliders(gameObject.get(), globalColliders);
+        }
+
+        // Collect colliders from current room
+        std::vector<ColliderComponent*> roomColliders;
+        if (m_pCurrentRoom)
+        {
+            const auto& roomObjects = m_pCurrentRoom->GetGameObjects();
+            for (const auto& obj : roomObjects)
+            {
+                CollectColliders(obj.get(), roomColliders);
+            }
+        }
+
+        // Run collision detection
+        m_pCollisionManager->Update(globalColliders, roomColliders);
+    }
 }
 
 void Scene::Render(ID3D12GraphicsCommandList* pCommandList)
@@ -427,4 +419,26 @@ void Scene::PrintHierarchy(GameObject* pGameObject, int nDepth)
 	{
 		PrintHierarchy(pGameObject->m_pSibling, nDepth);
 	}
+}
+
+void Scene::CollectColliders(GameObject* pGameObject, std::vector<ColliderComponent*>& outColliders)
+{
+    if (!pGameObject) return;
+
+    // Check if this object has a ColliderComponent
+    ColliderComponent* pCollider = pGameObject->GetComponent<ColliderComponent>();
+    if (pCollider && pCollider->IsEnabled())
+    {
+        outColliders.push_back(pCollider);
+    }
+
+    // Recurse for children and siblings
+    if (pGameObject->m_pChild)
+    {
+        CollectColliders(pGameObject->m_pChild, outColliders);
+    }
+    if (pGameObject->m_pSibling)
+    {
+        CollectColliders(pGameObject->m_pSibling, outColliders);
+    }
 }

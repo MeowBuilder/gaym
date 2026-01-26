@@ -24,7 +24,7 @@ struct ObjectConstants
 	XMFLOAT4X4 m_xmf4x4World;
 	UINT m_nMaterialIndex = 0;
     UINT m_bIsSkinned = 0; // 0: Static, 1: Skinned
-    float pad2; // 4 bytes
+    UINT m_bHasTexture = 0; // 0: No texture, 1: Has texture
     float pad3; // 4 bytes
 	MATERIAL mMaterial;
     XMFLOAT4X4 m_xmf4x4BoneTransforms[96];

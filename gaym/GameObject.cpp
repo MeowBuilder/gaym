@@ -41,6 +41,7 @@ void GameObject::Update(float deltaTime)
         XMStoreFloat4x4(&m_pcbMappedGameObject->m_xmf4x4World, XMMatrixTranspose(worldMatrix));
         m_pcbMappedGameObject->m_nMaterialIndex = m_nMaterialIndex;
         m_pcbMappedGameObject->mMaterial = m_Material; // Copy the new material struct
+        m_pcbMappedGameObject->m_bHasTexture = HasTexture() ? 1 : 0; // Set texture flag
     }
 
     // Recurse for children and siblings

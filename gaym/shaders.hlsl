@@ -13,7 +13,8 @@ cbuffer cbGameObject : register(b0)
     matrix World;
     uint MaterialIndex;
     uint bIsSkinned;
-    float2 pad;
+    uint bHasTexture;
+    float pad;
     MATERIAL gMaterial; // Replaced BaseColor with full Material
     matrix gBoneTransforms[96];
 };
@@ -103,7 +104,15 @@ float4 PS(PS_INPUT input) : SV_TARGET
     float3 normal = normalize(input.worldNormal);
     float3 vToCamera = normalize(g_CameraPosition - input.worldPosition); // Vector from fragment to camera
 
-    float4 albedoColor = gAlbedoMap.Sample(gSampler, input.uv);
+    float4 albedoColor;
+    if (bHasTexture)
+    {
+        albedoColor = gAlbedoMap.Sample(gSampler, input.uv);
+    }
+    else
+    {
+        albedoColor = float4(1.0f, 1.0f, 1.0f, 1.0f); // White if no texture
+    }
     // Combine with material diffuse (optional: multiply)
     float4 baseColor = albedoColor * gMaterial.m_cDiffuse;
 

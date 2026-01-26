@@ -9,6 +9,7 @@
 #include "InputSystem.h"
 #include "Camera.h"
 #include "Room.h" // Added Room.h include
+#include "CollisionManager.h" // Added CollisionManager include
 
 struct ID3D12Device;
 struct ID3D12GraphicsCommandList;
@@ -74,8 +75,12 @@ private:
     std::unique_ptr<CCamera> m_pCamera; // Added CCamera member
     GameObject* m_pPlayerGameObject = nullptr; // Added player GameObject pointer
 
+    // Collision System
+    std::unique_ptr<CollisionManager> m_pCollisionManager;
+
     void AddRenderComponentsToHierarchy(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList, GameObject* pGameObject, Shader* pShader);
     void PrintHierarchy(GameObject* pGameObject, int nDepth);
+    void CollectColliders(GameObject* pGameObject, std::vector<ColliderComponent*>& outColliders);
 public:
     D3D12_GPU_VIRTUAL_ADDRESS GetPassCBVAddress() const { if(m_pd3dcbPass) return m_pd3dcbPass->GetGPUVirtualAddress(); return 0; }
 };

@@ -120,3 +120,34 @@ public:
 	std::vector<std::string>		m_vBoneNames;
 	std::vector<XMFLOAT4X4>			m_vBindPoses; // Inverse Bind Pose Matrices
 };
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Simple procedural cube mesh
+class CubeMesh : public Mesh
+{
+public:
+	CubeMesh(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, float fWidth = 1.0f, float fHeight = 1.0f, float fDepth = 1.0f);
+	virtual ~CubeMesh();
+
+	virtual void ReleaseUploadBuffers() override;
+	virtual void Render(ID3D12GraphicsCommandList* pd3dCommandList, int nSubSet = 0) override;
+
+protected:
+	ComPtr<ID3D12Resource> m_pd3dPositionBuffer;
+	ComPtr<ID3D12Resource> m_pd3dPositionUploadBuffer;
+	D3D12_VERTEX_BUFFER_VIEW m_d3dPositionBufferView;
+
+	ComPtr<ID3D12Resource> m_pd3dNormalBuffer;
+	ComPtr<ID3D12Resource> m_pd3dNormalUploadBuffer;
+	D3D12_VERTEX_BUFFER_VIEW m_d3dNormalBufferView;
+
+	ComPtr<ID3D12Resource> m_pd3dTexCoordBuffer;
+	ComPtr<ID3D12Resource> m_pd3dTexCoordUploadBuffer;
+	D3D12_VERTEX_BUFFER_VIEW m_d3dTexCoordBufferView;
+
+	ComPtr<ID3D12Resource> m_pd3dIndexBuffer;
+	ComPtr<ID3D12Resource> m_pd3dIndexUploadBuffer;
+	D3D12_INDEX_BUFFER_VIEW m_d3dIndexBufferView;
+
+	UINT m_nIndices = 0;
+};
