@@ -10,6 +10,7 @@
 #include "Camera.h"
 #include "Room.h" // Added Room.h include
 #include "CollisionManager.h" // Added CollisionManager include
+#include "EnemySpawner.h" // Added EnemySpawner include
 
 struct ID3D12Device;
 struct ID3D12GraphicsCommandList;
@@ -77,6 +78,9 @@ private:
 
     // Collision System
     std::unique_ptr<CollisionManager> m_pCollisionManager;
+
+    // Enemy System
+    std::unique_ptr<EnemySpawner> m_pEnemySpawner;
 
     void AddRenderComponentsToHierarchy(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList, GameObject* pGameObject, Shader* pShader);
     void PrintHierarchy(GameObject* pGameObject, int nDepth);

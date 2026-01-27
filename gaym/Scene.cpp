@@ -16,6 +16,7 @@ Scene::Scene()
 {
     m_pCamera = std::make_unique<CCamera>();
     m_pCollisionManager = std::make_unique<CollisionManager>();
+    m_pEnemySpawner = std::make_unique<EnemySpawner>();
 }
 
 Scene::~Scene()
@@ -98,41 +99,26 @@ void Scene::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList)
     }
     m_pCamera->SetTarget(m_pPlayerGameObject);
 
-    // --------------------------------------------------------------------------
-    // Collision Test Cube (Enemy) - Visible cube mesh
-    // --------------------------------------------------------------------------
-    {
-        GameObject* pTestCube = CreateGameObject(pDevice, pCommandList);
-        pTestCube->GetTransform()->SetPosition(10.0f, 0.0f, 0.0f);  // 플레이어 근처
-
-        // Create and set cube mesh (6x6x6 size)
-        CubeMesh* pCubeMesh = new CubeMesh(pDevice, pCommandList, 6.0f, 6.0f, 6.0f);
-        pCubeMesh->AddRef();
-        pTestCube->SetMesh(pCubeMesh);
-
-        // Add RenderComponent
-        auto* pRenderComp = pTestCube->AddComponent<RenderComponent>();
-        pRenderComp->SetMesh(pCubeMesh);
-        pShader->AddRenderComponent(pRenderComp);
-
-        // Add Collider
-        auto* pCubeCollider = pTestCube->AddComponent<ColliderComponent>();
-        pCubeCollider->SetExtents(3.0f, 3.0f, 3.0f);  // 6x6x6 크기 (half extents)
-        pCubeCollider->SetCenter(0.0f, 0.0f, 0.0f);
-        pCubeCollider->SetLayer(CollisionLayer::Enemy);
-        pCubeCollider->SetCollisionMask(CollisionMask::Enemy);
-        pCubeCollider->SetOnCollisionEnter([](ColliderComponent* pOther) {
-            OutputDebugString(L"[Collision] TestCube ENTER collision with Player!\n");
-        });
-        pCubeCollider->SetOnCollisionExit([](ColliderComponent* pOther) {
-            OutputDebugString(L"[Collision] TestCube EXIT collision with Player!\n");
-        });
-
-        OutputDebugString(L"[Scene] Collision Test Cube created at (10, 0, 0)\n");
-    }
-
     // Set current room
     m_pCurrentRoom = m_vRooms[0].get();
+
+    // --------------------------------------------------------------------------
+    // Initialize Enemy Spawner and configure room spawns
+    // --------------------------------------------------------------------------
+    m_pEnemySpawner->Init(pDevice, pCommandList, this, pShader.get());
+
+    // Configure spawn points for the room
+    RoomSpawnConfig spawnConfig;
+    spawnConfig.AddSpawn("TestEnemy", 10.0f, 0.0f, 0.0f);   // Right side
+    spawnConfig.AddSpawn("TestEnemy", -10.0f, 0.0f, 0.0f);  // Left side
+    spawnConfig.AddSpawn("TestEnemy", 0.0f, 0.0f, 15.0f);   // Front
+
+    // Apply configuration to room
+    m_pCurrentRoom->SetSpawnConfig(spawnConfig);
+    m_pCurrentRoom->SetEnemySpawner(m_pEnemySpawner.get());
+    m_pCurrentRoom->SetPlayerTarget(m_pPlayerGameObject);
+
+    OutputDebugString(L"[Scene] Enemy spawn system initialized\n");
 
     // Store the shader
     m_vShaders.push_back(std::move(pShader));

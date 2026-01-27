@@ -39,16 +39,15 @@ namespace DirectX
         WIC_LOADER_MIP_AUTOGEN = 0x4,
         WIC_LOADER_MIP_RESERVE = 0x8,
     };
-
-    // Standard version
-    HRESULT __cdecl LoadWICTextureFromMemory(
-        _In_ ID3D12Device* d3dDevice,
-        _In_reads_bytes_(wicDataSize) const uint8_t* wicData,
+    HRESULT LoadWICTextureFromMemory(
+        ID3D12Device* d3dDevice,
+        const uint8_t* wicData,
         size_t wicDataSize,
-        _Outptr_ ID3D12Resource** texture,
+        ID3D12Resource** texture,
         std::unique_ptr<uint8_t[]>& decodedData,
-        D3D12_SUBRESOURCE_DATA& subresource,
-        size_t maxsize = 0);
+        D3D12_SUBRESOURCE_DATA& subresource);
+    // Standard version
+      
 
     HRESULT __cdecl LoadWICTextureFromFile(
         _In_ ID3D12Device* d3dDevice,
