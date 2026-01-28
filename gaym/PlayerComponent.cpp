@@ -4,6 +4,7 @@
 #include "GameObject.h" // Needed for GameObject
 #include "TransformComponent.h" // Needed for TransformComponent
 #include "Camera.h" // Needed for CCamera
+#include "SkillComponent.h" // Needed for SkillComponent
 
 PlayerComponent::PlayerComponent(GameObject* pOwner)
     : Component(pOwner)
@@ -100,4 +101,11 @@ void PlayerComponent::PlayerUpdate(float deltaTime, InputSystem* pInputSystem, C
     // Apply displacement
     currentPosition += displacement;
     pTransform->SetPosition(XMFLOAT3(XMVectorGetX(currentPosition), XMVectorGetY(currentPosition), XMVectorGetZ(currentPosition)));
+
+    // --- Skill Input Processing ---
+    SkillComponent* pSkillComponent = m_pOwner->GetComponent<SkillComponent>();
+    if (pSkillComponent)
+    {
+        pSkillComponent->ProcessSkillInput(pInputSystem, pCamera);
+    }
 }

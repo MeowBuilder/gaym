@@ -10,6 +10,9 @@
 #include "AnimationComponent.h"
 #include "CollisionManager.h"
 #include "CollisionLayer.h"
+#include "SkillComponent.h"
+#include "FireballBehavior.h"
+#include "ProjectileManager.h"
 #include <functional> // Added for std::function
 
 Scene::Scene()
@@ -17,6 +20,7 @@ Scene::Scene()
     m_pCamera = std::make_unique<CCamera>();
     m_pCollisionManager = std::make_unique<CollisionManager>();
     m_pEnemySpawner = std::make_unique<EnemySpawner>();
+    m_pProjectileManager = std::make_unique<ProjectileManager>();
 }
 
 Scene::~Scene()
@@ -88,6 +92,21 @@ void Scene::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList)
             OutputDebugString(L"[Collision] Player EXIT collision!\n");
         });
 
+        // Add Skill Component
+        auto* pSkillComponent = pPlayer->AddComponent<SkillComponent>();
+
+        // Equip Fireball to Q slot
+        auto fireballQ = std::make_unique<FireballBehavior>();
+        fireballQ->SetProjectileManager(m_pProjectileManager.get());
+        pSkillComponent->EquipSkill(SkillSlot::Q, std::move(fireballQ));
+
+        // Also equip Fireball to RightClick slot for testing
+        auto fireballRClick = std::make_unique<FireballBehavior>();
+        fireballRClick->SetProjectileManager(m_pProjectileManager.get());
+        pSkillComponent->EquipSkill(SkillSlot::RightClick, std::move(fireballRClick));
+
+        OutputDebugString(L"[Scene] Skill system initialized - Fireball equipped to Q and RightClick\n");
+
         AddRenderComponentsToHierarchy(pDevice, pCommandList, pPlayer, pShader.get());
     }
     else
@@ -119,6 +138,13 @@ void Scene::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList)
     m_pCurrentRoom->SetPlayerTarget(m_pPlayerGameObject);
 
     OutputDebugString(L"[Scene] Enemy spawn system initialized\n");
+
+    // Initialize Projectile Manager with rendering resources
+    // Reserve descriptor indices for projectiles (64 max rendered projectiles)
+    UINT nProjectileDescriptorStart = m_nNextDescriptorIndex;
+    m_nNextDescriptorIndex += 64;  // Reserve 64 descriptors for projectiles
+    m_pProjectileManager->Init(this, pDevice, pCommandList, m_pDescriptorHeap.get(), nProjectileDescriptorStart);
+    OutputDebugString(L"[Scene] Projectile system initialized\n");
 
     // Store the shader
     m_vShaders.push_back(std::move(pShader));
@@ -249,6 +275,12 @@ void Scene::Update(float deltaTime, InputSystem* pInputSystem)
         m_pPlayerGameObject->GetComponent<PlayerComponent>()->PlayerUpdate(deltaTime, pInputSystem, m_pCamera.get());
     }
 
+    // Update Projectile System
+    if (m_pProjectileManager)
+    {
+        m_pProjectileManager->Update(deltaTime);
+    }
+
     // 2. Check for collisions
     if (m_pCollisionManager)
     {
@@ -346,6 +378,12 @@ void Scene::Render(ID3D12GraphicsCommandList* pCommandList)
     for (auto& shader : m_vShaders)
     {
         shader->Render(pCommandList, GetPassCBVAddress());
+    }
+
+    // Render projectiles (after main rendering, pipeline state is already set)
+    if (m_pProjectileManager)
+    {
+        m_pProjectileManager->Render(pCommandList);
     }
 }
 

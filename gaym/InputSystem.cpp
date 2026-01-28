@@ -8,6 +8,7 @@ InputSystem::InputSystem()
       m_firstMouseMove(true)
 {
     ZeroMemory(m_keyState, sizeof(m_keyState));
+    ZeroMemory(m_mouseButtonState, sizeof(m_mouseButtonState));
 }
 
 InputSystem::~InputSystem()
@@ -50,6 +51,31 @@ void InputSystem::OnMouseMove(int x, int y)
 void InputSystem::OnMouseWheel(short delta)
 {
     m_mouseWheelDelta = (float)delta / WHEEL_DELTA;
+}
+
+void InputSystem::OnMouseButtonDown(int button)
+{
+    if (button >= 0 && button < MAX_MOUSE_BUTTONS)
+    {
+        m_mouseButtonState[button] = true;
+    }
+}
+
+void InputSystem::OnMouseButtonUp(int button)
+{
+    if (button >= 0 && button < MAX_MOUSE_BUTTONS)
+    {
+        m_mouseButtonState[button] = false;
+    }
+}
+
+bool InputSystem::IsMouseButtonDown(int button) const
+{
+    if (button >= 0 && button < MAX_MOUSE_BUTTONS)
+    {
+        return m_mouseButtonState[button];
+    }
+    return false;
 }
 
 void InputSystem::Reset()

@@ -129,6 +129,24 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
     case WM_MOUSEWHEEL:
         g_pDx12App->GetInputSystem().OnMouseWheel(GET_WHEEL_DELTA_WPARAM(wParam));
         break;
+    case WM_LBUTTONDOWN:
+        g_pDx12App->GetInputSystem().OnMouseButtonDown(0);
+        break;
+    case WM_LBUTTONUP:
+        g_pDx12App->GetInputSystem().OnMouseButtonUp(0);
+        break;
+    case WM_RBUTTONDOWN:
+        g_pDx12App->GetInputSystem().OnMouseButtonDown(1);
+        break;
+    case WM_RBUTTONUP:
+        g_pDx12App->GetInputSystem().OnMouseButtonUp(1);
+        break;
+    case WM_MBUTTONDOWN:
+        g_pDx12App->GetInputSystem().OnMouseButtonDown(2);
+        break;
+    case WM_MBUTTONUP:
+        g_pDx12App->GetInputSystem().OnMouseButtonUp(2);
+        break;
     case WM_SIZE:
         g_pDx12App->OnResize(LOWORD(lParam), HIWORD(lParam));
         break;
