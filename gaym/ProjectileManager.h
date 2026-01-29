@@ -53,7 +53,8 @@ public:
         float explosionRadius,
         ElementType element,
         GameObject* owner,
-        bool isPlayerProjectile = true
+        bool isPlayerProjectile = true,
+        float scale = 1.0f
     );
 
     // Update all projectiles (movement + collision)

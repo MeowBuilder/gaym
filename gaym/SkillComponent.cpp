@@ -40,6 +40,63 @@ void SkillComponent::Update(float deltaTime)
         }
     }
 
+    // Update charge timer
+    if (m_bIsCharging)
+    {
+        m_fChargeTime += deltaTime;
+        // Visual/audio feedback could be added here based on charge level
+    }
+
+    // Update channel timer
+    if (m_bIsChanneling)
+    {
+        m_fChannelTime += deltaTime;
+        m_fChannelTickAccum += deltaTime;
+
+        // Fire tick if enough time passed
+        if (m_fChannelTickAccum >= m_fChannelTickRate)
+        {
+            m_fChannelTickAccum -= m_fChannelTickRate;
+
+            size_t index = static_cast<size_t>(m_ActiveSkillSlot);
+            if (m_Skills[index])
+            {
+                // Use stored target position for channel ticks
+                m_Skills[index]->Execute(m_pOwner, m_ChannelTargetPosition, 0.3f);  // 30% damage per tick
+            }
+        }
+
+        // Check if channel duration expired
+        if (m_fChannelTime >= m_fChannelDuration)
+        {
+            OutputDebugString(L"[Skill] Channel complete!\n");
+            m_bIsChanneling = false;
+            m_fChannelTime = 0.0f;
+
+            size_t index = static_cast<size_t>(m_ActiveSkillSlot);
+            if (m_Skills[index])
+            {
+                float cooldown = m_Skills[index]->GetSkillData().cooldown;
+                m_CooldownTimers[index] = cooldown;
+                m_SkillStates[index] = SkillState::Cooldown;
+                m_Skills[index]->Reset();
+            }
+            m_ActiveSkillSlot = SkillSlot::Count;
+        }
+    }
+
+    // Update enhance timer
+    if (m_bIsEnhanced)
+    {
+        m_fEnhanceTimer -= deltaTime;
+        if (m_fEnhanceTimer <= 0.0f)
+        {
+            m_bIsEnhanced = false;
+            m_fEnhanceTimer = 0.0f;
+            OutputDebugString(L"[Skill] Enhancement expired\n");
+        }
+    }
+
     // Update active skill if any
     if (m_ActiveSkillSlot != SkillSlot::Count)
     {
@@ -66,11 +123,84 @@ void SkillComponent::ProcessSkillInput(InputSystem* pInputSystem, CCamera* pCame
 {
     if (!pInputSystem || !pCamera) return;
 
+    // Process rune input (1-5 keys to change activation type)
+    ProcessRuneInput(pInputSystem);
+
+    // Calculate target position
+    DirectX::XMFLOAT3 targetPos = CalculateTargetPosition(pInputSystem, pCamera);
+
+    // Handle charging state
+    if (m_bIsCharging)
+    {
+        // Check if key is still held
+        if (IsSkillKeyPressed(m_ChargingSlot, pInputSystem))
+        {
+            // Continue charging
+            // (charge time is updated in ExecuteWithActivationType via deltaTime from Update)
+        }
+        else
+        {
+            // Key released - fire the charged skill
+            size_t index = static_cast<size_t>(m_ChargingSlot);
+            if (m_Skills[index])
+            {
+                float chargeRatio = m_fChargeTime / m_fMaxChargeTime;
+                chargeRatio = min(1.0f, chargeRatio);
+
+                // Apply charge multiplier (1.0x to 3.0x based on charge)
+                float damageMultiplier = 1.0f + chargeRatio * 2.0f;
+
+                wchar_t buffer[128];
+                swprintf_s(buffer, 128, L"[Skill] Charge released! Charge: %.0f%%, Multiplier: %.1fx\n",
+                    chargeRatio * 100.0f, damageMultiplier);
+                OutputDebugString(buffer);
+
+                // Execute with multiplier
+                m_Skills[index]->Execute(m_pOwner, m_ChargeTargetPosition, damageMultiplier);
+                m_SkillStates[index] = SkillState::Casting;
+                m_ActiveSkillSlot = m_ChargingSlot;
+
+                // Start cooldown
+                float cooldown = m_Skills[index]->GetSkillData().cooldown;
+                m_CooldownTimers[index] = cooldown;
+            }
+
+            m_bIsCharging = false;
+            m_fChargeTime = 0.0f;
+            m_ChargingSlot = SkillSlot::Count;
+        }
+        return;  // Don't process other inputs while charging
+    }
+
+    // Handle channeling state
+    if (m_bIsChanneling)
+    {
+        if (IsSkillKeyPressed(m_ActiveSkillSlot, pInputSystem))
+        {
+            // Continue channeling - handled in Update
+        }
+        else
+        {
+            // Key released - stop channeling
+            OutputDebugString(L"[Skill] Channel interrupted\n");
+            m_bIsChanneling = false;
+            m_fChannelTime = 0.0f;
+
+            size_t index = static_cast<size_t>(m_ActiveSkillSlot);
+            if (m_Skills[index])
+            {
+                float cooldown = m_Skills[index]->GetSkillData().cooldown * 0.5f; // Half cooldown on interrupt
+                m_CooldownTimers[index] = cooldown;
+                m_SkillStates[index] = SkillState::Cooldown;
+                m_Skills[index]->Reset();
+            }
+            m_ActiveSkillSlot = SkillSlot::Count;
+        }
+        return;
+    }
+
     // Don't process new skill input if a skill is currently active
     if (m_ActiveSkillSlot != SkillSlot::Count) return;
-
-    // Calculate target position once for all skills
-    DirectX::XMFLOAT3 targetPos = CalculateTargetPosition(pInputSystem, pCamera);
 
     // Check each skill slot for input
     for (size_t i = 0; i < static_cast<size_t>(SkillSlot::Count); ++i)
@@ -78,7 +208,7 @@ void SkillComponent::ProcessSkillInput(InputSystem* pInputSystem, CCamera* pCame
         SkillSlot slot = static_cast<SkillSlot>(i);
         if (IsSkillKeyPressed(slot, pInputSystem))
         {
-            TryUseSkill(slot, targetPos);
+            ExecuteWithActivationType(slot, targetPos);
             break;  // Only use one skill per frame
         }
     }
@@ -223,5 +353,136 @@ bool SkillComponent::IsSkillKeyPressed(SkillSlot slot, InputSystem* pInputSystem
         return pInputSystem->IsMouseButtonDown(1);  // Right mouse button
     default:
         return false;
+    }
+}
+
+void SkillComponent::SetActivationType(ActivationType type)
+{
+    if (m_CurrentActivationType != type)
+    {
+        m_CurrentActivationType = type;
+
+        const wchar_t* typeNames[] = { L"Instant", L"Charge", L"Channel", L"Place", L"Enhance" };
+        wchar_t buffer[128];
+        swprintf_s(buffer, 128, L"[Skill] Activation type changed to: %s\n", typeNames[static_cast<int>(type)]);
+        OutputDebugString(buffer);
+    }
+}
+
+float SkillComponent::GetChargeProgress() const
+{
+    if (!m_bIsCharging) return 0.0f;
+    return min(1.0f, m_fChargeTime / m_fMaxChargeTime);
+}
+
+void SkillComponent::ProcessRuneInput(InputSystem* pInputSystem)
+{
+    // 1-5 keys change activation type
+    if (pInputSystem->IsKeyDown('1'))
+    {
+        SetActivationType(ActivationType::Instant);
+    }
+    else if (pInputSystem->IsKeyDown('2'))
+    {
+        SetActivationType(ActivationType::Charge);
+    }
+    else if (pInputSystem->IsKeyDown('3'))
+    {
+        SetActivationType(ActivationType::Channel);
+    }
+    else if (pInputSystem->IsKeyDown('4'))
+    {
+        SetActivationType(ActivationType::Place);
+    }
+    else if (pInputSystem->IsKeyDown('5'))
+    {
+        SetActivationType(ActivationType::Enhance);
+    }
+}
+
+void SkillComponent::ExecuteWithActivationType(SkillSlot slot, const DirectX::XMFLOAT3& targetPosition)
+{
+    size_t index = static_cast<size_t>(slot);
+
+    // Check if skill exists and is ready
+    if (index >= m_Skills.size() || !m_Skills[index])
+    {
+        return;
+    }
+
+    if (m_SkillStates[index] != SkillState::Ready)
+    {
+        return;
+    }
+
+    float damageMultiplier = 1.0f;
+
+    // Apply enhance multiplier if active
+    if (m_bIsEnhanced)
+    {
+        damageMultiplier = m_fEnhanceMultiplier;
+        m_bIsEnhanced = false;  // Consume enhancement
+        m_fEnhanceTimer = 0.0f;
+        OutputDebugString(L"[Skill] Enhancement consumed! 2x damage!\n");
+    }
+
+    switch (m_CurrentActivationType)
+    {
+    case ActivationType::Instant:
+        // Immediate execution
+        m_Skills[index]->Execute(m_pOwner, targetPosition, damageMultiplier);
+        m_SkillStates[index] = SkillState::Casting;
+        m_ActiveSkillSlot = slot;
+        OutputDebugString(L"[Skill] Instant cast!\n");
+        break;
+
+    case ActivationType::Charge:
+        // Start charging
+        m_bIsCharging = true;
+        m_fChargeTime = 0.0f;
+        m_ChargingSlot = slot;
+        m_ChargeTargetPosition = targetPosition;
+        m_SkillStates[index] = SkillState::Casting;
+        OutputDebugString(L"[Skill] Charging started... Hold to charge, release to fire\n");
+        break;
+
+    case ActivationType::Channel:
+        // Start channeling
+        m_bIsChanneling = true;
+        m_fChannelTime = 0.0f;
+        m_fChannelTickAccum = 0.0f;
+        m_ActiveSkillSlot = slot;
+        m_ChannelTargetPosition = targetPosition;  // Store target for channel ticks
+        m_SkillStates[index] = SkillState::Casting;
+        OutputDebugString(L"[Skill] Channeling started... Hold to continue\n");
+        // First tick immediately
+        m_Skills[index]->Execute(m_pOwner, targetPosition, damageMultiplier * 0.3f);  // 30% damage per tick
+        break;
+
+    case ActivationType::Place:
+        // Place at target location (trap/turret style)
+        {
+            OutputDebugString(L"[Skill] Placing at target location!\n");
+            // Execute with special flag for placement (use negative multiplier as signal)
+            m_Skills[index]->Execute(m_pOwner, targetPosition, -1.0f);  // -1 signals placement mode
+            m_SkillStates[index] = SkillState::Casting;
+            m_ActiveSkillSlot = slot;
+        }
+        break;
+
+    case ActivationType::Enhance:
+        // Self-buff - enhance next attack
+        m_bIsEnhanced = true;
+        m_fEnhanceTimer = m_fEnhanceDuration;
+        m_SkillStates[index] = SkillState::Casting;
+        m_ActiveSkillSlot = slot;
+
+        // Visual feedback - execute at self position with 0 damage (just for VFX)
+        {
+            DirectX::XMFLOAT3 selfPos = m_pOwner->GetTransform()->GetPosition();
+            m_Skills[index]->Execute(m_pOwner, selfPos, 0.0f);  // 0 damage, just VFX
+        }
+        OutputDebugString(L"[Skill] Enhanced! Next attack deals 2x damage for 5 seconds\n");
+        break;
     }
 }

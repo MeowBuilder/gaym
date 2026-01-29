@@ -40,6 +40,14 @@ public:
     // Get cooldown progress (0.0 = just used, 1.0 = ready)
     float GetCooldownProgress(SkillSlot slot) const;
 
+    // Rune/Activation type management
+    void SetActivationType(ActivationType type);
+    ActivationType GetActivationType() const { return m_CurrentActivationType; }
+
+    // Charge state (for Charge activation type)
+    bool IsCharging() const { return m_bIsCharging; }
+    float GetChargeProgress() const;
+
 private:
     // Try to use a skill in the given slot
     bool TryUseSkill(SkillSlot slot, const DirectX::XMFLOAT3& targetPosition);
@@ -62,4 +70,34 @@ private:
 
     // Currently active skill (if any)
     SkillSlot m_ActiveSkillSlot = SkillSlot::Count;  // Count means no active skill
+
+    // Current activation type (set by rune)
+    ActivationType m_CurrentActivationType = ActivationType::Instant;
+
+    // Charge system
+    bool m_bIsCharging = false;
+    float m_fChargeTime = 0.0f;
+    float m_fMaxChargeTime = 1.5f;  // Time to full charge
+    SkillSlot m_ChargingSlot = SkillSlot::Count;
+    DirectX::XMFLOAT3 m_ChargeTargetPosition;
+
+    // Channel system
+    bool m_bIsChanneling = false;
+    float m_fChannelTime = 0.0f;
+    float m_fChannelDuration = 2.0f;  // Total channel duration
+    float m_fChannelTickRate = 0.2f;  // Time between ticks
+    float m_fChannelTickAccum = 0.0f;
+    DirectX::XMFLOAT3 m_ChannelTargetPosition;  // Stored target for channeling
+
+    // Enhance system
+    bool m_bIsEnhanced = false;
+    float m_fEnhanceTimer = 0.0f;
+    float m_fEnhanceDuration = 5.0f;  // Enhancement lasts 5 seconds
+    float m_fEnhanceMultiplier = 2.0f;  // Damage multiplier
+
+    // Process rune input (1-5 keys)
+    void ProcessRuneInput(InputSystem* pInputSystem);
+
+    // Execute skill based on current activation type
+    void ExecuteWithActivationType(SkillSlot slot, const DirectX::XMFLOAT3& targetPosition);
 };

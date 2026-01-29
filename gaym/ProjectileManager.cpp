@@ -93,7 +93,8 @@ void ProjectileManager::SpawnProjectile(
     float explosionRadius,
     ElementType element,
     GameObject* owner,
-    bool isPlayerProjectile)
+    bool isPlayerProjectile,
+    float scale)
 {
     Projectile proj;
     proj.position = startPos;
@@ -107,6 +108,7 @@ void ProjectileManager::SpawnProjectile(
     proj.maxDistance = 100.0f;
     proj.distanceTraveled = 0.0f;
     proj.isActive = true;
+    proj.scale = scale;
 
     // Calculate direction
     XMVECTOR start = XMLoadFloat3(&startPos);

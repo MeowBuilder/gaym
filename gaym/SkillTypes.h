@@ -22,13 +22,31 @@ enum class ElementType : uint8_t
     Earth       // 대지
 };
 
-// How the skill is activated
+// How the skill is activated (determined by Activation Rune)
 enum class ActivationType : uint8_t
 {
-    Instant,        // Immediate effect on key press
-    Hold,           // Effect while key is held
-    Channel,        // Channeled over time
-    Charge          // Charge up then release
+    Instant = 0,    // 1: Immediate effect on key press
+    Charge,         // 2: Charge up then release (more damage)
+    Channel,        // 3: Channeled over time (continuous effect)
+    Place,          // 4: Place trap/turret at location
+    Enhance,        // 5: Self-buff, enhance next attack
+    Count
+};
+
+// Rune types for skill modification
+enum class RuneType : uint8_t
+{
+    // Activation Runes (changes how skill is cast)
+    ActivationInstant = 0,
+    ActivationCharge,
+    ActivationChannel,
+    ActivationPlace,
+    ActivationEnhance,
+
+    // Element Runes (changes element) - future
+    // Effect Runes (adds effects) - future
+
+    None = 255
 };
 
 // Current state of a skill

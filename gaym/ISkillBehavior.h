@@ -14,7 +14,9 @@ public:
     // Execute the skill - called when skill is activated
     // caster: The GameObject using the skill
     // targetPosition: World position where skill is aimed
-    virtual void Execute(GameObject* caster, const DirectX::XMFLOAT3& targetPosition) = 0;
+    // damageMultiplier: Multiplier for damage (default 1.0, can be modified by charge/enhance)
+    //   Special values: -1.0 = placement mode, 0.0 = VFX only (no damage)
+    virtual void Execute(GameObject* caster, const DirectX::XMFLOAT3& targetPosition, float damageMultiplier = 1.0f) = 0;
 
     // Update the skill each frame while active
     // Returns true if skill is still active, false if finished
