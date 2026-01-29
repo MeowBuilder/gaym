@@ -21,6 +21,7 @@ Scene::Scene()
     m_pCollisionManager = std::make_unique<CollisionManager>();
     m_pEnemySpawner = std::make_unique<EnemySpawner>();
     m_pProjectileManager = std::make_unique<ProjectileManager>();
+    m_pParticleSystem = std::make_unique<ParticleSystem>();
 }
 
 Scene::~Scene()
@@ -138,6 +139,12 @@ void Scene::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList)
     m_pCurrentRoom->SetPlayerTarget(m_pPlayerGameObject);
 
     OutputDebugString(L"[Scene] Enemy spawn system initialized\n");
+
+    // Initialize Particle System (before Projectile Manager so it can use particles)
+    UINT nParticleDescriptorStart = m_nNextDescriptorIndex;
+    m_nNextDescriptorIndex += 512;  // Reserve 512 descriptors for particles
+    m_pParticleSystem->Init(pDevice, pCommandList, m_pDescriptorHeap.get(), nParticleDescriptorStart);
+    OutputDebugString(L"[Scene] Particle system initialized\n");
 
     // Initialize Projectile Manager with rendering resources
     // Reserve descriptor indices for projectiles (64 max rendered projectiles)
@@ -281,6 +288,12 @@ void Scene::Update(float deltaTime, InputSystem* pInputSystem)
         m_pProjectileManager->Update(deltaTime);
     }
 
+    // Update Particle System
+    if (m_pParticleSystem)
+    {
+        m_pParticleSystem->Update(deltaTime);
+    }
+
     // 2. Check for collisions
     if (m_pCollisionManager)
     {
@@ -384,6 +397,12 @@ void Scene::Render(ID3D12GraphicsCommandList* pCommandList)
     if (m_pProjectileManager)
     {
         m_pProjectileManager->Render(pCommandList);
+    }
+
+    // Render particles
+    if (m_pParticleSystem)
+    {
+        m_pParticleSystem->Render(pCommandList);
     }
 }
 

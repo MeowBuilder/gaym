@@ -12,6 +12,7 @@
 #include "CollisionManager.h" // Added CollisionManager include
 #include "EnemySpawner.h" // Added EnemySpawner include
 #include "ProjectileManager.h" // Added ProjectileManager include
+#include "ParticleSystem.h" // Added ParticleSystem include
 
 struct ID3D12Device;
 struct ID3D12GraphicsCommandList;
@@ -51,6 +52,7 @@ public:
     CCamera* GetCamera() const { return m_pCamera.get(); } // Added getter for CCamera
     CRoom* GetCurrentRoom() const { return m_pCurrentRoom; } // Added getter for current room
     ProjectileManager* GetProjectileManager() { return m_pProjectileManager.get(); }
+    ParticleSystem* GetParticleSystem() { return m_pParticleSystem.get(); }
 
     GameObject* CreateGameObject(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList);
 
@@ -87,6 +89,9 @@ private:
 
     // Projectile System
     std::unique_ptr<ProjectileManager> m_pProjectileManager;
+
+    // Particle System
+    std::unique_ptr<ParticleSystem> m_pParticleSystem;
 
     void AddRenderComponentsToHierarchy(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList, GameObject* pGameObject, Shader* pShader);
     void PrintHierarchy(GameObject* pGameObject, int nDepth);

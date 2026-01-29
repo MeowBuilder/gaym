@@ -1,5 +1,6 @@
 #include "stdafx.h"
 #include "ProjectileManager.h"
+#include "ParticleSystem.h"
 #include "Scene.h"
 #include "Room.h"
 #include "GameObject.h"
@@ -29,6 +30,9 @@ void ProjectileManager::Init(Scene* pScene, ID3D12Device* pDevice, ID3D12Graphic
     m_pScene = pScene;
     m_pDescriptorHeap = pDescriptorHeap;
     m_nDescriptorStartIndex = nStartDescriptorIndex;
+
+    // Get particle system from scene
+    m_pParticleSystem = pScene->GetParticleSystem();
 
     // Create projectile mesh (small cube)
     m_pProjectileMesh = std::make_unique<CubeMesh>(pDevice, pCommandList, 0.5f, 0.5f, 0.5f);
@@ -69,6 +73,9 @@ void ProjectileManager::SpawnProjectile(const Projectile& projectile)
     }
 
     m_Projectiles.push_back(projectile);
+
+    // Create particle trail for this projectile
+    CreateProjectileParticles(m_Projectiles.back());
 
     wchar_t buffer[256];
     swprintf_s(buffer, 256, L"[ProjectileManager] Spawned projectile at (%.1f, %.1f, %.1f) -> dir (%.2f, %.2f, %.2f)\n",
@@ -125,14 +132,35 @@ void ProjectileManager::Update(float deltaTime)
         // Update position
         projectile.Update(deltaTime);
 
+        // Update particle emitter position
+        if (m_pParticleSystem && projectile.particleEmitterId >= 0)
+        {
+            ParticleEmitter* pEmitter = m_pParticleSystem->GetEmitter(projectile.particleEmitterId);
+            if (pEmitter)
+            {
+                pEmitter->SetPosition(projectile.position);
+            }
+        }
+
         // Check collisions
         if (projectile.isActive)
         {
             CheckProjectileCollisions(projectile);
         }
 
+        // If projectile became inactive (hit something or expired), stop emitter and spawn explosion
         if (!projectile.isActive)
         {
+            if (m_pParticleSystem && projectile.particleEmitterId >= 0)
+            {
+                ParticleEmitter* pEmitter = m_pParticleSystem->GetEmitter(projectile.particleEmitterId);
+                if (pEmitter)
+                {
+                    pEmitter->Stop();
+                }
+            }
+            // Spawn explosion particles
+            SpawnExplosionParticles(projectile.position, projectile.element);
             inactiveCount++;
         }
     }
@@ -337,5 +365,118 @@ XMFLOAT4 ProjectileManager::GetElementColor(ElementType element) const
         return XMFLOAT4(0.6f, 0.4f, 0.2f, 1.0f);  // Brown (대지)
     default:
         return XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);  // White
+    }
+}
+
+void ProjectileManager::CreateProjectileParticles(Projectile& projectile)
+{
+    if (!m_pParticleSystem) return;
+
+    // Create trail emitter based on element type
+    ParticleEmitterConfig config;
+
+    switch (projectile.element)
+    {
+    case ElementType::Fire:
+        config = FireParticlePresets::FireballTrail();
+        break;
+    case ElementType::Water:
+        config.emissionRate = 25.0f;
+        config.minLifetime = 0.2f;
+        config.maxLifetime = 0.4f;
+        config.startColor = { 0.3f, 0.6f, 1.0f, 1.0f };
+        config.endColor = { 0.1f, 0.3f, 0.8f, 0.0f };
+        config.gravity = { 0.0f, -1.0f, 0.0f };
+        break;
+    case ElementType::Wind:
+        config.emissionRate = 20.0f;
+        config.minLifetime = 0.15f;
+        config.maxLifetime = 0.3f;
+        config.startColor = { 0.8f, 1.0f, 0.8f, 0.8f };
+        config.endColor = { 0.6f, 0.9f, 0.6f, 0.0f };
+        config.minVelocity = { -1.0f, -1.0f, -1.0f };
+        config.maxVelocity = { 1.0f, 1.0f, 1.0f };
+        break;
+    case ElementType::Earth:
+        config.emissionRate = 15.0f;
+        config.minLifetime = 0.3f;
+        config.maxLifetime = 0.5f;
+        config.startColor = { 0.7f, 0.5f, 0.3f, 1.0f };
+        config.endColor = { 0.4f, 0.3f, 0.2f, 0.0f };
+        config.gravity = { 0.0f, -3.0f, 0.0f };
+        break;
+    default:
+        config.emissionRate = 20.0f;
+        config.startColor = { 1.0f, 1.0f, 1.0f, 1.0f };
+        config.endColor = { 0.5f, 0.5f, 0.5f, 0.0f };
+        break;
+    }
+
+    projectile.particleEmitterId = m_pParticleSystem->CreateEmitter(config, projectile.position);
+}
+
+void ProjectileManager::SpawnExplosionParticles(const XMFLOAT3& position, ElementType element)
+{
+    if (!m_pParticleSystem) return;
+
+    ParticleEmitterConfig config;
+
+    switch (element)
+    {
+    case ElementType::Fire:
+        config = FireParticlePresets::FireballExplosion();
+        break;
+    case ElementType::Water:
+        config.burstCount = 25;
+        config.emissionRate = 0.0f;
+        config.minLifetime = 0.2f;
+        config.maxLifetime = 0.5f;
+        config.minStartSize = 0.3f;
+        config.maxStartSize = 0.6f;
+        config.minVelocity = { -4.0f, -2.0f, -4.0f };
+        config.maxVelocity = { 4.0f, 4.0f, 4.0f };
+        config.startColor = { 0.4f, 0.7f, 1.0f, 1.0f };
+        config.endColor = { 0.2f, 0.4f, 0.8f, 0.0f };
+        config.gravity = { 0.0f, -5.0f, 0.0f };
+        break;
+    case ElementType::Wind:
+        config.burstCount = 20;
+        config.emissionRate = 0.0f;
+        config.minLifetime = 0.2f;
+        config.maxLifetime = 0.4f;
+        config.minStartSize = 0.2f;
+        config.maxStartSize = 0.5f;
+        config.minVelocity = { -6.0f, -6.0f, -6.0f };
+        config.maxVelocity = { 6.0f, 6.0f, 6.0f };
+        config.startColor = { 0.9f, 1.0f, 0.9f, 0.9f };
+        config.endColor = { 0.7f, 0.95f, 0.7f, 0.0f };
+        break;
+    case ElementType::Earth:
+        config.burstCount = 20;
+        config.emissionRate = 0.0f;
+        config.minLifetime = 0.4f;
+        config.maxLifetime = 0.7f;
+        config.minStartSize = 0.4f;
+        config.maxStartSize = 0.8f;
+        config.minVelocity = { -3.0f, 0.0f, -3.0f };
+        config.maxVelocity = { 3.0f, 5.0f, 3.0f };
+        config.startColor = { 0.8f, 0.6f, 0.4f, 1.0f };
+        config.endColor = { 0.5f, 0.35f, 0.2f, 0.0f };
+        config.gravity = { 0.0f, -8.0f, 0.0f };
+        break;
+    default:
+        config.burstCount = 15;
+        config.emissionRate = 0.0f;
+        config.startColor = { 1.0f, 1.0f, 1.0f, 1.0f };
+        config.endColor = { 0.5f, 0.5f, 0.5f, 0.0f };
+        break;
+    }
+
+    int emitterId = m_pParticleSystem->CreateEmitter(config, position);
+    ParticleEmitter* pEmitter = m_pParticleSystem->GetEmitter(emitterId);
+    if (pEmitter)
+    {
+        pEmitter->Burst();
+        pEmitter->Stop();  // Stop continuous emission, let burst particles fade
     }
 }

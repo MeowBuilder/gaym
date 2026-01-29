@@ -28,8 +28,9 @@ struct Projectile
     float distanceTraveled = 0.0f;
     bool isActive = true;
 
-    // Visual (for future use)
+    // Visual
     float scale = 1.0f;
+    int particleEmitterId = -1;  // Associated particle emitter (-1 = none)
 
     // Helper to update position
     void Update(float deltaTime)
