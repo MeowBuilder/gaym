@@ -49,6 +49,11 @@ public:
 
     CCamera* GetCamera() const { return m_pCamera.get(); } // Added getter for CCamera
 
+    // Interaction system
+    bool IsNearInteractionCube() const;
+    bool IsInteractionCubeActive() const { return m_bInteractionCubeActive; }
+    void TriggerInteraction();
+
     GameObject* CreateGameObject(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList);
 
     void AllocateDescriptor(D3D12_CPU_DESCRIPTOR_HANDLE* pCpuHandle, D3D12_GPU_DESCRIPTOR_HANDLE* pGpuHandle)
@@ -63,6 +68,12 @@ private:
     std::vector<std::unique_ptr<GameObject>> m_vGameObjects; // Global Objects (Player, etc.)
     std::vector<std::unique_ptr<CRoom>> m_vRooms; // Room List
     CRoom* m_pCurrentRoom = nullptr; // Pointer to the current active room
+
+    // Interaction Cube
+    GameObject* m_pInteractionCube = nullptr;
+    bool m_bInteractionCubeActive = true;
+    bool m_bEnemiesSpawned = false;
+    float m_fInteractionDistance = 5.0f;
 
     std::vector<std::unique_ptr<Shader>> m_vShaders;
 
