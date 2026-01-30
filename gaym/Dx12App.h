@@ -4,6 +4,13 @@
 #include "InputSystem.h" // Added InputSystem include
 #include <memory>
 
+// DirectXTK12 for text rendering
+#include <SpriteFont.h>
+#include <SpriteBatch.h>
+#include <ResourceUploadBatch.h>
+#include <GraphicsMemory.h>
+#include <DescriptorHeap.h>
+
 class Dx12App
 {
 public:
@@ -66,4 +73,13 @@ private:
 
     std::unique_ptr<Scene> m_pScene;
     InputSystem m_inputSystem; // Added InputSystem member
+
+    // DirectXTK12 텍스트 렌더링
+    std::unique_ptr<DirectX::GraphicsMemory> m_graphicsMemory;
+    std::unique_ptr<DirectX::DescriptorHeap> m_fontDescriptorHeap;
+    std::unique_ptr<DirectX::SpriteBatch> m_spriteBatch;
+    std::unique_ptr<DirectX::SpriteFont> m_spriteFont;
+
+    void InitializeText();
+    void RenderText();
 };

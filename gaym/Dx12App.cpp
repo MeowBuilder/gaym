@@ -1,5 +1,6 @@
 #include "stdafx.h"
 #include "Dx12App.h"
+#include <DescriptorHeap.h>  // DirectXTK12
 
 Dx12App* Dx12App::s_pInstance = nullptr;
 
@@ -44,6 +45,9 @@ void Dx12App::OnCreate(HINSTANCE hInstance, HWND hMainWnd)
     ID3D12CommandList* ppd3dCommandLists[] = { m_pd3dCommandList.Get() };
     m_pd3dCommandQueue->ExecuteCommandLists(_countof(ppd3dCommandLists), ppd3dCommandLists);
     WaitForGpuComplete();
+
+    // 텍스트 렌더링 초기화
+    InitializeText();
 
     m_GameTimer.Reset();
 }
@@ -264,7 +268,17 @@ void Dx12App::FrameAdvance()
     m_pd3dCommandList->OMSetRenderTargets(1, &d3dRtvCPUDescriptorHandle, FALSE, &d3dDsvCPUDescriptorHandle);
 
     m_pScene->Update(m_GameTimer.GetTimeElapsed(), &m_inputSystem);
+
+    // F key interaction check
+    if (m_inputSystem.IsKeyDown('F') && m_pScene->IsNearInteractionCube())
+    {
+        m_pScene->TriggerInteraction();
+    }
+
     m_pScene->Render(m_pd3dCommandList.Get());
+
+    // Text rendering (2D overlay on top of 3D scene)
+    RenderText();
 
     d3dResourceBarrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
     d3dResourceBarrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;
@@ -273,6 +287,9 @@ void Dx12App::FrameAdvance()
     CHECK_HR(m_pd3dCommandList->Close());
     ID3D12CommandList* ppd3dCommandLists[] = { m_pd3dCommandList.Get() };
     m_pd3dCommandQueue->ExecuteCommandLists(_countof(ppd3dCommandLists), ppd3dCommandLists);
+
+    // DirectXTK12 GPU 메모리 커밋
+    m_graphicsMemory->Commit(m_pd3dCommandQueue.Get());
 
     CHECK_HR(m_pdxgiSwapChain->Present(1, 0));
 
@@ -380,4 +397,81 @@ ComPtr<ID3D12Resource> Dx12App::CreateBufferResource(const void* pData, UINT nBy
         }
     }
     return pd3dBuffer;
+}
+
+void Dx12App::InitializeText()
+{
+    // GraphicsMemory 초기화
+    m_graphicsMemory = std::make_unique<DirectX::GraphicsMemory>(m_pd3dDevice.Get());
+
+    // 폰트용 디스크립터 힙 생성
+    m_fontDescriptorHeap = std::make_unique<DirectX::DescriptorHeap>(
+        m_pd3dDevice.Get(),
+        D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
+        D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
+        1  // 폰트 1개
+    );
+
+    // 리소스 업로드 배치
+    DirectX::ResourceUploadBatch resourceUpload(m_pd3dDevice.Get());
+    resourceUpload.Begin();
+
+    // SpriteBatch 생성
+    DirectX::RenderTargetState rtState(
+        DXGI_FORMAT_R8G8B8A8_UNORM,      // 백버퍼 포맷
+        DXGI_FORMAT_D24_UNORM_S8_UINT    // 깊이버퍼 포맷
+    );
+
+    DirectX::SpriteBatchPipelineStateDescription pd(rtState);
+    m_spriteBatch = std::make_unique<DirectX::SpriteBatch>(m_pd3dDevice.Get(), resourceUpload, pd);
+
+    // SpriteFont 로드
+    m_spriteFont = std::make_unique<DirectX::SpriteFont>(
+        m_pd3dDevice.Get(),
+        resourceUpload,
+        L"Fonts/myFont.spritefont",
+        m_fontDescriptorHeap->GetCpuHandle(0),
+        m_fontDescriptorHeap->GetGpuHandle(0)
+    );
+
+    // 업로드 완료 대기
+    auto uploadFinished = resourceUpload.End(m_pd3dCommandQueue.Get());
+    uploadFinished.wait();
+
+    // 뷰포트 설정
+    D3D12_VIEWPORT viewport = { 0, 0, (float)m_nWndClientWidth, (float)m_nWndClientHeight, 0, 1 };
+    m_spriteBatch->SetViewport(viewport);
+}
+
+void Dx12App::RenderText()
+{
+    // Bind descriptor heap
+    ID3D12DescriptorHeap* heaps[] = { m_fontDescriptorHeap->Heap() };
+    m_pd3dCommandList->SetDescriptorHeaps(1, heaps);
+
+    m_spriteBatch->Begin(m_pd3dCommandList.Get());
+
+    // Show interaction prompt when near the cube
+    if (m_pScene && m_pScene->IsInteractionCubeActive() && m_pScene->IsNearInteractionCube())
+    {
+        // Draw interaction box background (using text positioning)
+        const wchar_t* interactionText = L"[F] Interact";
+
+        // Center of screen
+        float screenCenterX = (float)m_nWndClientWidth / 2.0f;
+        float screenCenterY = (float)m_nWndClientHeight / 2.0f + 100.0f;
+
+        // Measure text for centering
+        XMVECTOR textSize = m_spriteFont->MeasureString(interactionText);
+        float textWidth = XMVectorGetX(textSize);
+
+        m_spriteFont->DrawString(
+            m_spriteBatch.get(),
+            interactionText,
+            XMFLOAT2(screenCenterX - textWidth / 2.0f, screenCenterY),
+            DirectX::Colors::Yellow
+        );
+    }
+
+    m_spriteBatch->End();
 }

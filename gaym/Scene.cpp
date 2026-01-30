@@ -53,7 +53,7 @@ void Scene::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList)
     // 1. Create Room
     // --------------------------------------------------------------------------
     auto pRoom = std::make_unique<CRoom>();
-    pRoom->SetState(RoomState::Active);
+    pRoom->SetState(RoomState::Inactive);  // Start inactive, activate on interaction
     pRoom->SetBoundingBox(BoundingBox(XMFLOAT3(0, 0, 0), XMFLOAT3(100.0f, 100.0f, 100.0f)));
     m_vRooms.push_back(std::move(pRoom));
 
@@ -175,6 +175,38 @@ void Scene::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList)
     m_pcbMappedPass->m_SpotLight.m_fSpotLightOuterCone = cosf(XMConvertToRadians(30.0f)); // Outer cone angle
     m_pcbMappedPass->m_SpotLight.m_fPad5 = 0.0f;
     m_pcbMappedPass->m_SpotLight.m_fPad6 = 0.0f;
+
+    // --------------------------------------------------------------------------
+    // Create Interaction Cube (Blue Cube) - as global object (not in room)
+    // --------------------------------------------------------------------------
+    CRoom* pTempRoom = m_pCurrentRoom;
+    m_pCurrentRoom = nullptr;  // Temporarily set to null so cube is created as global object
+    m_pInteractionCube = CreateGameObject(pDevice, pCommandList);
+    m_pCurrentRoom = pTempRoom;  // Restore
+
+    m_pInteractionCube->GetTransform()->SetPosition(0.0f, 1.0f, 10.0f);  // In front of player
+    m_pInteractionCube->GetTransform()->SetScale(2.0f, 2.0f, 2.0f);
+
+    // Create blue cube mesh
+    CubeMesh* pCubeMesh = new CubeMesh(pDevice, pCommandList, 1.0f, 1.0f, 1.0f);
+    m_pInteractionCube->SetMesh(pCubeMesh);
+
+    // Set blue material
+    MATERIAL blueMaterial;
+    blueMaterial.m_cAmbient = XMFLOAT4(0.0f, 0.0f, 0.2f, 1.0f);
+    blueMaterial.m_cDiffuse = XMFLOAT4(0.2f, 0.4f, 1.0f, 1.0f);  // Blue color
+    blueMaterial.m_cSpecular = XMFLOAT4(0.5f, 0.5f, 0.5f, 32.0f);
+    blueMaterial.m_cEmissive = XMFLOAT4(0.0f, 0.1f, 0.3f, 1.0f);  // Slight glow
+    m_pInteractionCube->SetMaterial(blueMaterial);
+
+    // Add render component
+    m_pInteractionCube->AddComponent<RenderComponent>()->SetMesh(pCubeMesh);
+    m_vShaders[0]->AddRenderComponent(m_pInteractionCube->GetComponent<RenderComponent>());
+
+    m_bInteractionCubeActive = true;
+    m_bEnemiesSpawned = false;
+
+    OutputDebugString(L"[Scene] Interaction cube created\n");
 }
 
 void Scene::LoadSceneFromFile(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList, const char* pstrFileName)
@@ -483,5 +515,47 @@ void Scene::CollectColliders(GameObject* pGameObject, std::vector<ColliderCompon
     if (pGameObject->m_pSibling)
     {
         CollectColliders(pGameObject->m_pSibling, outColliders);
+    }
+}
+
+bool Scene::IsNearInteractionCube() const
+{
+    if (!m_bInteractionCubeActive || !m_pInteractionCube || !m_pPlayerGameObject)
+        return false;
+
+    XMFLOAT3 playerPos = m_pPlayerGameObject->GetTransform()->GetPosition();
+    XMFLOAT3 cubePos = m_pInteractionCube->GetTransform()->GetPosition();
+
+    float dx = playerPos.x - cubePos.x;
+    float dy = playerPos.y - cubePos.y;
+    float dz = playerPos.z - cubePos.z;
+    float distance = sqrtf(dx * dx + dy * dy + dz * dz);
+
+    return distance <= m_fInteractionDistance;
+}
+
+void Scene::TriggerInteraction()
+{
+    if (!m_bInteractionCubeActive || !IsNearInteractionCube())
+        return;
+
+    OutputDebugString(L"[Scene] Interaction triggered!\n");
+
+    // Deactivate the interaction cube
+    m_bInteractionCubeActive = false;
+
+    // Remove cube from room (hide it by removing render component)
+    if (m_pInteractionCube)
+    {
+        // Move cube far away (simple hide)
+        m_pInteractionCube->GetTransform()->SetPosition(0.0f, -1000.0f, 0.0f);
+    }
+
+    // Activate room - this will spawn enemies automatically in Room::Update
+    if (m_pCurrentRoom && m_pCurrentRoom->GetState() == RoomState::Inactive)
+    {
+        m_pCurrentRoom->SetState(RoomState::Active);
+        m_bEnemiesSpawned = true;
+        OutputDebugString(L"[Scene] Room activated - enemies will spawn!\n");
     }
 }
