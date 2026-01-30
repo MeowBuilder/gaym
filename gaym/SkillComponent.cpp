@@ -9,6 +9,8 @@
 
 SkillComponent::SkillComponent(GameObject* pOwner)
     : Component(pOwner)
+    , m_ChargeTargetPosition{ 0.0f, 0.0f, 0.0f }
+    , m_ChannelTargetPosition{ 0.0f, 0.0f, 0.0f }
 {
     // Initialize all cooldowns to 0 (ready)
     m_CooldownTimers.fill(0.0f);
@@ -59,7 +61,7 @@ void SkillComponent::Update(float deltaTime)
             m_fChannelTickAccum -= m_fChannelTickRate;
 
             size_t index = static_cast<size_t>(m_ActiveSkillSlot);
-            if (m_Skills[index])
+            if (index < m_Skills.size() && m_Skills[index])
             {
                 // Use stored target position for channel ticks
                 m_Skills[index]->Execute(m_pOwner, m_ChannelTargetPosition, 0.3f);  // 30% damage per tick
@@ -72,9 +74,10 @@ void SkillComponent::Update(float deltaTime)
             OutputDebugString(L"[Skill] Channel complete!\n");
             m_bIsChanneling = false;
             m_fChannelTime = 0.0f;
+            m_fChannelTickAccum = 0.0f;  // Reset tick accumulator
 
             size_t index = static_cast<size_t>(m_ActiveSkillSlot);
-            if (m_Skills[index])
+            if (index < m_Skills.size() && m_Skills[index])
             {
                 float cooldown = m_Skills[index]->GetSkillData().cooldown;
                 m_CooldownTimers[index] = cooldown;
@@ -98,10 +101,11 @@ void SkillComponent::Update(float deltaTime)
     }
 
     // Update active skill if any
-    if (m_ActiveSkillSlot != SkillSlot::Count)
+    // Skip IsFinished() check if channeling or charging - those have their own completion logic
+    if (m_ActiveSkillSlot != SkillSlot::Count && !m_bIsChanneling && !m_bIsCharging)
     {
         size_t slotIndex = static_cast<size_t>(m_ActiveSkillSlot);
-        if (m_Skills[slotIndex])
+        if (slotIndex < m_Skills.size() && m_Skills[slotIndex])
         {
             m_Skills[slotIndex]->Update(deltaTime);
 
@@ -185,9 +189,10 @@ void SkillComponent::ProcessSkillInput(InputSystem* pInputSystem, CCamera* pCame
             OutputDebugString(L"[Skill] Channel interrupted\n");
             m_bIsChanneling = false;
             m_fChannelTime = 0.0f;
+            m_fChannelTickAccum = 0.0f;  // Reset tick accumulator
 
             size_t index = static_cast<size_t>(m_ActiveSkillSlot);
-            if (m_Skills[index])
+            if (index < m_Skills.size() && m_Skills[index])
             {
                 float cooldown = m_Skills[index]->GetSkillData().cooldown * 0.5f; // Half cooldown on interrupt
                 m_CooldownTimers[index] = cooldown;
