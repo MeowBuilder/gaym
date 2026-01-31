@@ -48,6 +48,14 @@ public:
     bool IsCharging() const { return m_bIsCharging; }
     float GetChargeProgress() const;
 
+    // Channel state
+    bool IsChanneling() const { return m_bIsChanneling; }
+    float GetChannelProgress() const { return (m_fChannelDuration > 0.0f) ? (m_fChannelTime / m_fChannelDuration) : 0.0f; }
+
+    // Enhance state
+    bool IsEnhanced() const { return m_bIsEnhanced; }
+    float GetEnhanceTimeRemaining() const { return m_fEnhanceTimer; }
+
 private:
     // Try to use a skill in the given slot
     bool TryUseSkill(SkillSlot slot, const DirectX::XMFLOAT3& targetPosition);

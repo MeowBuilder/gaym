@@ -53,6 +53,7 @@ public:
     CRoom* GetCurrentRoom() const { return m_pCurrentRoom; } // Added getter for current room
     ProjectileManager* GetProjectileManager() { return m_pProjectileManager.get(); }
     ParticleSystem* GetParticleSystem() { return m_pParticleSystem.get(); }
+    GameObject* GetPlayer() const { return m_pPlayerGameObject; }
 
     // Interaction system
     bool IsNearInteractionCube() const;

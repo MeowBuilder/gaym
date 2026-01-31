@@ -146,13 +146,22 @@ void SkillComponent::ProcessSkillInput(InputSystem* pInputSystem, CCamera* pCame
         {
             // Key released - fire the charged skill
             size_t index = static_cast<size_t>(m_ChargingSlot);
-            if (m_Skills[index])
+            if (index < m_Skills.size() && m_Skills[index])
             {
                 float chargeRatio = m_fChargeTime / m_fMaxChargeTime;
                 chargeRatio = min(1.0f, chargeRatio);
 
                 // Apply charge multiplier (1.0x to 3.0x based on charge)
                 float damageMultiplier = 1.0f + chargeRatio * 2.0f;
+
+                // Apply enhance multiplier if active
+                if (m_bIsEnhanced)
+                {
+                    damageMultiplier *= m_fEnhanceMultiplier;
+                    m_bIsEnhanced = false;
+                    m_fEnhanceTimer = 0.0f;
+                    OutputDebugString(L"[Skill] Enhancement consumed with Charge!\n");
+                }
 
                 wchar_t buffer[128];
                 swprintf_s(buffer, 128, L"[Skill] Charge released! Charge: %.0f%%, Multiplier: %.1fx\n",
@@ -423,7 +432,8 @@ void SkillComponent::ExecuteWithActivationType(SkillSlot slot, const DirectX::XM
     float damageMultiplier = 1.0f;
 
     // Apply enhance multiplier if active
-    if (m_bIsEnhanced)
+    // NOTE: For Charge mode, enhancement is applied when released, not when started
+    if (m_bIsEnhanced && m_CurrentActivationType != ActivationType::Charge)
     {
         damageMultiplier = m_fEnhanceMultiplier;
         m_bIsEnhanced = false;  // Consume enhancement

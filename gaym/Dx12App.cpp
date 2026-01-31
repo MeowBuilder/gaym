@@ -1,6 +1,11 @@
 #include "stdafx.h"
 #include "Dx12App.h"
+#include "SkillComponent.h"
+#include "ISkillBehavior.h"
+#include "SkillData.h"
 #include <DescriptorHeap.h>  // DirectXTK12
+#include <sstream>
+#include <iomanip>
 
 Dx12App* Dx12App::s_pInstance = nullptr;
 
@@ -454,14 +459,9 @@ void Dx12App::RenderText()
     // Show interaction prompt when near the cube
     if (m_pScene && m_pScene->IsInteractionCubeActive() && m_pScene->IsNearInteractionCube())
     {
-        // Draw interaction box background (using text positioning)
         const wchar_t* interactionText = L"[F] Interact";
-
-        // Center of screen
         float screenCenterX = (float)m_nWndClientWidth / 2.0f;
         float screenCenterY = (float)m_nWndClientHeight / 2.0f + 100.0f;
-
-        // Measure text for centering
         XMVECTOR textSize = m_spriteFont->MeasureString(interactionText);
         float textWidth = XMVectorGetX(textSize);
 
@@ -471,6 +471,170 @@ void Dx12App::RenderText()
             XMFLOAT2(screenCenterX - textWidth / 2.0f, screenCenterY),
             DirectX::Colors::Yellow
         );
+    }
+
+    // ========== Skill UI ==========
+    if (m_pScene)
+    {
+        GameObject* pPlayer = m_pScene->GetPlayer();
+        if (pPlayer)
+        {
+            SkillComponent* pSkill = pPlayer->GetComponent<SkillComponent>();
+            if (pSkill)
+            {
+                float lineHeight = 48.0f;  // Increased line spacing
+
+                // ========== Left Side: Skill Slots ==========
+                float leftX = 20.0f;
+                float leftY = (float)m_nWndClientHeight - 240.0f;
+
+                const wchar_t* slotNames[] = { L"Q", L"E", L"R", L"RMB" };
+                ActivationType activationType = pSkill->GetActivationType();
+
+                for (size_t i = 0; i < static_cast<size_t>(SkillSlot::Count); ++i)
+                {
+                    SkillSlot slot = static_cast<SkillSlot>(i);
+                    ISkillBehavior* pBehavior = pSkill->GetSkill(slot);
+
+                    std::wstringstream slotText;
+                    slotText << L"[" << slotNames[i] << L"] ";
+
+                    if (pBehavior)
+                    {
+                        const SkillData& data = pBehavior->GetSkillData();
+                        std::wstring skillName(data.name.begin(), data.name.end());
+                        slotText << skillName;
+
+                        float cooldownRemaining = pSkill->GetCooldownRemaining(slot);
+                        if (cooldownRemaining > 0.0f)
+                        {
+                            slotText << L"  CD: " << std::fixed << std::setprecision(1) << cooldownRemaining << L"s";
+                            m_spriteFont->DrawString(m_spriteBatch.get(), slotText.str().c_str(),
+                                XMFLOAT2(leftX, leftY), DirectX::Colors::Gray);
+                        }
+                        else
+                        {
+                            // Calculate final damage based on rune
+                            float baseDamage = data.damage;
+                            float finalDamage = baseDamage;
+                            const wchar_t* dmgNote = L"";
+
+                            switch (activationType)
+                            {
+                            case ActivationType::Instant:
+                                finalDamage = baseDamage;
+                                break;
+                            case ActivationType::Charge:
+                                if (pSkill->IsCharging())
+                                {
+                                    float mult = 1.0f + pSkill->GetChargeProgress() * 2.0f;
+                                    finalDamage = baseDamage * mult;
+                                    dmgNote = L" (charging)";
+                                }
+                                else
+                                {
+                                    finalDamage = baseDamage;
+                                    dmgNote = L"~";  // Can go up to 3x
+                                }
+                                break;
+                            case ActivationType::Channel:
+                                finalDamage = baseDamage * 0.3f;
+                                dmgNote = L"/tick";
+                                break;
+                            case ActivationType::Place:
+                                finalDamage = baseDamage * 1.5f;
+                                dmgNote = L" (trap)";
+                                break;
+                            case ActivationType::Enhance:
+                                finalDamage = baseDamage * 2.0f;
+                                dmgNote = L" (buff)";
+                                break;
+                            }
+
+                            // Apply enhance multiplier if active
+                            if (pSkill->IsEnhanced() && activationType != ActivationType::Enhance)
+                            {
+                                finalDamage *= 2.0f;
+                            }
+
+                            slotText << L"  DMG: " << (int)finalDamage << dmgNote;
+                            m_spriteFont->DrawString(m_spriteBatch.get(), slotText.str().c_str(),
+                                XMFLOAT2(leftX, leftY), DirectX::Colors::White);
+                        }
+                    }
+                    else
+                    {
+                        slotText << L"Empty";
+                        m_spriteFont->DrawString(m_spriteBatch.get(), slotText.str().c_str(),
+                            XMFLOAT2(leftX, leftY), DirectX::Colors::DarkGray);
+                    }
+
+                    leftY += lineHeight;
+                }
+
+                // ========== Right Side: Rune & Status ==========
+                float rightX = (float)m_nWndClientWidth - 500.0f;
+                float rightY = (float)m_nWndClientHeight - 280.0f;
+
+                // Rune type
+                const wchar_t* activationNames[] = { L"Instant", L"Charge", L"Channel", L"Place", L"Enhance" };
+                const wchar_t* runeDescriptions[] = {
+                    L"1x damage",
+                    L"Hold: 1x~3x damage",
+                    L"Hold: 0.3x per tick",
+                    L"1.5x trap damage",
+                    L"Buff: 2x next attack"
+                };
+
+                std::wstringstream runeText;
+                runeText << L"[Rune] " << activationNames[static_cast<int>(activationType)];
+                m_spriteFont->DrawString(m_spriteBatch.get(), runeText.str().c_str(),
+                    XMFLOAT2(rightX, rightY), DirectX::Colors::Cyan);
+                rightY += lineHeight;
+
+                // Rune description
+                m_spriteFont->DrawString(m_spriteBatch.get(), runeDescriptions[static_cast<int>(activationType)],
+                    XMFLOAT2(rightX, rightY), DirectX::Colors::LightGray);
+                rightY += lineHeight;
+
+                // Status indicators
+                if (pSkill->IsCharging())
+                {
+                    float chargeProgress = pSkill->GetChargeProgress();
+                    float mult = 1.0f + chargeProgress * 2.0f;
+                    std::wstringstream chargeText;
+                    chargeText << L"CHARGING " << (int)(chargeProgress * 100) << L"% ("
+                        << std::fixed << std::setprecision(1) << mult << L"x)";
+                    m_spriteFont->DrawString(m_spriteBatch.get(), chargeText.str().c_str(),
+                        XMFLOAT2(rightX, rightY), DirectX::Colors::Orange);
+                    rightY += lineHeight;
+                }
+
+                if (pSkill->IsChanneling())
+                {
+                    float channelProgress = pSkill->GetChannelProgress();
+                    std::wstringstream channelText;
+                    channelText << L"CHANNELING " << (int)(channelProgress * 100) << L"%";
+                    m_spriteFont->DrawString(m_spriteBatch.get(), channelText.str().c_str(),
+                        XMFLOAT2(rightX, rightY), DirectX::Colors::LightBlue);
+                    rightY += lineHeight;
+                }
+
+                if (pSkill->IsEnhanced())
+                {
+                    std::wstringstream enhanceText;
+                    enhanceText << L"ENHANCED 2x (" << std::fixed << std::setprecision(1)
+                        << pSkill->GetEnhanceTimeRemaining() << L"s)";
+                    m_spriteFont->DrawString(m_spriteBatch.get(), enhanceText.str().c_str(),
+                        XMFLOAT2(rightX, rightY), DirectX::Colors::Gold);
+                    rightY += lineHeight;
+                }
+
+                // Key hints at bottom
+                m_spriteFont->DrawString(m_spriteBatch.get(), L"[1-5] Change Rune",
+                    XMFLOAT2(rightX, rightY), DirectX::Colors::DimGray);
+            }
+        }
     }
 
     m_spriteBatch->End();
