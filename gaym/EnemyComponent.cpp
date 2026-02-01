@@ -4,6 +4,7 @@
 #include "TransformComponent.h"
 #include "IAttackBehavior.h"
 #include "Room.h"
+#include "MathUtils.h"
 
 EnemyComponent::EnemyComponent(GameObject* pOwner)
     : Component(pOwner)
@@ -115,13 +116,7 @@ float EnemyComponent::GetDistanceToTarget() const
 
     if (!pMyTransform || !pTargetTransform) return FLT_MAX;
 
-    XMFLOAT3 myPos = pMyTransform->GetPosition();
-    XMFLOAT3 targetPos = pTargetTransform->GetPosition();
-
-    float dx = targetPos.x - myPos.x;
-    float dz = targetPos.z - myPos.z;
-
-    return sqrtf(dx * dx + dz * dz);
+    return MathUtils::Distance2D(pMyTransform->GetPosition(), pTargetTransform->GetPosition());
 }
 
 void EnemyComponent::FaceTarget()
@@ -136,15 +131,12 @@ void EnemyComponent::FaceTarget()
     XMFLOAT3 myPos = pMyTransform->GetPosition();
     XMFLOAT3 targetPos = pTargetTransform->GetPosition();
 
-    // Calculate direction to target on XZ plane
-    float dx = targetPos.x - myPos.x;
-    float dz = targetPos.z - myPos.z;
-
-    float length = sqrtf(dx * dx + dz * dz);
-    if (length < 0.001f) return;
+    // Get normalized direction to target on XZ plane
+    XMFLOAT2 dir = MathUtils::Direction2D(myPos, targetPos);
+    if (dir.x == 0.0f && dir.y == 0.0f) return;
 
     // Calculate yaw angle
-    float yawRad = atan2f(dx, dz);
+    float yawRad = atan2f(dir.x, dir.y);
     float yawDeg = XMConvertToDegrees(yawRad);
 
     // Set rotation (only yaw)
@@ -164,21 +156,14 @@ void EnemyComponent::MoveTowardsTarget(float dt)
     XMFLOAT3 myPos = pMyTransform->GetPosition();
     XMFLOAT3 targetPos = pTargetTransform->GetPosition();
 
-    // Calculate direction to target on XZ plane
-    float dx = targetPos.x - myPos.x;
-    float dz = targetPos.z - myPos.z;
-
-    float length = sqrtf(dx * dx + dz * dz);
-    if (length < 0.001f) return;
-
-    // Normalize direction
-    dx /= length;
-    dz /= length;
+    // Get normalized direction to target on XZ plane
+    XMFLOAT2 dir = MathUtils::Direction2D(myPos, targetPos);
+    if (dir.x == 0.0f && dir.y == 0.0f) return;
 
     // Move towards target
     float moveAmount = m_Stats.m_fMoveSpeed * dt;
-    myPos.x += dx * moveAmount;
-    myPos.z += dz * moveAmount;
+    myPos.x += dir.x * moveAmount;
+    myPos.z += dir.y * moveAmount;
 
     pMyTransform->SetPosition(myPos);
 }

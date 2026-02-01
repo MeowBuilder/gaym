@@ -14,6 +14,8 @@
 #include "FireballBehavior.h"
 #include "ProjectileManager.h"
 #include "DropItemComponent.h"
+#include "InteractableComponent.h"
+#include "MathUtils.h"
 #include <functional> // Added for std::function
 
 Scene::Scene()
@@ -204,6 +206,20 @@ void Scene::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList)
     // Add render component
     m_pInteractionCube->AddComponent<RenderComponent>()->SetMesh(pCubeMesh);
     m_vShaders[0]->AddRenderComponent(m_pInteractionCube->GetComponent<RenderComponent>());
+
+    // Add interactable component
+    auto* pInteractable = m_pInteractionCube->AddComponent<InteractableComponent>();
+    pInteractable->SetPromptText(L"[F] Interact");
+    pInteractable->SetInteractionDistance(m_fInteractionDistance);
+    pInteractable->SetOnInteract([this](InteractableComponent* pComp) {
+        // Activate room when interacted
+        if (m_pCurrentRoom && m_pCurrentRoom->GetState() == RoomState::Inactive)
+        {
+            m_pCurrentRoom->SetState(RoomState::Active);
+            OutputDebugString(L"[Scene] Room activated via InteractableComponent!\n");
+        }
+        pComp->Hide();
+    });
 
     m_bInteractionCubeActive = true;
     m_bEnemiesSpawned = false;
@@ -522,43 +538,27 @@ void Scene::CollectColliders(GameObject* pGameObject, std::vector<ColliderCompon
 
 bool Scene::IsNearInteractionCube() const
 {
-    if (!m_bInteractionCubeActive || !m_pInteractionCube || !m_pPlayerGameObject)
+    if (!m_pInteractionCube || !m_pPlayerGameObject)
         return false;
 
-    XMFLOAT3 playerPos = m_pPlayerGameObject->GetTransform()->GetPosition();
-    XMFLOAT3 cubePos = m_pInteractionCube->GetTransform()->GetPosition();
+    auto* pInteractable = m_pInteractionCube->GetComponent<InteractableComponent>();
+    if (!pInteractable || !pInteractable->IsActive())
+        return false;
 
-    float dx = playerPos.x - cubePos.x;
-    float dy = playerPos.y - cubePos.y;
-    float dz = playerPos.z - cubePos.z;
-    float distance = sqrtf(dx * dx + dy * dy + dz * dz);
-
-    return distance <= m_fInteractionDistance;
+    return pInteractable->IsPlayerInRange(m_pPlayerGameObject);
 }
 
 void Scene::TriggerInteraction()
 {
-    if (!m_bInteractionCubeActive || !IsNearInteractionCube())
+    if (!IsNearInteractionCube())
         return;
 
-    OutputDebugString(L"[Scene] Interaction triggered!\n");
-
-    // Deactivate the interaction cube
-    m_bInteractionCubeActive = false;
-
-    // Remove cube from room (hide it by removing render component)
-    if (m_pInteractionCube)
+    auto* pInteractable = m_pInteractionCube->GetComponent<InteractableComponent>();
+    if (pInteractable)
     {
-        // Move cube far away (simple hide)
-        m_pInteractionCube->GetTransform()->SetPosition(0.0f, -1000.0f, 0.0f);
-    }
-
-    // Activate room - this will spawn enemies automatically in Room::Update
-    if (m_pCurrentRoom && m_pCurrentRoom->GetState() == RoomState::Inactive)
-    {
-        m_pCurrentRoom->SetState(RoomState::Active);
+        pInteractable->Interact();
+        m_bInteractionCubeActive = false;
         m_bEnemiesSpawned = true;
-        OutputDebugString(L"[Scene] Room activated - enemies will spawn!\n");
     }
 }
 
@@ -578,12 +578,7 @@ bool Scene::IsNearDropItem() const
     XMFLOAT3 playerPos = m_pPlayerGameObject->GetTransform()->GetPosition();
     XMFLOAT3 dropPos = pDropItem->GetTransform()->GetPosition();
 
-    float dx = playerPos.x - dropPos.x;
-    float dy = playerPos.y - dropPos.y;
-    float dz = playerPos.z - dropPos.z;
-    float distance = sqrtf(dx * dx + dy * dy + dz * dz);
-
-    return distance <= m_fDropInteractionDistance;
+    return MathUtils::Distance3D(playerPos, dropPos) <= m_fDropInteractionDistance;
 }
 
 void Scene::StartDropInteraction()
