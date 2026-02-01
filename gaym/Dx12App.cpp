@@ -3,6 +3,7 @@
 #include "SkillComponent.h"
 #include "ISkillBehavior.h"
 #include "SkillData.h"
+#include "DropItemComponent.h"
 #include <DescriptorHeap.h>  // DirectXTK12
 #include <sstream>
 #include <iomanip>
@@ -274,10 +275,55 @@ void Dx12App::FrameAdvance()
 
     m_pScene->Update(m_GameTimer.GetTimeElapsed(), &m_inputSystem);
 
-    // F key interaction check
-    if (m_inputSystem.IsKeyDown('F') && m_pScene->IsNearInteractionCube())
+    // Handle drop interaction state
+    DropInteractionState dropState = m_pScene->GetDropInteractionState();
+
+    // Block regular rune input when selecting drop runes
+    GameObject* pPlayer = m_pScene->GetPlayer();
+    if (pPlayer)
     {
-        m_pScene->TriggerInteraction();
+        SkillComponent* pSkill = pPlayer->GetComponent<SkillComponent>();
+        if (pSkill)
+        {
+            pSkill->SetRuneInputBlocked(dropState == DropInteractionState::SelectingRune);
+        }
+    }
+
+    if (dropState == DropInteractionState::SelectingRune)
+    {
+        // In rune selection mode - handle 1/2/3 keys
+        if (m_inputSystem.IsKeyDown('1'))
+        {
+            m_pScene->SelectRune(0);
+        }
+        else if (m_inputSystem.IsKeyDown('2'))
+        {
+            m_pScene->SelectRune(1);
+        }
+        else if (m_inputSystem.IsKeyDown('3'))
+        {
+            m_pScene->SelectRune(2);
+        }
+        else if (m_inputSystem.IsKeyDown(VK_ESCAPE))
+        {
+            m_pScene->CancelDropInteraction();
+        }
+    }
+    else
+    {
+        // Normal mode - check for F key interactions
+        // Priority: Drop item > Interaction cube
+        if (m_inputSystem.IsKeyDown('F'))
+        {
+            if (m_pScene->IsNearDropItem())
+            {
+                m_pScene->StartDropInteraction();
+            }
+            else if (m_pScene->IsNearInteractionCube())
+            {
+                m_pScene->TriggerInteraction();
+            }
+        }
     }
 
     m_pScene->Render(m_pd3dCommandList.Get());
@@ -471,6 +517,78 @@ void Dx12App::RenderText()
             XMFLOAT2(screenCenterX - textWidth / 2.0f, screenCenterY),
             DirectX::Colors::Yellow
         );
+    }
+
+    // ========== Drop Interaction UI ==========
+    if (m_pScene)
+    {
+        DropInteractionState dropState = m_pScene->GetDropInteractionState();
+        float screenCenterX = (float)m_nWndClientWidth / 2.0f;
+        float screenCenterY = (float)m_nWndClientHeight / 2.0f;
+
+        if (dropState == DropInteractionState::SelectingRune)
+        {
+            // Show rune selection UI
+            CRoom* pRoom = m_pScene->GetCurrentRoom();
+            if (pRoom)
+            {
+                GameObject* pDropItem = pRoom->GetDropItem();
+                if (pDropItem)
+                {
+                    DropItemComponent* pDropComp = pDropItem->GetComponent<DropItemComponent>();
+                    if (pDropComp)
+                    {
+                        const wchar_t* typeNames[] = { L"Instant", L"Charge", L"Channel", L"Place", L"Enhance" };
+                        const wchar_t* typeDescs[] = {
+                            L"1x damage",
+                            L"Hold: 1x~3x damage",
+                            L"Hold: 0.3x per tick",
+                            L"1.5x trap damage",
+                            L"Buff: 2x next attack"
+                        };
+
+                        // Title
+                        const wchar_t* titleText = L"=== Select a Rune ===";
+                        XMVECTOR titleSize = m_spriteFont->MeasureString(titleText);
+                        m_spriteFont->DrawString(m_spriteBatch.get(), titleText,
+                            XMFLOAT2(screenCenterX - XMVectorGetX(titleSize) / 2.0f, screenCenterY - 60.0f),
+                            DirectX::Colors::Gold);
+
+                        // Rune options
+                        for (int i = 0; i < 3; ++i)
+                        {
+                            ActivationType runeType = pDropComp->GetRuneOption(i);
+                            int typeIndex = static_cast<int>(runeType);
+
+                            std::wstringstream optionText;
+                            optionText << L"[" << (i + 1) << L"] " << typeNames[typeIndex]
+                                << L" - " << typeDescs[typeIndex];
+
+                            XMVECTOR optionSize = m_spriteFont->MeasureString(optionText.str().c_str());
+                            m_spriteFont->DrawString(m_spriteBatch.get(), optionText.str().c_str(),
+                                XMFLOAT2(screenCenterX - XMVectorGetX(optionSize) / 2.0f, screenCenterY + i * 40.0f),
+                                DirectX::Colors::White);
+                        }
+
+                        // Cancel hint
+                        const wchar_t* cancelText = L"[ESC] Cancel";
+                        XMVECTOR cancelSize = m_spriteFont->MeasureString(cancelText);
+                        m_spriteFont->DrawString(m_spriteBatch.get(), cancelText,
+                            XMFLOAT2(screenCenterX - XMVectorGetX(cancelSize) / 2.0f, screenCenterY + 140.0f),
+                            DirectX::Colors::Gray);
+                    }
+                }
+            }
+        }
+        else if (m_pScene->IsNearDropItem())
+        {
+            // Show pickup prompt
+            const wchar_t* pickupText = L"[F] Pick up Rune";
+            XMVECTOR textSize = m_spriteFont->MeasureString(pickupText);
+            m_spriteFont->DrawString(m_spriteBatch.get(), pickupText,
+                XMFLOAT2(screenCenterX - XMVectorGetX(textSize) / 2.0f, screenCenterY + 100.0f),
+                DirectX::Colors::Cyan);
+        }
     }
 
     // ========== Skill UI ==========

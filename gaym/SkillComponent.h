@@ -44,6 +44,10 @@ public:
     void SetActivationType(ActivationType type);
     ActivationType GetActivationType() const { return m_CurrentActivationType; }
 
+    // Block rune input (e.g., during drop rune selection)
+    void SetRuneInputBlocked(bool blocked) { m_bRuneInputBlocked = blocked; }
+    bool IsRuneInputBlocked() const { return m_bRuneInputBlocked; }
+
     // Charge state (for Charge activation type)
     bool IsCharging() const { return m_bIsCharging; }
     float GetChargeProgress() const;
@@ -105,6 +109,9 @@ private:
 
     // Process rune input (1-5 keys)
     void ProcessRuneInput(InputSystem* pInputSystem);
+
+    // Rune input blocking
+    bool m_bRuneInputBlocked = false;
 
     // Execute skill based on current activation type
     void ExecuteWithActivationType(SkillSlot slot, const DirectX::XMFLOAT3& targetPosition);

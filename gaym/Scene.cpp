@@ -13,6 +13,7 @@
 #include "SkillComponent.h"
 #include "FireballBehavior.h"
 #include "ProjectileManager.h"
+#include "DropItemComponent.h"
 #include <functional> // Added for std::function
 
 Scene::Scene()
@@ -137,6 +138,7 @@ void Scene::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList)
     m_pCurrentRoom->SetSpawnConfig(spawnConfig);
     m_pCurrentRoom->SetEnemySpawner(m_pEnemySpawner.get());
     m_pCurrentRoom->SetPlayerTarget(m_pPlayerGameObject);
+    m_pCurrentRoom->SetScene(this);
 
     OutputDebugString(L"[Scene] Enemy spawn system initialized\n");
 
@@ -558,4 +560,103 @@ void Scene::TriggerInteraction()
         m_bEnemiesSpawned = true;
         OutputDebugString(L"[Scene] Room activated - enemies will spawn!\n");
     }
+}
+
+bool Scene::IsNearDropItem() const
+{
+    if (!m_pCurrentRoom || !m_pPlayerGameObject)
+        return false;
+
+    GameObject* pDropItem = m_pCurrentRoom->GetDropItem();
+    if (!pDropItem)
+        return false;
+
+    DropItemComponent* pDropComp = pDropItem->GetComponent<DropItemComponent>();
+    if (!pDropComp || !pDropComp->IsActive())
+        return false;
+
+    XMFLOAT3 playerPos = m_pPlayerGameObject->GetTransform()->GetPosition();
+    XMFLOAT3 dropPos = pDropItem->GetTransform()->GetPosition();
+
+    float dx = playerPos.x - dropPos.x;
+    float dy = playerPos.y - dropPos.y;
+    float dz = playerPos.z - dropPos.z;
+    float distance = sqrtf(dx * dx + dy * dy + dz * dz);
+
+    return distance <= m_fDropInteractionDistance;
+}
+
+void Scene::StartDropInteraction()
+{
+    if (m_eDropState != DropInteractionState::None && m_eDropState != DropInteractionState::NearDrop)
+        return;
+
+    if (!IsNearDropItem())
+        return;
+
+    m_pCurrentDropItem = m_pCurrentRoom->GetDropItem();
+    m_eDropState = DropInteractionState::SelectingRune;
+
+    OutputDebugString(L"[Scene] Started drop interaction - selecting rune\n");
+}
+
+void Scene::SelectRune(int choice)
+{
+    if (m_eDropState != DropInteractionState::SelectingRune)
+        return;
+
+    if (choice < 0 || choice >= 3)
+        return;
+
+    if (!m_pCurrentDropItem)
+    {
+        CancelDropInteraction();
+        return;
+    }
+
+    DropItemComponent* pDropComp = m_pCurrentDropItem->GetComponent<DropItemComponent>();
+    if (!pDropComp)
+    {
+        CancelDropInteraction();
+        return;
+    }
+
+    // Get the selected rune type
+    ActivationType selectedRune = pDropComp->GetRuneOption(choice);
+
+    // Apply to player's skill component
+    if (m_pPlayerGameObject)
+    {
+        SkillComponent* pSkill = m_pPlayerGameObject->GetComponent<SkillComponent>();
+        if (pSkill)
+        {
+            pSkill->SetActivationType(selectedRune);
+
+            const wchar_t* typeNames[] = { L"Instant", L"Charge", L"Channel", L"Place", L"Enhance" };
+            wchar_t buffer[128];
+            swprintf_s(buffer, L"[Scene] Rune selected: %s\n", typeNames[static_cast<int>(selectedRune)]);
+            OutputDebugString(buffer);
+        }
+    }
+
+    // Deactivate and hide the drop item
+    pDropComp->SetActive(false);
+    m_pCurrentDropItem->GetTransform()->SetPosition(0.0f, -1000.0f, 0.0f);
+
+    // Clear room's drop reference
+    if (m_pCurrentRoom)
+    {
+        m_pCurrentRoom->ClearDropItem();
+    }
+
+    // Reset state
+    m_pCurrentDropItem = nullptr;
+    m_eDropState = DropInteractionState::None;
+}
+
+void Scene::CancelDropInteraction()
+{
+    m_eDropState = DropInteractionState::None;
+    m_pCurrentDropItem = nullptr;
+    OutputDebugString(L"[Scene] Drop interaction cancelled\n");
 }

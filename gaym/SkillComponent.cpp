@@ -391,6 +391,10 @@ float SkillComponent::GetChargeProgress() const
 
 void SkillComponent::ProcessRuneInput(InputSystem* pInputSystem)
 {
+    // Skip if rune input is blocked (e.g., during drop rune selection)
+    if (m_bRuneInputBlocked)
+        return;
+
     // 1-5 keys change activation type
     if (pInputSystem->IsKeyDown('1'))
     {

@@ -5,6 +5,7 @@
 
 class EnemyComponent;
 class EnemySpawner;
+class Scene;
 
 enum class RoomState {
     Inactive,   // 플레이어가 아직 진입하지 않음
@@ -54,6 +55,13 @@ public:
     void SpawnEnemies();
     bool HasSpawnedEnemies() const { return m_bEnemiesSpawned; }
 
+    // Drop item system
+    void SetScene(Scene* pScene) { m_pScene = pScene; }
+    void SpawnDropItem();
+    GameObject* GetDropItem() const { return m_pDropItem; }
+    bool HasDropItem() const { return m_pDropItem != nullptr; }
+    void ClearDropItem() { m_pDropItem = nullptr; }
+
 protected:
     std::vector<std::unique_ptr<GameObject>> m_vGameObjects; // 방에 속한 모든 오브젝트
     RoomState m_eState = RoomState::Inactive;
@@ -67,4 +75,8 @@ protected:
     EnemySpawner* m_pSpawner = nullptr;
     GameObject* m_pPlayerTarget = nullptr;
     bool m_bEnemiesSpawned = false;
+
+    // Drop item system
+    Scene* m_pScene = nullptr;
+    GameObject* m_pDropItem = nullptr;
 };

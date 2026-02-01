@@ -26,6 +26,8 @@ public:
     void OnResize(UINT nWidth, UINT nHeight);
 
     InputSystem& GetInputSystem() { return m_inputSystem; } // Added getter for InputSystem
+    ID3D12Device* GetDevice() const { return m_pd3dDevice.Get(); }
+    ID3D12GraphicsCommandList* GetCommandList() const { return m_pd3dCommandList.Get(); }
 
     static ComPtr<ID3D12Resource> CreateBufferResource(const void* pData, UINT nBytes, D3D12_HEAP_TYPE d3dHeapType = D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATES d3dResourceStates = D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER, ComPtr<ID3D12Resource>* ppd3dUploadBuffer = NULL);
 

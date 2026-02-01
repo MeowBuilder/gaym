@@ -3,6 +3,7 @@
 #include <vector>
 #include <memory>
 #include "GameObject.h"
+#include "SkillTypes.h"  // For ActivationType
 #include "Shader.h"
 #include "Mesh.h"
 #include "DescriptorHeap.h"
@@ -16,6 +17,14 @@
 
 struct ID3D12Device;
 struct ID3D12GraphicsCommandList;
+
+// Drop interaction state machine
+enum class DropInteractionState
+{
+    None,           // No drop nearby
+    NearDrop,       // Near a drop, can press F
+    SelectingRune   // Choosing from 3 runes
+};
 
 struct SpotLight
 {
@@ -60,6 +69,14 @@ public:
     bool IsInteractionCubeActive() const { return m_bInteractionCubeActive; }
     void TriggerInteraction();
 
+    // Drop interaction system
+    DropInteractionState GetDropInteractionState() const { return m_eDropState; }
+    bool IsNearDropItem() const;
+    void StartDropInteraction();  // Called when F pressed near drop
+    void SelectRune(int choice);  // Called when 1/2/3 pressed during selection
+    void CancelDropInteraction(); // Cancel selection (e.g., ESC or walk away)
+    bool IsSelectingRune() const { return m_eDropState == DropInteractionState::SelectingRune; }
+
     GameObject* CreateGameObject(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList);
 
     void AllocateDescriptor(D3D12_CPU_DESCRIPTOR_HANDLE* pCpuHandle, D3D12_GPU_DESCRIPTOR_HANDLE* pGpuHandle)
@@ -80,6 +97,11 @@ private:
     bool m_bInteractionCubeActive = true;
     bool m_bEnemiesSpawned = false;
     float m_fInteractionDistance = 5.0f;
+
+    // Drop interaction
+    DropInteractionState m_eDropState = DropInteractionState::None;
+    GameObject* m_pCurrentDropItem = nullptr;  // The drop we're interacting with
+    float m_fDropInteractionDistance = 5.0f;
 
     std::vector<std::unique_ptr<Shader>> m_vShaders;
 

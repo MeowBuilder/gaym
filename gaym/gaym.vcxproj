@@ -184,6 +184,7 @@
     <ClInclude Include="Timer.h" />
     <ClInclude Include="TransformComponent.h" />
     <ClInclude Include="WICTextureLoader12.h" />
+    <ClInclude Include="DropItemComponent.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Animation.cpp" />
@@ -220,6 +221,7 @@
     <ClCompile Include="Timer.cpp" />
     <ClCompile Include="TransformComponent.cpp" />
     <ClCompile Include="WICTextureLoader12.cpp" />
+    <ClCompile Include="DropItemComponent.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="gaym.rc" />
