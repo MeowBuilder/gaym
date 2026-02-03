@@ -23,7 +23,8 @@ enum class DropInteractionState
 {
     None,           // No drop nearby
     NearDrop,       // Near a drop, can press F
-    SelectingRune   // Choosing from 3 runes
+    SelectingRune,  // Choosing from 3 runes (click one)
+    SelectingSkill  // Choosing which skill slot to assign rune to
 };
 
 struct SpotLight
@@ -74,8 +75,12 @@ public:
     bool IsNearDropItem() const;
     void StartDropInteraction();  // Called when F pressed near drop
     void SelectRune(int choice);  // Called when 1/2/3 pressed during selection
+    void SelectRuneByClick(int runeIndex);  // Called when mouse clicks on a rune option
+    void SelectSkillSlot(SkillSlot slot, int runeSlotIndex);  // Called when clicking skill's rune slot
     void CancelDropInteraction(); // Cancel selection (e.g., ESC or walk away)
     bool IsSelectingRune() const { return m_eDropState == DropInteractionState::SelectingRune; }
+    bool IsSelectingSkill() const { return m_eDropState == DropInteractionState::SelectingSkill; }
+    ActivationType GetSelectedRune() const { return m_eSelectedRune; }
 
     GameObject* CreateGameObject(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList);
 
@@ -102,6 +107,7 @@ private:
     DropInteractionState m_eDropState = DropInteractionState::None;
     GameObject* m_pCurrentDropItem = nullptr;  // The drop we're interacting with
     float m_fDropInteractionDistance = 5.0f;
+    ActivationType m_eSelectedRune = ActivationType::None;  // Selected rune waiting for skill assignment
 
     std::vector<std::unique_ptr<Shader>> m_vShaders;
 

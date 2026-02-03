@@ -9,6 +9,7 @@ InputSystem::InputSystem()
 {
     ZeroMemory(m_keyState, sizeof(m_keyState));
     ZeroMemory(m_mouseButtonState, sizeof(m_mouseButtonState));
+    ZeroMemory(m_prevMouseButtonState, sizeof(m_prevMouseButtonState));
 }
 
 InputSystem::~InputSystem()
@@ -78,9 +79,22 @@ bool InputSystem::IsMouseButtonDown(int button) const
     return false;
 }
 
+bool InputSystem::IsMouseButtonPressed(int button) const
+{
+    if (button >= 0 && button < MAX_MOUSE_BUTTONS)
+    {
+        // Pressed = currently down AND was not down last frame
+        return m_mouseButtonState[button] && !m_prevMouseButtonState[button];
+    }
+    return false;
+}
+
 void InputSystem::Reset()
 {
     m_mouseDeltaX = 0.0f;
     m_mouseDeltaY = 0.0f;
     m_mouseWheelDelta = 0.0f;
+
+    // Save current state as previous for next frame
+    memcpy(m_prevMouseButtonState, m_mouseButtonState, sizeof(m_mouseButtonState));
 }

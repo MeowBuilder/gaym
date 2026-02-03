@@ -9,6 +9,9 @@ class ISkillBehavior;
 class InputSystem;
 class CCamera;
 
+// Number of rune slots per skill
+constexpr int RUNES_PER_SKILL = 3;
+
 // Component that manages skill slots and execution for a GameObject
 class SkillComponent : public Component
 {
@@ -40,9 +43,18 @@ public:
     // Get cooldown progress (0.0 = just used, 1.0 = ready)
     float GetCooldownProgress(SkillSlot slot) const;
 
-    // Rune/Activation type management
+    // Rune/Activation type management (legacy - uses first equipped rune)
     void SetActivationType(ActivationType type);
     ActivationType GetActivationType() const { return m_CurrentActivationType; }
+
+    // Per-skill rune slot management
+    void SetRuneSlot(SkillSlot skill, int runeIndex, ActivationType type);
+    ActivationType GetRuneSlot(SkillSlot skill, int runeIndex) const;
+    void ClearRuneSlot(SkillSlot skill, int runeIndex);
+    int GetEquippedRuneCount(SkillSlot skill) const;
+
+    // Get combined activation type for a skill (based on equipped runes)
+    ActivationType GetSkillActivationType(SkillSlot skill) const;
 
     // Block rune input (e.g., during drop rune selection)
     void SetRuneInputBlocked(bool blocked) { m_bRuneInputBlocked = blocked; }
@@ -83,8 +95,12 @@ private:
     // Currently active skill (if any)
     SkillSlot m_ActiveSkillSlot = SkillSlot::Count;  // Count means no active skill
 
-    // Current activation type (set by rune)
+    // Current activation type (set by rune) - legacy, for backwards compatibility
     ActivationType m_CurrentActivationType = ActivationType::Instant;
+
+    // Per-skill rune slots: [skill][runeSlot] = ActivationType
+    // None = empty slot
+    std::array<std::array<ActivationType, RUNES_PER_SKILL>, static_cast<size_t>(SkillSlot::Count)> m_SkillRunes;
 
     // Charge system
     bool m_bIsCharging = false;

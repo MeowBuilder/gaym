@@ -32,10 +32,12 @@ public:
 
     // Mouse button queries (0 = Left, 1 = Right, 2 = Middle)
     bool IsMouseButtonDown(int button) const;
+    bool IsMouseButtonPressed(int button) const;  // True only on the frame the button was pressed
 
 private:
     bool m_keyState[MAX_KEYS];
     bool m_mouseButtonState[MAX_MOUSE_BUTTONS]; // Left, Right, Middle
+    bool m_prevMouseButtonState[MAX_MOUSE_BUTTONS]; // Previous frame state
     int m_mouseX, m_mouseY; // Current mouse position
     float m_mouseDeltaX, m_mouseDeltaY; // Mouse movement delta
     float m_mouseWheelDelta; // Mouse wheel delta

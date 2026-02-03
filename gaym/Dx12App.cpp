@@ -278,33 +278,97 @@ void Dx12App::FrameAdvance()
     // Handle drop interaction state
     DropInteractionState dropState = m_pScene->GetDropInteractionState();
 
-    // Block regular rune input when selecting drop runes
+    // Block regular rune input when in any drop interaction state
     GameObject* pPlayer = m_pScene->GetPlayer();
     if (pPlayer)
     {
         SkillComponent* pSkill = pPlayer->GetComponent<SkillComponent>();
         if (pSkill)
         {
-            pSkill->SetRuneInputBlocked(dropState == DropInteractionState::SelectingRune);
+            pSkill->SetRuneInputBlocked(dropState == DropInteractionState::SelectingRune ||
+                                        dropState == DropInteractionState::SelectingSkill);
         }
     }
 
     if (dropState == DropInteractionState::SelectingRune)
     {
-        // In rune selection mode - handle 1/2/3 keys
+        // In rune selection mode - handle mouse clicks on rune options
+        float screenCenterX = (float)m_nWndClientWidth / 2.0f;
+        float screenCenterY = (float)m_nWndClientHeight / 2.0f;
+
+        if (m_inputSystem.IsMouseButtonPressed(0))  // Left click
+        {
+            XMFLOAT2 mousePos = m_inputSystem.GetMousePosition();
+
+            // Check if clicking on one of the 3 rune options
+            for (int i = 0; i < 3; ++i)
+            {
+                float optionY = screenCenterY + i * 40.0f;
+                float optionHeight = 36.0f;
+                float optionWidth = 400.0f;
+
+                if (mousePos.x >= screenCenterX - optionWidth / 2.0f &&
+                    mousePos.x <= screenCenterX + optionWidth / 2.0f &&
+                    mousePos.y >= optionY - 4.0f &&
+                    mousePos.y <= optionY + optionHeight)
+                {
+                    m_pScene->SelectRuneByClick(i);
+                    break;
+                }
+            }
+        }
+
+        // Also keep keyboard support
         if (m_inputSystem.IsKeyDown('1'))
         {
-            m_pScene->SelectRune(0);
+            m_pScene->SelectRuneByClick(0);
         }
         else if (m_inputSystem.IsKeyDown('2'))
         {
-            m_pScene->SelectRune(1);
+            m_pScene->SelectRuneByClick(1);
         }
         else if (m_inputSystem.IsKeyDown('3'))
         {
-            m_pScene->SelectRune(2);
+            m_pScene->SelectRuneByClick(2);
         }
         else if (m_inputSystem.IsKeyDown(VK_ESCAPE))
+        {
+            m_pScene->CancelDropInteraction();
+        }
+    }
+    else if (dropState == DropInteractionState::SelectingSkill)
+    {
+        // In skill slot selection mode - handle mouse clicks on skill rune slots
+        if (m_inputSystem.IsMouseButtonPressed(0))  // Left click
+        {
+            XMFLOAT2 mousePos = m_inputSystem.GetMousePosition();
+
+            float leftX = 20.0f;
+            float leftY = (float)m_nWndClientHeight - 240.0f;
+            float lineHeight = 48.0f;
+            float slotWidth = 30.0f;
+            float slotHeight = 24.0f;
+            float runeStartX = 250.0f;  // X position where rune slots start
+
+            for (int skillIdx = 0; skillIdx < static_cast<int>(SkillSlot::Count); ++skillIdx)
+            {
+                float skillY = leftY + skillIdx * lineHeight;
+
+                for (int runeIdx = 0; runeIdx < RUNES_PER_SKILL; ++runeIdx)
+                {
+                    float runeX = runeStartX + runeIdx * (slotWidth + 4.0f);
+
+                    if (mousePos.x >= runeX && mousePos.x <= runeX + slotWidth &&
+                        mousePos.y >= skillY && mousePos.y <= skillY + slotHeight)
+                    {
+                        m_pScene->SelectSkillSlot(static_cast<SkillSlot>(skillIdx), runeIdx);
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (m_inputSystem.IsKeyDown(VK_ESCAPE))
         {
             m_pScene->CancelDropInteraction();
         }
@@ -528,7 +592,7 @@ void Dx12App::RenderText()
 
         if (dropState == DropInteractionState::SelectingRune)
         {
-            // Show rune selection UI
+            // Show rune selection UI with clickable buttons
             CRoom* pRoom = m_pScene->GetCurrentRoom();
             if (pRoom)
             {
@@ -538,8 +602,9 @@ void Dx12App::RenderText()
                     DropItemComponent* pDropComp = pDropItem->GetComponent<DropItemComponent>();
                     if (pDropComp)
                     {
-                        const wchar_t* typeNames[] = { L"Instant", L"Charge", L"Channel", L"Place", L"Enhance" };
+                        const wchar_t* typeNames[] = { L"None", L"Instant", L"Charge", L"Channel", L"Place", L"Enhance" };
                         const wchar_t* typeDescs[] = {
+                            L"Empty",
                             L"1x damage",
                             L"Hold: 1x~3x damage",
                             L"Hold: 0.3x per tick",
@@ -548,26 +613,35 @@ void Dx12App::RenderText()
                         };
 
                         // Title
-                        const wchar_t* titleText = L"=== Select a Rune ===";
+                        const wchar_t* titleText = L"=== Click to Select a Rune ===";
                         XMVECTOR titleSize = m_spriteFont->MeasureString(titleText);
                         m_spriteFont->DrawString(m_spriteBatch.get(), titleText,
                             XMFLOAT2(screenCenterX - XMVectorGetX(titleSize) / 2.0f, screenCenterY - 60.0f),
                             DirectX::Colors::Gold);
 
-                        // Rune options
+                        // Rune options (clickable)
+                        XMFLOAT2 mousePos = m_inputSystem.GetMousePosition();
                         for (int i = 0; i < 3; ++i)
                         {
                             ActivationType runeType = pDropComp->GetRuneOption(i);
                             int typeIndex = static_cast<int>(runeType);
 
                             std::wstringstream optionText;
-                            optionText << L"[" << (i + 1) << L"] " << typeNames[typeIndex]
-                                << L" - " << typeDescs[typeIndex];
+                            optionText << L"> " << typeNames[typeIndex] << L" - " << typeDescs[typeIndex];
 
+                            float optionY = screenCenterY + i * 40.0f;
                             XMVECTOR optionSize = m_spriteFont->MeasureString(optionText.str().c_str());
+                            float optionWidth = XMVectorGetX(optionSize);
+
+                            // Check if mouse is hovering
+                            bool isHovered = (mousePos.x >= screenCenterX - optionWidth / 2.0f &&
+                                              mousePos.x <= screenCenterX + optionWidth / 2.0f &&
+                                              mousePos.y >= optionY - 4.0f &&
+                                              mousePos.y <= optionY + 32.0f);
+
                             m_spriteFont->DrawString(m_spriteBatch.get(), optionText.str().c_str(),
-                                XMFLOAT2(screenCenterX - XMVectorGetX(optionSize) / 2.0f, screenCenterY + i * 40.0f),
-                                DirectX::Colors::White);
+                                XMFLOAT2(screenCenterX - optionWidth / 2.0f, optionY),
+                                isHovered ? DirectX::Colors::Yellow : DirectX::Colors::White);
                         }
 
                         // Cancel hint
@@ -579,6 +653,74 @@ void Dx12App::RenderText()
                     }
                 }
             }
+        }
+        else if (dropState == DropInteractionState::SelectingSkill)
+        {
+            // Show skill slot selection UI
+            const wchar_t* titleText = L"=== Click a Rune Slot to Assign ===";
+            XMVECTOR titleSize = m_spriteFont->MeasureString(titleText);
+            m_spriteFont->DrawString(m_spriteBatch.get(), titleText,
+                XMFLOAT2(screenCenterX - XMVectorGetX(titleSize) / 2.0f, screenCenterY - 100.0f),
+                DirectX::Colors::Gold);
+
+            // Show selected rune info
+            const wchar_t* typeNames[] = { L"None", L"Instant", L"Charge", L"Channel", L"Place", L"Enhance" };
+            ActivationType selectedRune = m_pScene->GetSelectedRune();
+            std::wstringstream selectedText;
+            selectedText << L"Selected Rune: " << typeNames[static_cast<int>(selectedRune)];
+            XMVECTOR selectedSize = m_spriteFont->MeasureString(selectedText.str().c_str());
+            m_spriteFont->DrawString(m_spriteBatch.get(), selectedText.str().c_str(),
+                XMFLOAT2(screenCenterX - XMVectorGetX(selectedSize) / 2.0f, screenCenterY - 60.0f),
+                DirectX::Colors::Cyan);
+
+            // Show skill slots with rune slots (click on empty slot to assign)
+            const wchar_t* slotNames[] = { L"Q", L"E", L"R", L"RMB" };
+            GameObject* pPlayer = m_pScene->GetPlayer();
+            SkillComponent* pSkill = pPlayer ? pPlayer->GetComponent<SkillComponent>() : nullptr;
+
+            XMFLOAT2 mousePos = m_inputSystem.GetMousePosition();
+            float slotStartY = screenCenterY - 20.0f;
+            float lineHeight = 40.0f;
+
+            for (int skillIdx = 0; skillIdx < static_cast<int>(SkillSlot::Count); ++skillIdx)
+            {
+                float slotY = slotStartY + skillIdx * lineHeight;
+
+                // Skill name
+                std::wstringstream skillText;
+                skillText << L"[" << slotNames[skillIdx] << L"] ";
+                m_spriteFont->DrawString(m_spriteBatch.get(), skillText.str().c_str(),
+                    XMFLOAT2(screenCenterX - 150.0f, slotY), DirectX::Colors::White);
+
+                // Rune slots (3 boxes)
+                for (int runeIdx = 0; runeIdx < RUNES_PER_SKILL; ++runeIdx)
+                {
+                    float runeX = screenCenterX - 80.0f + runeIdx * 80.0f;
+                    float runeWidth = 70.0f;
+                    float runeHeight = 28.0f;
+
+                    ActivationType runeType = pSkill ? pSkill->GetRuneSlot(static_cast<SkillSlot>(skillIdx), runeIdx) : ActivationType::None;
+
+                    // Check hover
+                    bool isHovered = (mousePos.x >= runeX && mousePos.x <= runeX + runeWidth &&
+                                      mousePos.y >= slotY && mousePos.y <= slotY + runeHeight);
+
+                    // Draw slot
+                    const wchar_t* runeName = (runeType == ActivationType::None) ? L"[Empty]" : typeNames[static_cast<int>(runeType)];
+                    XMVECTORF32 color = (runeType == ActivationType::None)
+                        ? (isHovered ? DirectX::Colors::Yellow : DirectX::Colors::DarkGray)
+                        : DirectX::Colors::Cyan;
+
+                    m_spriteFont->DrawString(m_spriteBatch.get(), runeName, XMFLOAT2(runeX, slotY), color);
+                }
+            }
+
+            // Cancel hint
+            const wchar_t* cancelText = L"[ESC] Cancel";
+            XMVECTOR cancelSize = m_spriteFont->MeasureString(cancelText);
+            m_spriteFont->DrawString(m_spriteBatch.get(), cancelText,
+                XMFLOAT2(screenCenterX - XMVectorGetX(cancelSize) / 2.0f, slotStartY + 180.0f),
+                DirectX::Colors::Gray);
         }
         else if (m_pScene->IsNearDropItem())
         {
@@ -687,6 +829,21 @@ void Dx12App::RenderText()
                             XMFLOAT2(leftX, leftY), DirectX::Colors::DarkGray);
                     }
 
+                    // Show rune slots for this skill
+                    const wchar_t* runeShortNames[] = { L"-", L"I", L"C", L"Ch", L"P", L"E" };  // None, Instant, Charge, Channel, Place, Enhance
+                    float runeSlotX = leftX + 280.0f;
+                    std::wstringstream runeSlots;
+                    runeSlots << L"[";
+                    for (int r = 0; r < RUNES_PER_SKILL; ++r)
+                    {
+                        ActivationType rune = pSkill->GetRuneSlot(slot, r);
+                        if (r > 0) runeSlots << L"|";
+                        runeSlots << runeShortNames[static_cast<int>(rune)];
+                    }
+                    runeSlots << L"]";
+                    m_spriteFont->DrawString(m_spriteBatch.get(), runeSlots.str().c_str(),
+                        XMFLOAT2(runeSlotX, leftY), DirectX::Colors::Cyan);
+
                     leftY += lineHeight;
                 }
 
@@ -694,9 +851,10 @@ void Dx12App::RenderText()
                 float rightX = (float)m_nWndClientWidth - 500.0f;
                 float rightY = (float)m_nWndClientHeight - 280.0f;
 
-                // Rune type
-                const wchar_t* activationNames[] = { L"Instant", L"Charge", L"Channel", L"Place", L"Enhance" };
+                // Rune type (now includes None)
+                const wchar_t* activationNames[] = { L"None", L"Instant", L"Charge", L"Channel", L"Place", L"Enhance" };
                 const wchar_t* runeDescriptions[] = {
+                    L"No rune equipped",
                     L"1x damage",
                     L"Hold: 1x~3x damage",
                     L"Hold: 0.3x per tick",
@@ -704,8 +862,9 @@ void Dx12App::RenderText()
                     L"Buff: 2x next attack"
                 };
 
+                // Show current activation type
                 std::wstringstream runeText;
-                runeText << L"[Rune] " << activationNames[static_cast<int>(activationType)];
+                runeText << L"[Active Rune] " << activationNames[static_cast<int>(activationType)];
                 m_spriteFont->DrawString(m_spriteBatch.get(), runeText.str().c_str(),
                     XMFLOAT2(rightX, rightY), DirectX::Colors::Cyan);
                 rightY += lineHeight;
@@ -749,7 +908,7 @@ void Dx12App::RenderText()
                 }
 
                 // Key hints at bottom
-                m_spriteFont->DrawString(m_spriteBatch.get(), L"[1-5] Change Rune",
+                m_spriteFont->DrawString(m_spriteBatch.get(), L"Pick up runes to equip",
                     XMFLOAT2(rightX, rightY), DirectX::Colors::DimGray);
             }
         }

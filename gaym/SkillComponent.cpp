@@ -17,6 +17,12 @@ SkillComponent::SkillComponent(GameObject* pOwner)
 
     // Initialize all skill states to Ready
     m_SkillStates.fill(SkillState::Ready);
+
+    // Initialize all rune slots to None (empty)
+    for (auto& skillRunes : m_SkillRunes)
+    {
+        skillRunes.fill(ActivationType::None);
+    }
 }
 
 SkillComponent::~SkillComponent()
@@ -376,11 +382,71 @@ void SkillComponent::SetActivationType(ActivationType type)
     {
         m_CurrentActivationType = type;
 
-        const wchar_t* typeNames[] = { L"Instant", L"Charge", L"Channel", L"Place", L"Enhance" };
+        const wchar_t* typeNames[] = { L"None", L"Instant", L"Charge", L"Channel", L"Place", L"Enhance" };
         wchar_t buffer[128];
         swprintf_s(buffer, 128, L"[Skill] Activation type changed to: %s\n", typeNames[static_cast<int>(type)]);
         OutputDebugString(buffer);
     }
+}
+
+void SkillComponent::SetRuneSlot(SkillSlot skill, int runeIndex, ActivationType type)
+{
+    size_t skillIdx = static_cast<size_t>(skill);
+    if (skillIdx >= static_cast<size_t>(SkillSlot::Count) || runeIndex < 0 || runeIndex >= RUNES_PER_SKILL)
+        return;
+
+    m_SkillRunes[skillIdx][runeIndex] = type;
+
+    const wchar_t* slotNames[] = { L"Q", L"E", L"R", L"RMB" };
+    const wchar_t* typeNames[] = { L"None", L"Instant", L"Charge", L"Channel", L"Place", L"Enhance" };
+    wchar_t buffer[128];
+    swprintf_s(buffer, 128, L"[Skill] Rune set: %s slot %d = %s\n",
+        slotNames[skillIdx], runeIndex + 1, typeNames[static_cast<int>(type)]);
+    OutputDebugString(buffer);
+}
+
+ActivationType SkillComponent::GetRuneSlot(SkillSlot skill, int runeIndex) const
+{
+    size_t skillIdx = static_cast<size_t>(skill);
+    if (skillIdx >= static_cast<size_t>(SkillSlot::Count) || runeIndex < 0 || runeIndex >= RUNES_PER_SKILL)
+        return ActivationType::None;
+
+    return m_SkillRunes[skillIdx][runeIndex];
+}
+
+void SkillComponent::ClearRuneSlot(SkillSlot skill, int runeIndex)
+{
+    SetRuneSlot(skill, runeIndex, ActivationType::None);
+}
+
+int SkillComponent::GetEquippedRuneCount(SkillSlot skill) const
+{
+    size_t skillIdx = static_cast<size_t>(skill);
+    if (skillIdx >= static_cast<size_t>(SkillSlot::Count))
+        return 0;
+
+    int count = 0;
+    for (int i = 0; i < RUNES_PER_SKILL; ++i)
+    {
+        if (m_SkillRunes[skillIdx][i] != ActivationType::None)
+            ++count;
+    }
+    return count;
+}
+
+ActivationType SkillComponent::GetSkillActivationType(SkillSlot skill) const
+{
+    size_t skillIdx = static_cast<size_t>(skill);
+    if (skillIdx >= static_cast<size_t>(SkillSlot::Count))
+        return ActivationType::Instant;
+
+    // Return the first non-None rune, or Instant if no runes equipped
+    for (int i = 0; i < RUNES_PER_SKILL; ++i)
+    {
+        if (m_SkillRunes[skillIdx][i] != ActivationType::None)
+            return m_SkillRunes[skillIdx][i];
+    }
+    return ActivationType::Instant;
 }
 
 float SkillComponent::GetChargeProgress() const

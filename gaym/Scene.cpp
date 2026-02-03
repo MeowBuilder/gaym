@@ -653,5 +653,89 @@ void Scene::CancelDropInteraction()
 {
     m_eDropState = DropInteractionState::None;
     m_pCurrentDropItem = nullptr;
+    m_eSelectedRune = ActivationType::None;
     OutputDebugString(L"[Scene] Drop interaction cancelled\n");
+}
+
+void Scene::SelectRuneByClick(int runeIndex)
+{
+    if (m_eDropState != DropInteractionState::SelectingRune)
+        return;
+
+    if (runeIndex < 0 || runeIndex >= 3)
+        return;
+
+    if (!m_pCurrentDropItem)
+    {
+        CancelDropInteraction();
+        return;
+    }
+
+    DropItemComponent* pDropComp = m_pCurrentDropItem->GetComponent<DropItemComponent>();
+    if (!pDropComp)
+    {
+        CancelDropInteraction();
+        return;
+    }
+
+    // Store selected rune and move to skill selection state
+    m_eSelectedRune = pDropComp->GetRuneOption(runeIndex);
+    m_eDropState = DropInteractionState::SelectingSkill;
+
+    const wchar_t* typeNames[] = { L"None", L"Instant", L"Charge", L"Channel", L"Place", L"Enhance" };
+    wchar_t buffer[128];
+    swprintf_s(buffer, L"[Scene] Rune clicked: %s - Now select skill slot\n", typeNames[static_cast<int>(m_eSelectedRune)]);
+    OutputDebugString(buffer);
+}
+
+void Scene::SelectSkillSlot(SkillSlot slot, int runeSlotIndex)
+{
+    if (m_eDropState != DropInteractionState::SelectingSkill)
+        return;
+
+    if (m_eSelectedRune == ActivationType::None)
+    {
+        CancelDropInteraction();
+        return;
+    }
+
+    // Apply rune to player's skill slot
+    if (m_pPlayerGameObject)
+    {
+        SkillComponent* pSkill = m_pPlayerGameObject->GetComponent<SkillComponent>();
+        if (pSkill)
+        {
+            pSkill->SetRuneSlot(slot, runeSlotIndex, m_eSelectedRune);
+
+            // Also update legacy activation type to the first skill's first rune
+            pSkill->SetActivationType(pSkill->GetSkillActivationType(SkillSlot::Q));
+
+            const wchar_t* slotNames[] = { L"Q", L"E", L"R", L"RMB" };
+            const wchar_t* typeNames[] = { L"None", L"Instant", L"Charge", L"Channel", L"Place", L"Enhance" };
+            wchar_t buffer[128];
+            swprintf_s(buffer, L"[Scene] Rune %s assigned to %s slot %d\n",
+                typeNames[static_cast<int>(m_eSelectedRune)], slotNames[static_cast<int>(slot)], runeSlotIndex + 1);
+            OutputDebugString(buffer);
+        }
+    }
+
+    // Deactivate and hide the drop item
+    if (m_pCurrentDropItem)
+    {
+        DropItemComponent* pDropComp = m_pCurrentDropItem->GetComponent<DropItemComponent>();
+        if (pDropComp)
+            pDropComp->SetActive(false);
+        m_pCurrentDropItem->GetTransform()->SetPosition(0.0f, -1000.0f, 0.0f);
+    }
+
+    // Clear room's drop reference
+    if (m_pCurrentRoom)
+    {
+        m_pCurrentRoom->ClearDropItem();
+    }
+
+    // Reset state
+    m_pCurrentDropItem = nullptr;
+    m_eSelectedRune = ActivationType::None;
+    m_eDropState = DropInteractionState::None;
 }

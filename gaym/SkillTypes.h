@@ -25,7 +25,8 @@ enum class ElementType : uint8_t
 // How the skill is activated (determined by Activation Rune)
 enum class ActivationType : uint8_t
 {
-    Instant = 0,    // 1: Immediate effect on key press
+    None = 0,       // Empty slot
+    Instant,        // 1: Immediate effect on key press
     Charge,         // 2: Charge up then release (more damage)
     Channel,        // 3: Channeled over time (continuous effect)
     Place,          // 4: Place trap/turret at location
