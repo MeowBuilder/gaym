@@ -833,7 +833,10 @@ void Dx12App::RenderText()
                     leftY += lineHeight;
                 }
 
-                // ========== Rune Info (below skills) ==========
+                // ========== Rune Info (right bottom) ==========
+                float rightX = (float)m_nWndClientWidth - 400.0f;
+                float rightY = (float)m_nWndClientHeight - 180.0f;
+
                 const wchar_t* activationNames[] = { L"None", L"Instant", L"Charge", L"Channel", L"Place", L"Enhance" };
                 const wchar_t* runeDescriptions[] = {
                     L"No rune equipped",
@@ -844,15 +847,17 @@ void Dx12App::RenderText()
                     L"Buff: 2x next attack"
                 };
 
-                leftY += 10.0f;  // Add spacing
-
                 // Show current activation type
                 std::wstringstream runeText;
-                runeText << L"[Rune] " << activationNames[static_cast<int>(activationType)]
-                         << L" - " << runeDescriptions[static_cast<int>(activationType)];
+                runeText << L"[Rune] " << activationNames[static_cast<int>(activationType)];
                 m_spriteFont->DrawString(m_spriteBatch.get(), runeText.str().c_str(),
-                    XMFLOAT2(leftX, leftY), DirectX::Colors::Cyan);
-                leftY += lineHeight;
+                    XMFLOAT2(rightX, rightY), DirectX::Colors::Cyan);
+                rightY += lineHeight;
+
+                // Rune description
+                m_spriteFont->DrawString(m_spriteBatch.get(), runeDescriptions[static_cast<int>(activationType)],
+                    XMFLOAT2(rightX, rightY), DirectX::Colors::LightGray);
+                rightY += lineHeight;
 
                 // Status indicators
                 if (pSkill->IsCharging())
@@ -863,8 +868,8 @@ void Dx12App::RenderText()
                     chargeText << L"CHARGING " << (int)(chargeProgress * 100) << L"% ("
                         << std::fixed << std::setprecision(1) << mult << L"x)";
                     m_spriteFont->DrawString(m_spriteBatch.get(), chargeText.str().c_str(),
-                        XMFLOAT2(leftX, leftY), DirectX::Colors::Orange);
-                    leftY += lineHeight;
+                        XMFLOAT2(rightX, rightY), DirectX::Colors::Orange);
+                    rightY += lineHeight;
                 }
 
                 if (pSkill->IsChanneling())
@@ -873,8 +878,8 @@ void Dx12App::RenderText()
                     std::wstringstream channelText;
                     channelText << L"CHANNELING " << (int)(channelProgress * 100) << L"%";
                     m_spriteFont->DrawString(m_spriteBatch.get(), channelText.str().c_str(),
-                        XMFLOAT2(leftX, leftY), DirectX::Colors::LightBlue);
-                    leftY += lineHeight;
+                        XMFLOAT2(rightX, rightY), DirectX::Colors::LightBlue);
+                    rightY += lineHeight;
                 }
 
                 if (pSkill->IsEnhanced())
@@ -883,7 +888,7 @@ void Dx12App::RenderText()
                     enhanceText << L"ENHANCED 2x (" << std::fixed << std::setprecision(1)
                         << pSkill->GetEnhanceTimeRemaining() << L"s)";
                     m_spriteFont->DrawString(m_spriteBatch.get(), enhanceText.str().c_str(),
-                        XMFLOAT2(leftX, leftY), DirectX::Colors::Gold);
+                        XMFLOAT2(rightX, rightY), DirectX::Colors::Gold);
                 }
             }
         }
