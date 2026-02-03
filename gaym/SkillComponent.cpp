@@ -457,31 +457,8 @@ float SkillComponent::GetChargeProgress() const
 
 void SkillComponent::ProcessRuneInput(InputSystem* pInputSystem)
 {
-    // Skip if rune input is blocked (e.g., during drop rune selection)
-    if (m_bRuneInputBlocked)
-        return;
-
-    // 1-5 keys change activation type
-    if (pInputSystem->IsKeyDown('1'))
-    {
-        SetActivationType(ActivationType::Instant);
-    }
-    else if (pInputSystem->IsKeyDown('2'))
-    {
-        SetActivationType(ActivationType::Charge);
-    }
-    else if (pInputSystem->IsKeyDown('3'))
-    {
-        SetActivationType(ActivationType::Channel);
-    }
-    else if (pInputSystem->IsKeyDown('4'))
-    {
-        SetActivationType(ActivationType::Place);
-    }
-    else if (pInputSystem->IsKeyDown('5'))
-    {
-        SetActivationType(ActivationType::Enhance);
-    }
+    // Rune input is now handled through the drop item UI system
+    // This function is kept for potential future use
 }
 
 void SkillComponent::ExecuteWithActivationType(SkillSlot slot, const DirectX::XMFLOAT3& targetPosition)

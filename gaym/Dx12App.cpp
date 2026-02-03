@@ -343,23 +343,24 @@ void Dx12App::FrameAdvance()
         {
             XMFLOAT2 mousePos = m_inputSystem.GetMousePosition();
 
-            float leftX = 20.0f;
-            float leftY = (float)m_nWndClientHeight - 240.0f;
-            float lineHeight = 48.0f;
-            float slotWidth = 30.0f;
-            float slotHeight = 24.0f;
-            float runeStartX = 250.0f;  // X position where rune slots start
+            // Must match the UI rendering coordinates exactly!
+            float screenCenterX = (float)m_nWndClientWidth / 2.0f;
+            float screenCenterY = (float)m_nWndClientHeight / 2.0f;
+            float slotStartY = screenCenterY - 20.0f;
+            float lineHeight = 40.0f;
 
             for (int skillIdx = 0; skillIdx < static_cast<int>(SkillSlot::Count); ++skillIdx)
             {
-                float skillY = leftY + skillIdx * lineHeight;
+                float slotY = slotStartY + skillIdx * lineHeight;
 
                 for (int runeIdx = 0; runeIdx < RUNES_PER_SKILL; ++runeIdx)
                 {
-                    float runeX = runeStartX + runeIdx * (slotWidth + 4.0f);
+                    float runeX = screenCenterX - 80.0f + runeIdx * 80.0f;
+                    float runeWidth = 70.0f;
+                    float runeHeight = 28.0f;
 
-                    if (mousePos.x >= runeX && mousePos.x <= runeX + slotWidth &&
-                        mousePos.y >= skillY && mousePos.y <= skillY + slotHeight)
+                    if (mousePos.x >= runeX && mousePos.x <= runeX + runeWidth &&
+                        mousePos.y >= slotY && mousePos.y <= slotY + runeHeight)
                     {
                         m_pScene->SelectSkillSlot(static_cast<SkillSlot>(skillIdx), runeIdx);
                         break;
@@ -829,29 +830,10 @@ void Dx12App::RenderText()
                             XMFLOAT2(leftX, leftY), DirectX::Colors::DarkGray);
                     }
 
-                    // Show rune slots for this skill
-                    const wchar_t* runeShortNames[] = { L"-", L"I", L"C", L"Ch", L"P", L"E" };  // None, Instant, Charge, Channel, Place, Enhance
-                    float runeSlotX = leftX + 280.0f;
-                    std::wstringstream runeSlots;
-                    runeSlots << L"[";
-                    for (int r = 0; r < RUNES_PER_SKILL; ++r)
-                    {
-                        ActivationType rune = pSkill->GetRuneSlot(slot, r);
-                        if (r > 0) runeSlots << L"|";
-                        runeSlots << runeShortNames[static_cast<int>(rune)];
-                    }
-                    runeSlots << L"]";
-                    m_spriteFont->DrawString(m_spriteBatch.get(), runeSlots.str().c_str(),
-                        XMFLOAT2(runeSlotX, leftY), DirectX::Colors::Cyan);
-
                     leftY += lineHeight;
                 }
 
-                // ========== Right Side: Rune & Status ==========
-                float rightX = (float)m_nWndClientWidth - 500.0f;
-                float rightY = (float)m_nWndClientHeight - 280.0f;
-
-                // Rune type (now includes None)
+                // ========== Rune Info (below skills) ==========
                 const wchar_t* activationNames[] = { L"None", L"Instant", L"Charge", L"Channel", L"Place", L"Enhance" };
                 const wchar_t* runeDescriptions[] = {
                     L"No rune equipped",
@@ -862,17 +844,15 @@ void Dx12App::RenderText()
                     L"Buff: 2x next attack"
                 };
 
+                leftY += 10.0f;  // Add spacing
+
                 // Show current activation type
                 std::wstringstream runeText;
-                runeText << L"[Active Rune] " << activationNames[static_cast<int>(activationType)];
+                runeText << L"[Rune] " << activationNames[static_cast<int>(activationType)]
+                         << L" - " << runeDescriptions[static_cast<int>(activationType)];
                 m_spriteFont->DrawString(m_spriteBatch.get(), runeText.str().c_str(),
-                    XMFLOAT2(rightX, rightY), DirectX::Colors::Cyan);
-                rightY += lineHeight;
-
-                // Rune description
-                m_spriteFont->DrawString(m_spriteBatch.get(), runeDescriptions[static_cast<int>(activationType)],
-                    XMFLOAT2(rightX, rightY), DirectX::Colors::LightGray);
-                rightY += lineHeight;
+                    XMFLOAT2(leftX, leftY), DirectX::Colors::Cyan);
+                leftY += lineHeight;
 
                 // Status indicators
                 if (pSkill->IsCharging())
@@ -883,8 +863,8 @@ void Dx12App::RenderText()
                     chargeText << L"CHARGING " << (int)(chargeProgress * 100) << L"% ("
                         << std::fixed << std::setprecision(1) << mult << L"x)";
                     m_spriteFont->DrawString(m_spriteBatch.get(), chargeText.str().c_str(),
-                        XMFLOAT2(rightX, rightY), DirectX::Colors::Orange);
-                    rightY += lineHeight;
+                        XMFLOAT2(leftX, leftY), DirectX::Colors::Orange);
+                    leftY += lineHeight;
                 }
 
                 if (pSkill->IsChanneling())
@@ -893,8 +873,8 @@ void Dx12App::RenderText()
                     std::wstringstream channelText;
                     channelText << L"CHANNELING " << (int)(channelProgress * 100) << L"%";
                     m_spriteFont->DrawString(m_spriteBatch.get(), channelText.str().c_str(),
-                        XMFLOAT2(rightX, rightY), DirectX::Colors::LightBlue);
-                    rightY += lineHeight;
+                        XMFLOAT2(leftX, leftY), DirectX::Colors::LightBlue);
+                    leftY += lineHeight;
                 }
 
                 if (pSkill->IsEnhanced())
@@ -903,13 +883,8 @@ void Dx12App::RenderText()
                     enhanceText << L"ENHANCED 2x (" << std::fixed << std::setprecision(1)
                         << pSkill->GetEnhanceTimeRemaining() << L"s)";
                     m_spriteFont->DrawString(m_spriteBatch.get(), enhanceText.str().c_str(),
-                        XMFLOAT2(rightX, rightY), DirectX::Colors::Gold);
-                    rightY += lineHeight;
+                        XMFLOAT2(leftX, leftY), DirectX::Colors::Gold);
                 }
-
-                // Key hints at bottom
-                m_spriteFont->DrawString(m_spriteBatch.get(), L"Pick up runes to equip",
-                    XMFLOAT2(rightX, rightY), DirectX::Colors::DimGray);
             }
         }
     }
