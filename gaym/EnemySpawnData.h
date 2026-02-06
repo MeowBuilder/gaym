@@ -20,6 +20,9 @@ struct EnemySpawnData
     // Attack behavior factory
     std::function<std::unique_ptr<IAttackBehavior>()> m_fnCreateAttack;
 
+    // Animation config
+    EnemyAnimationConfig m_AnimConfig;
+
     // Constructor with defaults for test enemy
     EnemySpawnData()
     {

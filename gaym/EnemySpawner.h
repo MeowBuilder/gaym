@@ -1,6 +1,7 @@
 #pragma once
 #include "stdafx.h"
 #include "EnemySpawnData.h"
+#include "MeshLoader.h"
 #include <map>
 #include <string>
 #include <memory>
@@ -37,6 +38,12 @@ public:
 private:
     // Create a cube mesh enemy for testing
     GameObject* CreateCubeEnemy(CRoom* pRoom, const XMFLOAT3& position, const XMFLOAT3& scale, const XMFLOAT4& color);
+
+    // Create an enemy with loaded mesh from file
+    GameObject* CreateMeshEnemy(CRoom* pRoom, const XMFLOAT3& position, const EnemySpawnData& data);
+
+    // Add render components recursively to game object hierarchy
+    void AddRenderComponentsToHierarchy(GameObject* pGameObject);
 
     // Setup common enemy components
     void SetupEnemyComponents(GameObject* pEnemy, const EnemySpawnData& data, CRoom* pRoom, GameObject* pTarget);

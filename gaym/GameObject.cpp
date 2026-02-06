@@ -128,9 +128,43 @@ void GameObject::LoadTexture(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 {
     if (m_strTextureName.empty()) return;
 
-    // Prepend "Animation/" directory
-    std::string fullPath = "Animation/" + m_strTextureName;
-    std::wstring wstrTextureName(fullPath.begin(), fullPath.end());
+    // Convert .tga extension to .png (TGA files have been converted to PNG)
+    std::string textureName = m_strTextureName;
+    size_t tgaPos = textureName.rfind(".tga");
+    if (tgaPos != std::string::npos)
+    {
+        textureName.replace(tgaPos, 4, ".png");
+    }
+
+    // Try multiple texture paths
+    std::vector<std::string> searchPaths = {
+        "Assets/Player/Textures/" + textureName,
+        "Assets/Enemies/AirElemental/Textures/" + textureName,
+        "Assets/Textures/" + textureName,
+        "Animation/" + textureName,  // Legacy path
+        textureName  // Direct path
+    };
+
+    std::wstring wstrTextureName;
+    bool found = false;
+    for (const auto& path : searchPaths)
+    {
+        std::wstring wpath(path.begin(), path.end());
+        if (GetFileAttributesW(wpath.c_str()) != INVALID_FILE_ATTRIBUTES)
+        {
+            wstrTextureName = wpath;
+            found = true;
+            break;
+        }
+    }
+
+    if (!found)
+    {
+        char buffer[256];
+        sprintf_s(buffer, "Texture not found in any search path: %s\n", textureName.c_str());
+        OutputDebugStringA(buffer);
+        return;
+    }
 
     std::unique_ptr<uint8_t[]> decodedData;
     D3D12_SUBRESOURCE_DATA subresource;
@@ -138,8 +172,8 @@ void GameObject::LoadTexture(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
     HRESULT hr = DirectX::LoadWICTextureFromFile(pd3dDevice, wstrTextureName.c_str(), m_pd3dTexture.GetAddressOf(), decodedData, subresource);
     if (FAILED(hr))
     {
-        char buffer[256];
-        sprintf_s(buffer, "Failed to load texture: %s\n", m_strTextureName.c_str());
+        char buffer[512];
+        sprintf_s(buffer, "Failed to load texture: %ls\n", wstrTextureName.c_str());
         OutputDebugStringA(buffer);
         return;
     }

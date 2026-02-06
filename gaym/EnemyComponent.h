@@ -3,11 +3,28 @@
 #include <DirectXMath.h>
 #include <memory>
 #include <functional>
+#include <string>
 
 using namespace DirectX;
 
 class IAttackBehavior;
 class CRoom;
+class AnimationComponent;
+
+struct EnemyAnimationConfig
+{
+    std::string m_strIdleClip = "idle";
+    std::string m_strChaseClip = "Run_Forward";
+    std::string m_strAttackClip = "Combat_Unarmed_Attack";
+    std::string m_strStaggerClip = "Combat_Stun";
+    std::string m_strDeathClip = "Death";
+
+    bool m_bLoopIdle = true;
+    bool m_bLoopChase = true;
+    bool m_bLoopAttack = false;
+    bool m_bLoopStagger = false;
+    bool m_bLoopDeath = false;
+};
 
 enum class EnemyState
 {
@@ -69,6 +86,10 @@ public:
     void FaceTarget();
     void MoveTowardsTarget(float dt);
 
+    // Animation
+    void SetAnimationComponent(AnimationComponent* pAnimComp) { m_pAnimationComp = pAnimComp; }
+    void SetAnimationConfig(const EnemyAnimationConfig& config) { m_AnimConfig = config; }
+
 private:
     // State update functions
     void UpdateIdle(float dt);
@@ -85,6 +106,10 @@ private:
     std::unique_ptr<IAttackBehavior> m_pAttackBehavior;
     GameObject* m_pTarget = nullptr;
     CRoom* m_pRoom = nullptr;
+
+    // Animation
+    AnimationComponent* m_pAnimationComp = nullptr;
+    EnemyAnimationConfig m_AnimConfig;
 
     // Timers
     float m_fAttackCooldownTimer = 0.0f;

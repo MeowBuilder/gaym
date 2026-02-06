@@ -61,6 +61,7 @@ public:
 
     CCamera* GetCamera() const { return m_pCamera.get(); } // Added getter for CCamera
     CRoom* GetCurrentRoom() const { return m_pCurrentRoom; } // Added getter for current room
+    void SetCurrentRoom(CRoom* pRoom) { m_pCurrentRoom = pRoom; }
     ProjectileManager* GetProjectileManager() { return m_pProjectileManager.get(); }
     ParticleSystem* GetParticleSystem() { return m_pParticleSystem.get(); }
     GameObject* GetPlayer() const { return m_pPlayerGameObject; }

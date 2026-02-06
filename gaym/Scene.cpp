@@ -66,7 +66,7 @@ void Scene::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList)
     // --------------------------------------------------------------------------
     m_pCurrentRoom = nullptr; 
 
-    GameObject* pPlayer = MeshLoader::LoadGeometryFromFile(this, pDevice, pCommandList, NULL, "Animation/Vampire A Lusth.bin");
+    GameObject* pPlayer = MeshLoader::LoadGeometryFromFile(this, pDevice, pCommandList, NULL, "Assets/Player/Models/Vampire A Lusth.bin");
     if (pPlayer)
     {
         OutputDebugString(L"Player model loaded successfully!\n");
@@ -77,7 +77,7 @@ void Scene::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList)
 
         // Add Animation Component
         pPlayer->AddComponent<AnimationComponent>();
-        pPlayer->GetComponent<AnimationComponent>()->LoadAnimation("Animation/Walking_Anim.bin");
+        pPlayer->GetComponent<AnimationComponent>()->LoadAnimation("Assets/Player/Animations/Walking_Anim.bin");
         pPlayer->GetComponent<AnimationComponent>()->Play("mixamo.com");
 
         // Add Collider Component for Player
@@ -132,9 +132,9 @@ void Scene::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList)
 
     // Configure spawn points for the room
     RoomSpawnConfig spawnConfig;
-    spawnConfig.AddSpawn("TestEnemy", 10.0f, 0.0f, 0.0f);   // Right side
-    spawnConfig.AddSpawn("TestEnemy", -10.0f, 0.0f, 0.0f);  // Left side
-    spawnConfig.AddSpawn("TestEnemy", 0.0f, 0.0f, 15.0f);   // Front
+    spawnConfig.AddSpawn("AirElemental", 10.0f, 0.0f, 0.0f);   // Right side
+    spawnConfig.AddSpawn("AirElemental", -10.0f, 0.0f, 0.0f);  // Left side
+    spawnConfig.AddSpawn("AirElemental", 0.0f, 0.0f, 15.0f);   // Front
 
     // Apply configuration to room
     m_pCurrentRoom->SetSpawnConfig(spawnConfig);

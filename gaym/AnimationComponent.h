@@ -19,6 +19,11 @@ public:
     void Play(std::string strClipName, bool bLoop = true);
     void Stop();
 
+    // Blending
+    void CrossFade(const std::string& strClipName, float fBlendDuration, bool bLoop = true);
+    bool IsBlending() const { return m_bIsBlending; }
+    bool IsPlaying() const { return m_bIsPlaying; }
+
 private:
     std::shared_ptr<AnimationSet> m_pAnimationSet;
     AnimationClip* m_pCurrentClip = nullptr;
@@ -26,6 +31,15 @@ private:
     float m_fCurrentTime = 0.0f;
     bool m_bLoop = true;
     bool m_bIsPlaying = false;
+
+    // Blending state
+    AnimationClip* m_pPreviousClip = nullptr;
+    float m_fPreviousTime = 0.0f;
+    bool m_bPreviousLoop = false;
+
+    bool m_bIsBlending = false;
+    float m_fBlendDuration = 0.2f;
+    float m_fBlendTimer = 0.0f;
 
     // Cache to quickly find bone TransformComponents by name
     std::map<std::string, TransformComponent*> m_mapBoneTransforms;

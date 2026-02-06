@@ -3,6 +3,7 @@
 #include "GameObject.h"
 #include "TransformComponent.h"
 #include "IAttackBehavior.h"
+#include "AnimationComponent.h"
 #include "Room.h"
 #include "MathUtils.h"
 
@@ -59,6 +60,29 @@ void EnemyComponent::ChangeState(EnemyState newState)
         stateNames[static_cast<int>(oldState)],
         stateNames[static_cast<int>(newState)]);
     OutputDebugString(buffer);
+
+    // Animation transition
+    if (m_pAnimationComp)
+    {
+        switch (newState)
+        {
+        case EnemyState::Idle:
+            m_pAnimationComp->CrossFade(m_AnimConfig.m_strIdleClip, 0.2f, m_AnimConfig.m_bLoopIdle);
+            break;
+        case EnemyState::Chase:
+            m_pAnimationComp->CrossFade(m_AnimConfig.m_strChaseClip, 0.2f, m_AnimConfig.m_bLoopChase);
+            break;
+        case EnemyState::Attack:
+            m_pAnimationComp->CrossFade(m_AnimConfig.m_strAttackClip, 0.15f, m_AnimConfig.m_bLoopAttack);
+            break;
+        case EnemyState::Stagger:
+            m_pAnimationComp->CrossFade(m_AnimConfig.m_strStaggerClip, 0.1f, m_AnimConfig.m_bLoopStagger);
+            break;
+        case EnemyState::Dead:
+            m_pAnimationComp->CrossFade(m_AnimConfig.m_strDeathClip, 0.1f, m_AnimConfig.m_bLoopDeath);
+            break;
+        }
+    }
 
     // State entry actions
     switch (newState)

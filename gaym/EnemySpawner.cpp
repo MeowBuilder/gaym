@@ -5,12 +5,14 @@
 #include "EnemyComponent.h"
 #include "ColliderComponent.h"
 #include "RenderComponent.h"
+#include "AnimationComponent.h"
 #include "CollisionLayer.h"
 #include "MeleeAttackBehavior.h"
 #include "Room.h"
 #include "Scene.h"
 #include "Shader.h"
 #include "Mesh.h"
+#include "MeshLoader.h"
 
 EnemySpawner::EnemySpawner()
 {
@@ -41,6 +43,31 @@ void EnemySpawner::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pComma
     };
 
     RegisterEnemyPreset("TestEnemy", testEnemy);
+
+    // Register AirElemental preset
+    EnemySpawnData airElemental;
+    airElemental.m_strMeshPath = "Assets/Enemies/AirElemental/Models/AirElemental_Bl.bin";
+    airElemental.m_strAnimationPath = "Assets/Enemies/AirElemental/Animations/AirElemental_Bl_Anim.bin";
+    airElemental.m_xmf3Scale = XMFLOAT3(3.0f, 3.0f, 3.0f);
+    airElemental.m_xmf4Color = XMFLOAT4(0.5f, 0.7f, 1.0f, 1.0f);  // Light blue
+
+    airElemental.m_Stats.m_fMaxHP = 80.0f;
+    airElemental.m_Stats.m_fCurrentHP = 80.0f;
+    airElemental.m_Stats.m_fMoveSpeed = 5.0f;
+    airElemental.m_Stats.m_fAttackRange = 4.0f;
+    airElemental.m_Stats.m_fAttackCooldown = 2.0f;
+
+    airElemental.m_AnimConfig.m_strIdleClip = "idle";
+    airElemental.m_AnimConfig.m_strChaseClip = "Run_Forward";
+    airElemental.m_AnimConfig.m_strAttackClip = "Combat_Unarmed_Attack";
+    airElemental.m_AnimConfig.m_strStaggerClip = "Combat_Stun";
+    airElemental.m_AnimConfig.m_strDeathClip = "Death";
+
+    airElemental.m_fnCreateAttack = []() {
+        return std::make_unique<MeleeAttackBehavior>(15.0f, 0.4f, 0.2f, 0.4f);
+    };
+
+    RegisterEnemyPreset("AirElemental", airElemental);
 
     OutputDebugString(L"[EnemySpawner] Initialized with default presets\n");
 }
@@ -84,9 +111,8 @@ GameObject* EnemySpawner::SpawnEnemy(CRoom* pRoom, const std::string& preset, co
     }
     else
     {
-        // TODO: Load mesh from file
-        // For now, fallback to cube
-        pEnemy = CreateCubeEnemy(pRoom, position, data.m_xmf3Scale, data.m_xmf4Color);
+        // Load mesh from file
+        pEnemy = CreateMeshEnemy(pRoom, position, data);
     }
 
     if (pEnemy)
@@ -203,5 +229,94 @@ void EnemySpawner::SetupEnemyComponents(GameObject* pEnemy, const EnemySpawnData
         pRoom->RegisterEnemy(pEnemyComp);
     }
 
+    // Connect AnimationComponent if present
+    auto* pAnimComp = pEnemy->GetComponent<AnimationComponent>();
+    if (pAnimComp)
+    {
+        pEnemyComp->SetAnimationComponent(pAnimComp);
+        pEnemyComp->SetAnimationConfig(data.m_AnimConfig);
+        pAnimComp->Play(data.m_AnimConfig.m_strIdleClip, data.m_AnimConfig.m_bLoopIdle);
+    }
+
     OutputDebugString(L"[EnemySpawner] Setup enemy components complete\n");
+}
+
+GameObject* EnemySpawner::CreateMeshEnemy(CRoom* pRoom, const XMFLOAT3& position, const EnemySpawnData& data)
+{
+    if (!m_pDevice || !m_pCommandList || !m_pScene) return nullptr;
+
+    // Temporarily set current room to place enemy in room
+    CRoom* pPrevRoom = m_pScene->GetCurrentRoom();
+    m_pScene->SetCurrentRoom(pRoom);
+
+    // Load mesh from file
+    GameObject* pEnemy = MeshLoader::LoadGeometryFromFile(m_pScene, m_pDevice, m_pCommandList, NULL, data.m_strMeshPath.c_str());
+
+    // Restore previous room
+    m_pScene->SetCurrentRoom(pPrevRoom);
+
+    if (!pEnemy)
+    {
+        wchar_t buffer[256];
+        swprintf_s(buffer, L"[EnemySpawner] Failed to load mesh: %hs\n", data.m_strMeshPath.c_str());
+        OutputDebugString(buffer);
+        return nullptr;
+    }
+
+    // Set position and scale
+    TransformComponent* pTransform = pEnemy->GetTransform();
+    if (pTransform)
+    {
+        pTransform->SetPosition(position);
+        pTransform->SetScale(data.m_xmf3Scale);
+    }
+
+    // Add AnimationComponent and load animation
+    if (!data.m_strAnimationPath.empty())
+    {
+        auto* pAnimComp = pEnemy->AddComponent<AnimationComponent>();
+        pAnimComp->Init(m_pDevice, m_pCommandList);
+        pAnimComp->LoadAnimation(data.m_strAnimationPath.c_str());
+    }
+
+    // Add RenderComponents to hierarchy
+    AddRenderComponentsToHierarchy(pEnemy);
+
+    // Add ColliderComponent
+    auto* pCollider = pEnemy->AddComponent<ColliderComponent>();
+    float colliderScale = data.m_xmf3Scale.x;
+    if (data.m_xmf3Scale.y > colliderScale) colliderScale = data.m_xmf3Scale.y;
+    if (data.m_xmf3Scale.z > colliderScale) colliderScale = data.m_xmf3Scale.z;
+    pCollider->SetExtents(colliderScale * 0.5f, colliderScale * 1.0f, colliderScale * 0.5f);
+    pCollider->SetCenter(0.0f, colliderScale * 1.0f, 0.0f);
+    pCollider->SetLayer(CollisionLayer::Enemy);
+    pCollider->SetCollisionMask(CollisionMask::Enemy);
+
+    wchar_t buffer[256];
+    swprintf_s(buffer, L"[EnemySpawner] Created mesh enemy at (%.1f, %.1f, %.1f) from %hs\n",
+        position.x, position.y, position.z, data.m_strMeshPath.c_str());
+    OutputDebugString(buffer);
+
+    return pEnemy;
+}
+
+void EnemySpawner::AddRenderComponentsToHierarchy(GameObject* pGameObject)
+{
+    if (!pGameObject || !m_pShader) return;
+
+    if (pGameObject->GetMesh())
+    {
+        auto* pRenderComp = pGameObject->AddComponent<RenderComponent>();
+        pRenderComp->SetMesh(pGameObject->GetMesh());
+        m_pShader->AddRenderComponent(pRenderComp);
+    }
+
+    if (pGameObject->m_pChild)
+    {
+        AddRenderComponentsToHierarchy(pGameObject->m_pChild);
+    }
+    if (pGameObject->m_pSibling)
+    {
+        AddRenderComponentsToHierarchy(pGameObject->m_pSibling);
+    }
 }

@@ -105,6 +105,19 @@ void MeshLoader::LoadMaterialsInfoFromFile(ID3D12Device* pd3dDevice, ID3D12Graph
 				pGameObject->SetSrvGpuDescriptorHandle(gpuHandle);
 			}
 		}
+		else if (!strcmp(pstrToken, "<EmissiveColor>:"))
+		{
+			XMFLOAT4 emissive;
+			fread(&emissive, sizeof(float), 4, pInFile);
+		}
+		else if (!strcmp(pstrToken, "<Glossiness>:") ||
+				 !strcmp(pstrToken, "<Metallic>:") ||
+				 !strcmp(pstrToken, "<SpecularHighlight>:") ||
+				 !strcmp(pstrToken, "<GlossyReflection>:"))
+		{
+			float fValue;
+			fread(&fValue, sizeof(float), 1, pInFile);
+		}
 	}
 }
 
