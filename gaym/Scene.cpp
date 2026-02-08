@@ -130,11 +130,11 @@ void Scene::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList)
     // --------------------------------------------------------------------------
     m_pEnemySpawner->Init(pDevice, pCommandList, this, pShader.get());
 
-    // Configure spawn points for the room
+    // Configure spawn points for the room (diverse enemy types)
     RoomSpawnConfig spawnConfig;
-    spawnConfig.AddSpawn("AirElemental", 10.0f, 0.0f, 0.0f);   // Right side
-    spawnConfig.AddSpawn("AirElemental", -10.0f, 0.0f, 0.0f);  // Left side
-    spawnConfig.AddSpawn("AirElemental", 0.0f, 0.0f, 15.0f);   // Front
+    spawnConfig.AddSpawn("RushAoEEnemy", 10.0f, 0.0f, 5.0f);     // Red - right side (melee rush)
+    spawnConfig.AddSpawn("RushFrontEnemy", -10.0f, 0.0f, 5.0f);  // Green - left side (melee rush)
+    spawnConfig.AddSpawn("RangedEnemy", 0.0f, 0.0f, 20.0f);      // Blue - far back (ranged)
 
     // Apply configuration to room
     m_pCurrentRoom->SetSpawnConfig(spawnConfig);

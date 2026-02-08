@@ -195,46 +195,71 @@ void ProjectileManager::CheckProjectileCollisions(Projectile& projectile)
 
     BoundingSphere projSphere = projectile.GetBoundingSphere();
 
-    // Get current room from scene
-    CRoom* pRoom = m_pScene->GetCurrentRoom();
-    if (!pRoom) return;
-
-    // Check against enemies in the room
-    const auto& gameObjects = pRoom->GetGameObjects();
-    for (const auto& obj : gameObjects)
+    if (projectile.isPlayerProjectile)
     {
-        if (!obj) continue;
+        // Player projectile: check against enemies in the room
+        CRoom* pRoom = m_pScene->GetCurrentRoom();
+        if (!pRoom) return;
 
-        EnemyComponent* pEnemy = obj->GetComponent<EnemyComponent>();
-        if (!pEnemy || pEnemy->IsDead()) continue;
-
-        // Get enemy position
-        TransformComponent* pTransform = obj->GetTransform();
-        if (!pTransform) continue;
-
-        XMFLOAT3 enemyPos = pTransform->GetPosition();
-
-        // Simple sphere collision (enemy assumed to have radius ~1.5)
-        BoundingSphere enemySphere(enemyPos, 1.5f);
-        enemySphere.Center.y += 1.0f; // Adjust to center of enemy
-
-        if (projSphere.Intersects(enemySphere))
+        const auto& gameObjects = pRoom->GetGameObjects();
+        for (const auto& obj : gameObjects)
         {
-            // Hit!
-            if (projectile.explosionRadius > 0.0f)
-            {
-                ApplyAoEDamage(projectile, projectile.position);
-            }
-            else
-            {
-                ApplyDamage(projectile, pEnemy);
-            }
+            if (!obj) continue;
 
+            EnemyComponent* pEnemy = obj->GetComponent<EnemyComponent>();
+            if (!pEnemy || pEnemy->IsDead()) continue;
+
+            TransformComponent* pTransform = obj->GetTransform();
+            if (!pTransform) continue;
+
+            XMFLOAT3 enemyPos = pTransform->GetPosition();
+
+            BoundingSphere enemySphere(enemyPos, 1.5f);
+            enemySphere.Center.y += 1.0f;
+
+            if (projSphere.Intersects(enemySphere))
+            {
+                if (projectile.explosionRadius > 0.0f)
+                {
+                    ApplyAoEDamage(projectile, projectile.position);
+                }
+                else
+                {
+                    ApplyDamage(projectile, pEnemy);
+                }
+
+                projectile.isActive = false;
+
+                wchar_t buffer[128];
+                swprintf_s(buffer, 128, L"[ProjectileManager] Hit enemy! Damage: %.0f\n", projectile.damage);
+                OutputDebugString(buffer);
+                return;
+            }
+        }
+    }
+    else
+    {
+        // Enemy projectile: check against player
+        GameObject* pPlayer = m_pScene->GetPlayer();
+        if (!pPlayer) return;
+
+        TransformComponent* pPlayerTransform = pPlayer->GetTransform();
+        if (!pPlayerTransform) return;
+
+        XMFLOAT3 playerPos = pPlayerTransform->GetPosition();
+
+        BoundingSphere playerSphere(playerPos, 1.5f);
+        playerSphere.Center.y += 1.0f;
+
+        if (projSphere.Intersects(playerSphere))
+        {
             projectile.isActive = false;
 
             wchar_t buffer[128];
-            swprintf_s(buffer, 128, L"[ProjectileManager] Hit enemy! Damage: %.0f\n", projectile.damage);
+            swprintf_s(buffer, 128, L"[ProjectileManager] Enemy projectile hit player! Damage: %.0f\n", projectile.damage);
             OutputDebugString(buffer);
+
+            // TODO: PlayerComponent::TakeDamage
             return;
         }
     }

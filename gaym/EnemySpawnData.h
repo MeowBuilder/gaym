@@ -23,6 +23,9 @@ struct EnemySpawnData
     // Animation config
     EnemyAnimationConfig m_AnimConfig;
 
+    // Attack indicator config
+    AttackIndicatorConfig m_IndicatorConfig;
+
     // Constructor with defaults for test enemy
     EnemySpawnData()
     {

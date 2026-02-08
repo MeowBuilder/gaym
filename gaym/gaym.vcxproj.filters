@@ -111,6 +111,15 @@
     <ClInclude Include="MeleeAttackBehavior.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
+    <ClInclude Include="RushAoEAttackBehavior.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="RushFrontAttackBehavior.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="RangedAttackBehavior.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="gaym.cpp">
@@ -186,6 +195,15 @@
       <Filter>소스 파일</Filter>
     </ClCompile>
     <ClCompile Include="MeleeAttackBehavior.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="RushAoEAttackBehavior.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="RushFrontAttackBehavior.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="RangedAttackBehavior.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
   </ItemGroup>

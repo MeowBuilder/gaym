@@ -26,6 +26,22 @@ struct EnemyAnimationConfig
     bool m_bLoopDeath = false;
 };
 
+enum class IndicatorType
+{
+    None,
+    Circle,      // Melee: circle around enemy
+    RushCircle,  // Rush + 360 AoE: line + circle at destination
+    RushCone     // Rush + cone: line + fan at destination
+};
+
+struct AttackIndicatorConfig
+{
+    IndicatorType m_eType = IndicatorType::None;
+    float m_fRushDistance = 0.0f;    // Length of rush path (speed * duration)
+    float m_fHitRadius = 0.0f;      // Radius for circle/AoE hit zone
+    float m_fConeAngle = 0.0f;      // Cone angle in degrees (for RushCone)
+};
+
 enum class EnemyState
 {
     Idle,
@@ -90,6 +106,11 @@ public:
     void SetAnimationComponent(AnimationComponent* pAnimComp) { m_pAnimationComp = pAnimComp; }
     void SetAnimationConfig(const EnemyAnimationConfig& config) { m_AnimConfig = config; }
 
+    // Attack indicators
+    void SetIndicatorConfig(const AttackIndicatorConfig& config) { m_IndicatorConfig = config; }
+    void SetRushLineIndicator(GameObject* pIndicator) { m_pRushLineIndicator = pIndicator; }
+    void SetHitZoneIndicator(GameObject* pIndicator) { m_pHitZoneIndicator = pIndicator; }
+
 private:
     // State update functions
     void UpdateIdle(float dt);
@@ -99,6 +120,8 @@ private:
     void UpdateDead(float dt);
 
     void Die();
+    void ShowIndicators();
+    void HideIndicators();
 
 private:
     EnemyState m_eCurrentState = EnemyState::Idle;
@@ -110,6 +133,11 @@ private:
     // Animation
     AnimationComponent* m_pAnimationComp = nullptr;
     EnemyAnimationConfig m_AnimConfig;
+
+    // Attack indicators
+    AttackIndicatorConfig m_IndicatorConfig;
+    GameObject* m_pRushLineIndicator = nullptr;
+    GameObject* m_pHitZoneIndicator = nullptr;
 
     // Timers
     float m_fAttackCooldownTimer = 0.0f;

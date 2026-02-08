@@ -10,6 +10,10 @@ class GameObject;
 class CRoom;
 class Scene;
 class Shader;
+class EnemyComponent;
+class Mesh;
+class LineMesh;
+class FanMesh;
 
 class EnemySpawner
 {
@@ -45,8 +49,17 @@ private:
     // Add render components recursively to game object hierarchy
     void AddRenderComponentsToHierarchy(GameObject* pGameObject);
 
+    // Apply color tint to all meshes in game object hierarchy
+    void ApplyColorToHierarchy(GameObject* pGameObject, const XMFLOAT4& color);
+
     // Setup common enemy components
     void SetupEnemyComponents(GameObject* pEnemy, const EnemySpawnData& data, CRoom* pRoom, GameObject* pTarget);
+
+    // Create indicator game objects
+    GameObject* CreateIndicatorObject(CRoom* pRoom, Mesh* pMesh);
+
+    // Setup attack indicators for an enemy
+    void SetupAttackIndicators(GameObject* pEnemy, EnemyComponent* pEnemyComp, const AttackIndicatorConfig& config, CRoom* pRoom);
 
 private:
     std::map<std::string, EnemySpawnData> m_mapPresets;
@@ -55,4 +68,9 @@ private:
     ID3D12GraphicsCommandList* m_pCommandList = nullptr;
     Scene* m_pScene = nullptr;
     Shader* m_pShader = nullptr;
+
+    // Shared meshes for indicators
+    RingMesh* m_pRingMesh = nullptr;
+    LineMesh* m_pLineMesh = nullptr;
+    FanMesh* m_pFanMesh = nullptr;
 };
