@@ -25,6 +25,7 @@ public:
 
     // Query input state
     bool IsKeyDown(int key) const { return m_keyState[key]; }
+    bool IsKeyPressed(int key) const { return m_keyState[key] && !m_prevKeyState[key]; }
     float GetMouseDeltaX() const { return m_mouseDeltaX; }
     float GetMouseDeltaY() const { return m_mouseDeltaY; }
     float GetMouseWheelDelta() const { return m_mouseWheelDelta; }
@@ -36,6 +37,7 @@ public:
 
 private:
     bool m_keyState[MAX_KEYS];
+    bool m_prevKeyState[MAX_KEYS]; // Previous frame state for IsKeyPressed
     bool m_mouseButtonState[MAX_MOUSE_BUTTONS]; // Left, Right, Middle
     bool m_prevMouseButtonState[MAX_MOUSE_BUTTONS]; // Previous frame state
     int m_mouseX, m_mouseY; // Current mouse position

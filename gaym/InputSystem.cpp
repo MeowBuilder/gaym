@@ -8,6 +8,7 @@ InputSystem::InputSystem()
       m_firstMouseMove(true)
 {
     ZeroMemory(m_keyState, sizeof(m_keyState));
+    ZeroMemory(m_prevKeyState, sizeof(m_prevKeyState));
     ZeroMemory(m_mouseButtonState, sizeof(m_mouseButtonState));
     ZeroMemory(m_prevMouseButtonState, sizeof(m_prevMouseButtonState));
 }
@@ -96,5 +97,6 @@ void InputSystem::Reset()
     m_mouseWheelDelta = 0.0f;
 
     // Save current state as previous for next frame
+    memcpy(m_prevKeyState, m_keyState, sizeof(m_keyState));
     memcpy(m_prevMouseButtonState, m_mouseButtonState, sizeof(m_mouseButtonState));
 }

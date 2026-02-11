@@ -1,9 +1,11 @@
 #include "stdafx.h"
 #include "Dx12App.h"
+#include "d3dx12.h"
 #include "SkillComponent.h"
 #include "ISkillBehavior.h"
 #include "SkillData.h"
 #include "DropItemComponent.h"
+#include "PlayerComponent.h"
 #include <DescriptorHeap.h>  // DirectXTK12
 #include <sstream>
 #include <iomanip>
@@ -389,6 +391,24 @@ void Dx12App::FrameAdvance()
                 m_pScene->TriggerInteraction();
             }
         }
+
+        // DEBUG: T key = take 10 damage, Y key = heal 10
+        GameObject* pPlayer = m_pScene->GetPlayer();
+        if (pPlayer)
+        {
+            PlayerComponent* pPlayerComp = pPlayer->GetComponent<PlayerComponent>();
+            if (pPlayerComp)
+            {
+                if (m_inputSystem.IsKeyPressed('T'))
+                {
+                    pPlayerComp->TakeDamage(10.0f);
+                }
+                if (m_inputSystem.IsKeyPressed('Y'))
+                {
+                    pPlayerComp->Heal(10.0f);
+                }
+            }
+        }
     }
 
     m_pScene->Render(m_pd3dCommandList.Get());
@@ -520,25 +540,35 @@ void Dx12App::InitializeText()
     // GraphicsMemory 초기화
     m_graphicsMemory = std::make_unique<DirectX::GraphicsMemory>(m_pd3dDevice.Get());
 
-    // 폰트용 디스크립터 힙 생성
+    // 폰트용 디스크립터 힙 생성 (폰트 1개 + 체력바 텍스처 2개 = 3개)
     m_fontDescriptorHeap = std::make_unique<DirectX::DescriptorHeap>(
         m_pd3dDevice.Get(),
         D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
         D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
-        1  // 폰트 1개
+        3  // 폰트 1개 + 체력바 base 1개 + 체력바 fill 1개
     );
 
     // 리소스 업로드 배치
     DirectX::ResourceUploadBatch resourceUpload(m_pd3dDevice.Get());
     resourceUpload.Begin();
 
-    // SpriteBatch 생성
+    // SpriteBatch 생성 (알파 블렌딩 활성화)
     DirectX::RenderTargetState rtState(
         DXGI_FORMAT_R8G8B8A8_UNORM,      // 백버퍼 포맷
         DXGI_FORMAT_D24_UNORM_S8_UINT    // 깊이버퍼 포맷
     );
 
-    DirectX::SpriteBatchPipelineStateDescription pd(rtState);
+    // Non-premultiplied alpha blend state for PNG transparency
+    CD3DX12_BLEND_DESC blendDesc(D3D12_DEFAULT);
+    blendDesc.RenderTarget[0].BlendEnable = TRUE;
+    blendDesc.RenderTarget[0].SrcBlend = D3D12_BLEND_SRC_ALPHA;
+    blendDesc.RenderTarget[0].DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
+    blendDesc.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
+    blendDesc.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_ONE;
+    blendDesc.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_INV_SRC_ALPHA;
+    blendDesc.RenderTarget[0].BlendOpAlpha = D3D12_BLEND_OP_ADD;
+
+    DirectX::SpriteBatchPipelineStateDescription pd(rtState, &blendDesc);
     m_spriteBatch = std::make_unique<DirectX::SpriteBatch>(m_pd3dDevice.Get(), resourceUpload, pd);
 
     // SpriteFont 로드
@@ -557,6 +587,21 @@ void Dx12App::InitializeText()
     // 뷰포트 설정
     D3D12_VIEWPORT viewport = { 0, 0, (float)m_nWndClientWidth, (float)m_nWndClientHeight, 0, 1 };
     m_spriteBatch->SetViewport(viewport);
+
+    // HealthBarUI 초기화 (디스크립터 인덱스 1, 2 사용)
+    // CommandList를 열어서 텍스처 업로드
+    CHECK_HR(m_pd3dCommandAllocator->Reset());
+    CHECK_HR(m_pd3dCommandList->Reset(m_pd3dCommandAllocator.Get(), NULL));
+
+    m_pHealthBarUI = std::make_unique<HealthBarUI>();
+    m_pHealthBarUI->Initialize(m_pd3dDevice.Get(), m_pd3dCommandList.Get(),
+                                m_fontDescriptorHeap.get(), 1);
+
+    // CommandList를 닫고 실행
+    CHECK_HR(m_pd3dCommandList->Close());
+    ID3D12CommandList* ppd3dCommandLists[] = { m_pd3dCommandList.Get() };
+    m_pd3dCommandQueue->ExecuteCommandLists(_countof(ppd3dCommandLists), ppd3dCommandLists);
+    WaitForGpuComplete();
 }
 
 void Dx12App::RenderText()
@@ -566,6 +611,21 @@ void Dx12App::RenderText()
     m_pd3dCommandList->SetDescriptorHeaps(1, heaps);
 
     m_spriteBatch->Begin(m_pd3dCommandList.Get());
+
+    // ========== Player Health Bar ==========
+    if (m_pScene && m_pHealthBarUI)
+    {
+        GameObject* pPlayer = m_pScene->GetPlayer();
+        if (pPlayer)
+        {
+            PlayerComponent* pPlayerComp = pPlayer->GetComponent<PlayerComponent>();
+            if (pPlayerComp)
+            {
+                m_pHealthBarUI->Render(m_spriteBatch.get(), pPlayerComp->GetHPRatio(),
+                                        (float)m_nWndClientWidth, (float)m_nWndClientHeight);
+            }
+        }
+    }
 
     // Show interaction prompt when near the cube
     if (m_pScene && m_pScene->IsInteractionCubeActive() && m_pScene->IsNearInteractionCube())

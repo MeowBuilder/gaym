@@ -109,3 +109,25 @@ void PlayerComponent::PlayerUpdate(float deltaTime, InputSystem* pInputSystem, C
         pSkillComponent->ProcessSkillInput(pInputSystem, pCamera);
     }
 }
+
+void PlayerComponent::TakeDamage(float fDamage)
+{
+    if (fDamage <= 0.0f || IsDead()) return;
+
+    m_fCurrentHP -= fDamage;
+    if (m_fCurrentHP < 0.0f)
+    {
+        m_fCurrentHP = 0.0f;
+    }
+}
+
+void PlayerComponent::Heal(float fAmount)
+{
+    if (fAmount <= 0.0f || IsDead()) return;
+
+    m_fCurrentHP += fAmount;
+    if (m_fCurrentHP > m_fMaxHP)
+    {
+        m_fCurrentHP = m_fMaxHP;
+    }
+}

@@ -2,6 +2,7 @@
 #include "Timer.h"
 #include "Scene.h"
 #include "InputSystem.h" // Added InputSystem include
+#include "HealthBarUI.h"
 #include <memory>
 
 // DirectXTK12 for text rendering
@@ -81,6 +82,9 @@ private:
     std::unique_ptr<DirectX::DescriptorHeap> m_fontDescriptorHeap;
     std::unique_ptr<DirectX::SpriteBatch> m_spriteBatch;
     std::unique_ptr<DirectX::SpriteFont> m_spriteFont;
+
+    // Health Bar UI
+    std::unique_ptr<HealthBarUI> m_pHealthBarUI;
 
     void InitializeText();
     void RenderText();
