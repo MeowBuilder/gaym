@@ -12,6 +12,16 @@ class CCamera;
 // Number of rune slots per skill
 constexpr int RUNES_PER_SKILL = 3;
 
+// Combo flags from multiple runes equipped on a single skill
+struct RuneCombo {
+    bool hasInstant = false;
+    bool hasCharge = false;
+    bool hasChannel = false;
+    bool hasPlace = false;
+    bool hasEnhance = false;
+    int count = 0;  // Total equipped rune count
+};
+
 // Component that manages skill slots and execution for a GameObject
 class SkillComponent : public Component
 {
@@ -55,6 +65,9 @@ public:
 
     // Get combined activation type for a skill (based on equipped runes)
     ActivationType GetSkillActivationType(SkillSlot skill) const;
+
+    // Get rune combo flags for a skill (all equipped rune types)
+    RuneCombo GetRuneCombo(SkillSlot skill) const;
 
     // Block rune input (e.g., during drop rune selection)
     void SetRuneInputBlocked(bool blocked) { m_bRuneInputBlocked = blocked; }

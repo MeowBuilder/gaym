@@ -151,3 +151,101 @@ protected:
 
 	UINT m_nIndices = 0;
 };
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Flat line (thin rectangle) on XZ plane for rush path visualization
+// Unit length along +Z (0 to 1), width along X. Scale Z to match rush distance.
+class LineMesh : public Mesh
+{
+public:
+	LineMesh(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList,
+	         float fWidth = 0.5f);
+	virtual ~LineMesh();
+
+	virtual void ReleaseUploadBuffers() override;
+	virtual void Render(ID3D12GraphicsCommandList* pd3dCommandList, int nSubSet = 0) override;
+
+protected:
+	ComPtr<ID3D12Resource> m_pd3dPositionBuffer;
+	ComPtr<ID3D12Resource> m_pd3dPositionUploadBuffer;
+	D3D12_VERTEX_BUFFER_VIEW m_d3dPositionBufferView;
+
+	ComPtr<ID3D12Resource> m_pd3dNormalBuffer;
+	ComPtr<ID3D12Resource> m_pd3dNormalUploadBuffer;
+	D3D12_VERTEX_BUFFER_VIEW m_d3dNormalBufferView;
+
+	ComPtr<ID3D12Resource> m_pd3dTexCoordBuffer;
+	ComPtr<ID3D12Resource> m_pd3dTexCoordUploadBuffer;
+	D3D12_VERTEX_BUFFER_VIEW m_d3dTexCoordBufferView;
+
+	ComPtr<ID3D12Resource> m_pd3dIndexBuffer;
+	ComPtr<ID3D12Resource> m_pd3dIndexUploadBuffer;
+	D3D12_INDEX_BUFFER_VIEW m_d3dIndexBufferView;
+
+	UINT m_nIndices = 0;
+};
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Fan/sector mesh on XZ plane for cone attack visualization
+// Unit radius, centered at origin, spanning configurable angle around +Z axis
+class FanMesh : public Mesh
+{
+public:
+	FanMesh(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList,
+	        float fAngleDeg = 90.0f, int nSegments = 24);
+	virtual ~FanMesh();
+
+	virtual void ReleaseUploadBuffers() override;
+	virtual void Render(ID3D12GraphicsCommandList* pd3dCommandList, int nSubSet = 0) override;
+
+protected:
+	ComPtr<ID3D12Resource> m_pd3dPositionBuffer;
+	ComPtr<ID3D12Resource> m_pd3dPositionUploadBuffer;
+	D3D12_VERTEX_BUFFER_VIEW m_d3dPositionBufferView;
+
+	ComPtr<ID3D12Resource> m_pd3dNormalBuffer;
+	ComPtr<ID3D12Resource> m_pd3dNormalUploadBuffer;
+	D3D12_VERTEX_BUFFER_VIEW m_d3dNormalBufferView;
+
+	ComPtr<ID3D12Resource> m_pd3dTexCoordBuffer;
+	ComPtr<ID3D12Resource> m_pd3dTexCoordUploadBuffer;
+	D3D12_VERTEX_BUFFER_VIEW m_d3dTexCoordBufferView;
+
+	ComPtr<ID3D12Resource> m_pd3dIndexBuffer;
+	ComPtr<ID3D12Resource> m_pd3dIndexUploadBuffer;
+	D3D12_INDEX_BUFFER_VIEW m_d3dIndexBufferView;
+
+	UINT m_nIndices = 0;
+};
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Flat ring mesh on XZ plane (for range indicators)
+class RingMesh : public Mesh
+{
+public:
+	RingMesh(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList,
+	         float fOuterRadius = 1.0f, float fInnerRadius = 0.92f, int nSegments = 48);
+	virtual ~RingMesh();
+
+	virtual void ReleaseUploadBuffers() override;
+	virtual void Render(ID3D12GraphicsCommandList* pd3dCommandList, int nSubSet = 0) override;
+
+protected:
+	ComPtr<ID3D12Resource> m_pd3dPositionBuffer;
+	ComPtr<ID3D12Resource> m_pd3dPositionUploadBuffer;
+	D3D12_VERTEX_BUFFER_VIEW m_d3dPositionBufferView;
+
+	ComPtr<ID3D12Resource> m_pd3dNormalBuffer;
+	ComPtr<ID3D12Resource> m_pd3dNormalUploadBuffer;
+	D3D12_VERTEX_BUFFER_VIEW m_d3dNormalBufferView;
+
+	ComPtr<ID3D12Resource> m_pd3dTexCoordBuffer;
+	ComPtr<ID3D12Resource> m_pd3dTexCoordUploadBuffer;
+	D3D12_VERTEX_BUFFER_VIEW m_d3dTexCoordBufferView;
+
+	ComPtr<ID3D12Resource> m_pd3dIndexBuffer;
+	ComPtr<ID3D12Resource> m_pd3dIndexUploadBuffer;
+	D3D12_INDEX_BUFFER_VIEW m_d3dIndexBufferView;
+
+	UINT m_nIndices = 0;
+};

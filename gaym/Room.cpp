@@ -5,6 +5,7 @@
 #include "Scene.h"
 #include "Dx12App.h"
 #include "DropItemComponent.h"
+#include "InteractableComponent.h"
 #include "RenderComponent.h"
 #include "TransformComponent.h"
 #include "Mesh.h"
@@ -104,6 +105,7 @@ void CRoom::CheckClearCondition()
     {
         SetState(RoomState::Cleared);
         SpawnDropItem();
+        SpawnPortalCube();
     }
 }
 
@@ -209,4 +211,69 @@ void CRoom::SpawnDropItem()
     m_pDropItem->AddComponent<DropItemComponent>();
 
     OutputDebugString(L"[Room] Drop item spawned successfully!\n");
+}
+
+void CRoom::SpawnPortalCube()
+{
+    if (m_pPortalCube) return;  // Already spawned
+    if (!m_pScene)
+    {
+        OutputDebugString(L"[Room] Cannot spawn portal - no Scene pointer\n");
+        return;
+    }
+
+    OutputDebugString(L"[Room] Spawning portal cube...\n");
+
+    // Spawn at player's position + Z offset (so it doesn't overlap with drop item)
+    XMFLOAT3 spawnPos = XMFLOAT3(0.0f, 1.5f, 5.0f);
+    if (m_pPlayerTarget)
+    {
+        spawnPos = m_pPlayerTarget->GetTransform()->GetPosition();
+        spawnPos.y = 1.5f;
+        spawnPos.z += 5.0f;  // Offset in Z to avoid overlapping with drop item
+    }
+
+    // Create portal cube as a room object
+    m_pPortalCube = m_pScene->CreateGameObject(Dx12App::GetInstance()->GetDevice(),
+                                                Dx12App::GetInstance()->GetCommandList());
+
+    if (!m_pPortalCube)
+    {
+        OutputDebugString(L"[Room] Failed to create portal cube GameObject\n");
+        return;
+    }
+
+    // Set position and scale
+    m_pPortalCube->GetTransform()->SetPosition(spawnPos.x, spawnPos.y, spawnPos.z);
+    m_pPortalCube->GetTransform()->SetScale(2.0f, 2.0f, 2.0f);
+
+    // Create blue cube mesh
+    CubeMesh* pCubeMesh = new CubeMesh(Dx12App::GetInstance()->GetDevice(),
+                                        Dx12App::GetInstance()->GetCommandList(),
+                                        1.0f, 1.0f, 1.0f);
+    m_pPortalCube->SetMesh(pCubeMesh);
+
+    // Set blue material with glow
+    MATERIAL blueMaterial;
+    blueMaterial.m_cAmbient = XMFLOAT4(0.0f, 0.0f, 0.3f, 1.0f);
+    blueMaterial.m_cDiffuse = XMFLOAT4(0.2f, 0.4f, 1.0f, 1.0f);  // Blue color
+    blueMaterial.m_cSpecular = XMFLOAT4(0.5f, 0.5f, 0.5f, 32.0f);
+    blueMaterial.m_cEmissive = XMFLOAT4(0.0f, 0.2f, 0.6f, 1.0f);  // Blue glow
+    m_pPortalCube->SetMaterial(blueMaterial);
+
+    // Add RenderComponent for visibility
+    m_pPortalCube->AddComponent<RenderComponent>()->SetMesh(pCubeMesh);
+
+    // Add InteractableComponent
+    auto* pInteractable = m_pPortalCube->AddComponent<InteractableComponent>();
+    pInteractable->SetPromptText(L"[F] Enter Portal");
+    pInteractable->SetInteractionDistance(5.0f);
+    pInteractable->SetOnInteract([this](InteractableComponent* pComp) {
+        if (m_pScene)
+        {
+            m_pScene->TransitionToNextRoom();
+        }
+    });
+
+    OutputDebugString(L"[Room] Portal cube spawned successfully!\n");
 }

@@ -301,3 +301,270 @@ void CubeMesh::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nSubSet)
     pd3dCommandList->IASetIndexBuffer(&m_d3dIndexBufferView);
     pd3dCommandList->DrawIndexedInstanced(m_nIndices, 1, 0, 0, 0);
 }
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// RingMesh - flat ring on XZ plane
+
+RingMesh::RingMesh(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList,
+                   float fOuterRadius, float fInnerRadius, int nSegments)
+{
+    m_nVertices = nSegments * 2;
+    m_nIndices = nSegments * 6;
+    m_nType = VERTEXT_POSITION | VERTEXT_NORMAL | VERTEXT_TEXTURE_COORD0;
+
+    std::vector<XMFLOAT3> positions(m_nVertices);
+    std::vector<XMFLOAT3> normals(m_nVertices);
+    std::vector<XMFLOAT2> texCoords(m_nVertices);
+    std::vector<UINT> indices(m_nIndices);
+
+    for (int i = 0; i < nSegments; i++)
+    {
+        float angle = XMConvertToRadians(360.0f * i / nSegments);
+        float cosA = cosf(angle);
+        float sinA = sinf(angle);
+
+        // Outer vertex
+        int outerIdx = i * 2;
+        positions[outerIdx] = XMFLOAT3(cosA * fOuterRadius, 0.0f, sinA * fOuterRadius);
+        normals[outerIdx] = XMFLOAT3(0.0f, 1.0f, 0.0f);
+        texCoords[outerIdx] = XMFLOAT2(static_cast<float>(i) / nSegments, 0.0f);
+
+        // Inner vertex
+        int innerIdx = i * 2 + 1;
+        positions[innerIdx] = XMFLOAT3(cosA * fInnerRadius, 0.0f, sinA * fInnerRadius);
+        normals[innerIdx] = XMFLOAT3(0.0f, 1.0f, 0.0f);
+        texCoords[innerIdx] = XMFLOAT2(static_cast<float>(i) / nSegments, 1.0f);
+    }
+
+    for (int i = 0; i < nSegments; i++)
+    {
+        int cur = i * 2;
+        int next = ((i + 1) % nSegments) * 2;
+        int idx = i * 6;
+
+        // Two triangles per segment
+        indices[idx + 0] = cur;
+        indices[idx + 1] = next;
+        indices[idx + 2] = cur + 1;
+
+        indices[idx + 3] = cur + 1;
+        indices[idx + 4] = next;
+        indices[idx + 5] = next + 1;
+    }
+
+    // Create position buffer
+    m_pd3dPositionBuffer = Dx12App::CreateBufferResource(positions.data(), sizeof(XMFLOAT3) * m_nVertices,
+        D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER, &m_pd3dPositionUploadBuffer);
+    m_d3dPositionBufferView.BufferLocation = m_pd3dPositionBuffer->GetGPUVirtualAddress();
+    m_d3dPositionBufferView.StrideInBytes = sizeof(XMFLOAT3);
+    m_d3dPositionBufferView.SizeInBytes = sizeof(XMFLOAT3) * m_nVertices;
+
+    // Create normal buffer
+    m_pd3dNormalBuffer = Dx12App::CreateBufferResource(normals.data(), sizeof(XMFLOAT3) * m_nVertices,
+        D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER, &m_pd3dNormalUploadBuffer);
+    m_d3dNormalBufferView.BufferLocation = m_pd3dNormalBuffer->GetGPUVirtualAddress();
+    m_d3dNormalBufferView.StrideInBytes = sizeof(XMFLOAT3);
+    m_d3dNormalBufferView.SizeInBytes = sizeof(XMFLOAT3) * m_nVertices;
+
+    // Create texture coordinate buffer
+    m_pd3dTexCoordBuffer = Dx12App::CreateBufferResource(texCoords.data(), sizeof(XMFLOAT2) * m_nVertices,
+        D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER, &m_pd3dTexCoordUploadBuffer);
+    m_d3dTexCoordBufferView.BufferLocation = m_pd3dTexCoordBuffer->GetGPUVirtualAddress();
+    m_d3dTexCoordBufferView.StrideInBytes = sizeof(XMFLOAT2);
+    m_d3dTexCoordBufferView.SizeInBytes = sizeof(XMFLOAT2) * m_nVertices;
+
+    // Create index buffer
+    m_pd3dIndexBuffer = Dx12App::CreateBufferResource(indices.data(), sizeof(UINT) * m_nIndices,
+        D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_INDEX_BUFFER, &m_pd3dIndexUploadBuffer);
+    m_d3dIndexBufferView.BufferLocation = m_pd3dIndexBuffer->GetGPUVirtualAddress();
+    m_d3dIndexBufferView.Format = DXGI_FORMAT_R32_UINT;
+    m_d3dIndexBufferView.SizeInBytes = sizeof(UINT) * m_nIndices;
+}
+
+RingMesh::~RingMesh()
+{
+}
+
+void RingMesh::ReleaseUploadBuffers()
+{
+    if (m_pd3dPositionUploadBuffer) m_pd3dPositionUploadBuffer = nullptr;
+    if (m_pd3dNormalUploadBuffer) m_pd3dNormalUploadBuffer = nullptr;
+    if (m_pd3dTexCoordUploadBuffer) m_pd3dTexCoordUploadBuffer = nullptr;
+    if (m_pd3dIndexUploadBuffer) m_pd3dIndexUploadBuffer = nullptr;
+}
+
+void RingMesh::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nSubSet)
+{
+    pd3dCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+    D3D12_VERTEX_BUFFER_VIEW pVertexBufferViews[3] = { m_d3dPositionBufferView, m_d3dNormalBufferView, m_d3dTexCoordBufferView };
+    pd3dCommandList->IASetVertexBuffers(0, 3, pVertexBufferViews);
+    pd3dCommandList->IASetIndexBuffer(&m_d3dIndexBufferView);
+    pd3dCommandList->DrawIndexedInstanced(m_nIndices, 1, 0, 0, 0);
+}
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// LineMesh - flat thin rectangle on XZ plane, from (0,0,0) to (0,0,1)
+
+LineMesh::LineMesh(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, float fWidth)
+{
+    m_nVertices = 4;
+    m_nIndices = 6;
+    m_nType = VERTEXT_POSITION | VERTEXT_NORMAL | VERTEXT_TEXTURE_COORD0;
+
+    float hw = fWidth * 0.5f;
+
+    XMFLOAT3 positions[4] = {
+        { -hw, 0.0f, 0.0f }, {  hw, 0.0f, 0.0f },
+        {  hw, 0.0f, 1.0f }, { -hw, 0.0f, 1.0f }
+    };
+
+    XMFLOAT3 normals[4] = {
+        { 0, 1, 0 }, { 0, 1, 0 }, { 0, 1, 0 }, { 0, 1, 0 }
+    };
+
+    XMFLOAT2 texCoords[4] = {
+        { 0, 0 }, { 1, 0 }, { 1, 1 }, { 0, 1 }
+    };
+
+    UINT indices[6] = { 0, 1, 2, 0, 2, 3 };
+
+    m_pd3dPositionBuffer = Dx12App::CreateBufferResource(positions, sizeof(XMFLOAT3) * m_nVertices,
+        D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER, &m_pd3dPositionUploadBuffer);
+    m_d3dPositionBufferView.BufferLocation = m_pd3dPositionBuffer->GetGPUVirtualAddress();
+    m_d3dPositionBufferView.StrideInBytes = sizeof(XMFLOAT3);
+    m_d3dPositionBufferView.SizeInBytes = sizeof(XMFLOAT3) * m_nVertices;
+
+    m_pd3dNormalBuffer = Dx12App::CreateBufferResource(normals, sizeof(XMFLOAT3) * m_nVertices,
+        D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER, &m_pd3dNormalUploadBuffer);
+    m_d3dNormalBufferView.BufferLocation = m_pd3dNormalBuffer->GetGPUVirtualAddress();
+    m_d3dNormalBufferView.StrideInBytes = sizeof(XMFLOAT3);
+    m_d3dNormalBufferView.SizeInBytes = sizeof(XMFLOAT3) * m_nVertices;
+
+    m_pd3dTexCoordBuffer = Dx12App::CreateBufferResource(texCoords, sizeof(XMFLOAT2) * m_nVertices,
+        D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER, &m_pd3dTexCoordUploadBuffer);
+    m_d3dTexCoordBufferView.BufferLocation = m_pd3dTexCoordBuffer->GetGPUVirtualAddress();
+    m_d3dTexCoordBufferView.StrideInBytes = sizeof(XMFLOAT2);
+    m_d3dTexCoordBufferView.SizeInBytes = sizeof(XMFLOAT2) * m_nVertices;
+
+    m_pd3dIndexBuffer = Dx12App::CreateBufferResource(indices, sizeof(UINT) * m_nIndices,
+        D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_INDEX_BUFFER, &m_pd3dIndexUploadBuffer);
+    m_d3dIndexBufferView.BufferLocation = m_pd3dIndexBuffer->GetGPUVirtualAddress();
+    m_d3dIndexBufferView.Format = DXGI_FORMAT_R32_UINT;
+    m_d3dIndexBufferView.SizeInBytes = sizeof(UINT) * m_nIndices;
+}
+
+LineMesh::~LineMesh()
+{
+}
+
+void LineMesh::ReleaseUploadBuffers()
+{
+    if (m_pd3dPositionUploadBuffer) m_pd3dPositionUploadBuffer = nullptr;
+    if (m_pd3dNormalUploadBuffer) m_pd3dNormalUploadBuffer = nullptr;
+    if (m_pd3dTexCoordUploadBuffer) m_pd3dTexCoordUploadBuffer = nullptr;
+    if (m_pd3dIndexUploadBuffer) m_pd3dIndexUploadBuffer = nullptr;
+}
+
+void LineMesh::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nSubSet)
+{
+    pd3dCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+    D3D12_VERTEX_BUFFER_VIEW pVertexBufferViews[3] = { m_d3dPositionBufferView, m_d3dNormalBufferView, m_d3dTexCoordBufferView };
+    pd3dCommandList->IASetVertexBuffers(0, 3, pVertexBufferViews);
+    pd3dCommandList->IASetIndexBuffer(&m_d3dIndexBufferView);
+    pd3dCommandList->DrawIndexedInstanced(m_nIndices, 1, 0, 0, 0);
+}
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// FanMesh - sector/pie on XZ plane, unit radius, angle around +Z axis
+
+FanMesh::FanMesh(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList,
+                 float fAngleDeg, int nSegments)
+{
+    // nSegments+1 arc vertices + 1 center vertex
+    m_nVertices = nSegments + 2;
+    m_nIndices = nSegments * 3;
+    m_nType = VERTEXT_POSITION | VERTEXT_NORMAL | VERTEXT_TEXTURE_COORD0;
+
+    std::vector<XMFLOAT3> positions(m_nVertices);
+    std::vector<XMFLOAT3> normals(m_nVertices);
+    std::vector<XMFLOAT2> texCoords(m_nVertices);
+    std::vector<UINT> indices(m_nIndices);
+
+    // Center vertex at origin
+    positions[0] = XMFLOAT3(0.0f, 0.0f, 0.0f);
+    normals[0] = XMFLOAT3(0.0f, 1.0f, 0.0f);
+    texCoords[0] = XMFLOAT2(0.5f, 0.5f);
+
+    float halfAngleRad = XMConvertToRadians(fAngleDeg * 0.5f);
+
+    for (int i = 0; i <= nSegments; i++)
+    {
+        // Angle from -halfAngle to +halfAngle, centered around +Z axis
+        float t = static_cast<float>(i) / nSegments;
+        float angle = -halfAngleRad + t * 2.0f * halfAngleRad;
+
+        // +Z is forward, X is right
+        float x = sinf(angle);
+        float z = cosf(angle);
+
+        positions[i + 1] = XMFLOAT3(x, 0.0f, z);
+        normals[i + 1] = XMFLOAT3(0.0f, 1.0f, 0.0f);
+        texCoords[i + 1] = XMFLOAT2(0.5f + x * 0.5f, 0.5f - z * 0.5f);
+    }
+
+    // Triangles: center → arc[i] → arc[i+1]
+    for (int i = 0; i < nSegments; i++)
+    {
+        indices[i * 3 + 0] = 0;
+        indices[i * 3 + 1] = i + 1;
+        indices[i * 3 + 2] = i + 2;
+    }
+
+    m_pd3dPositionBuffer = Dx12App::CreateBufferResource(positions.data(), sizeof(XMFLOAT3) * m_nVertices,
+        D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER, &m_pd3dPositionUploadBuffer);
+    m_d3dPositionBufferView.BufferLocation = m_pd3dPositionBuffer->GetGPUVirtualAddress();
+    m_d3dPositionBufferView.StrideInBytes = sizeof(XMFLOAT3);
+    m_d3dPositionBufferView.SizeInBytes = sizeof(XMFLOAT3) * m_nVertices;
+
+    m_pd3dNormalBuffer = Dx12App::CreateBufferResource(normals.data(), sizeof(XMFLOAT3) * m_nVertices,
+        D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER, &m_pd3dNormalUploadBuffer);
+    m_d3dNormalBufferView.BufferLocation = m_pd3dNormalBuffer->GetGPUVirtualAddress();
+    m_d3dNormalBufferView.StrideInBytes = sizeof(XMFLOAT3);
+    m_d3dNormalBufferView.SizeInBytes = sizeof(XMFLOAT3) * m_nVertices;
+
+    m_pd3dTexCoordBuffer = Dx12App::CreateBufferResource(texCoords.data(), sizeof(XMFLOAT2) * m_nVertices,
+        D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER, &m_pd3dTexCoordUploadBuffer);
+    m_d3dTexCoordBufferView.BufferLocation = m_pd3dTexCoordBuffer->GetGPUVirtualAddress();
+    m_d3dTexCoordBufferView.StrideInBytes = sizeof(XMFLOAT2);
+    m_d3dTexCoordBufferView.SizeInBytes = sizeof(XMFLOAT2) * m_nVertices;
+
+    m_pd3dIndexBuffer = Dx12App::CreateBufferResource(indices.data(), sizeof(UINT) * m_nIndices,
+        D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_INDEX_BUFFER, &m_pd3dIndexUploadBuffer);
+    m_d3dIndexBufferView.BufferLocation = m_pd3dIndexBuffer->GetGPUVirtualAddress();
+    m_d3dIndexBufferView.Format = DXGI_FORMAT_R32_UINT;
+    m_d3dIndexBufferView.SizeInBytes = sizeof(UINT) * m_nIndices;
+}
+
+FanMesh::~FanMesh()
+{
+}
+
+void FanMesh::ReleaseUploadBuffers()
+{
+    if (m_pd3dPositionUploadBuffer) m_pd3dPositionUploadBuffer = nullptr;
+    if (m_pd3dNormalUploadBuffer) m_pd3dNormalUploadBuffer = nullptr;
+    if (m_pd3dTexCoordUploadBuffer) m_pd3dTexCoordUploadBuffer = nullptr;
+    if (m_pd3dIndexUploadBuffer) m_pd3dIndexUploadBuffer = nullptr;
+}
+
+void FanMesh::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nSubSet)
+{
+    pd3dCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+    D3D12_VERTEX_BUFFER_VIEW pVertexBufferViews[3] = { m_d3dPositionBufferView, m_d3dNormalBufferView, m_d3dTexCoordBufferView };
+    pd3dCommandList->IASetVertexBuffers(0, 3, pVertexBufferViews);
+    pd3dCommandList->IASetIndexBuffer(&m_d3dIndexBufferView);
+    pd3dCommandList->DrawIndexedInstanced(m_nIndices, 1, 0, 0, 0);
+}

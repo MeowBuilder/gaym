@@ -38,7 +38,7 @@ void Scene::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList)
 {
     // Create Descriptor Heap
     m_pDescriptorHeap = std::make_unique<CDescriptorHeap>();
-    m_pDescriptorHeap->Create(pDevice, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 256, true);
+    m_pDescriptorHeap->Create(pDevice, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 2048, true);
 
     // Create Pass Constant Buffer
     UINT nConstantBufferSize = (sizeof(PassConstants) + 255) & ~255;
@@ -130,11 +130,11 @@ void Scene::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList)
     // --------------------------------------------------------------------------
     m_pEnemySpawner->Init(pDevice, pCommandList, this, pShader.get());
 
-    // Configure spawn points for the room
+    // Configure spawn points for the room (diverse enemy types)
     RoomSpawnConfig spawnConfig;
-    spawnConfig.AddSpawn("AirElemental", 10.0f, 0.0f, 0.0f);   // Right side
-    spawnConfig.AddSpawn("AirElemental", -10.0f, 0.0f, 0.0f);  // Left side
-    spawnConfig.AddSpawn("AirElemental", 0.0f, 0.0f, 15.0f);   // Front
+    spawnConfig.AddSpawn("RushAoEEnemy", 10.0f, 0.0f, 5.0f);     // Red - right side (melee rush)
+    spawnConfig.AddSpawn("RushFrontEnemy", -10.0f, 0.0f, 5.0f);  // Green - left side (melee rush)
+    spawnConfig.AddSpawn("RangedEnemy", 0.0f, 0.0f, 20.0f);      // Blue - far back (ranged)
 
     // Apply configuration to room
     m_pCurrentRoom->SetSpawnConfig(spawnConfig);
@@ -738,4 +738,92 @@ void Scene::SelectSkillSlot(SkillSlot slot, int runeSlotIndex)
     m_pCurrentDropItem = nullptr;
     m_eSelectedRune = ActivationType::None;
     m_eDropState = DropInteractionState::None;
+}
+
+bool Scene::IsNearPortalCube() const
+{
+    if (!m_pCurrentRoom || !m_pPlayerGameObject)
+        return false;
+
+    GameObject* pPortal = m_pCurrentRoom->GetPortalCube();
+    if (!pPortal)
+        return false;
+
+    auto* pInteractable = pPortal->GetComponent<InteractableComponent>();
+    if (!pInteractable || !pInteractable->IsActive())
+        return false;
+
+    return pInteractable->IsPlayerInRange(m_pPlayerGameObject);
+}
+
+void Scene::TriggerPortalInteraction()
+{
+    if (!IsNearPortalCube())
+        return;
+
+    GameObject* pPortal = m_pCurrentRoom->GetPortalCube();
+    if (!pPortal)
+        return;
+
+    auto* pInteractable = pPortal->GetComponent<InteractableComponent>();
+    if (pInteractable)
+    {
+        pInteractable->Interact();
+    }
+}
+
+void Scene::TransitionToNextRoom()
+{
+    OutputDebugString(L"[Scene] Transitioning to next room...\n");
+
+    m_nRoomCount++;
+
+    // Create new room
+    auto pNewRoom = std::make_unique<CRoom>();
+    pNewRoom->SetBoundingBox(BoundingBox(XMFLOAT3(0, 0, 0), XMFLOAT3(100.0f, 100.0f, 100.0f)));
+
+    // Configure spawn points - vary based on room count
+    RoomSpawnConfig spawnConfig;
+    int baseEnemies = 3;
+    int extraEnemies = m_nRoomCount; // More enemies as rooms progress (capped at reasonable number)
+    if (extraEnemies > 5) extraEnemies = 5;
+
+    // Cycle through different enemy combinations
+    const char* enemyTypes[] = { "RushAoEEnemy", "RushFrontEnemy", "RangedEnemy" };
+    int numEnemies = baseEnemies + extraEnemies;
+    if (numEnemies > 8) numEnemies = 8;
+
+    for (int i = 0; i < numEnemies; ++i)
+    {
+        const char* type = enemyTypes[i % 3];
+        float angle = (float)i * (6.28318f / (float)numEnemies);
+        float radius = 10.0f + (i % 2) * 5.0f;
+        float x = cosf(angle) * radius;
+        float z = sinf(angle) * radius + 10.0f;
+        spawnConfig.AddSpawn(type, x, 0.0f, z);
+    }
+
+    // Apply configuration to new room
+    CRoom* pRoomPtr = pNewRoom.get();
+    pRoomPtr->SetSpawnConfig(spawnConfig);
+    pRoomPtr->SetEnemySpawner(m_pEnemySpawner.get());
+    pRoomPtr->SetPlayerTarget(m_pPlayerGameObject);
+    pRoomPtr->SetScene(this);
+
+    // Add to room list and set as current
+    m_vRooms.push_back(std::move(pNewRoom));
+    m_pCurrentRoom = pRoomPtr;
+
+    // Reset player position to origin
+    if (m_pPlayerGameObject)
+    {
+        m_pPlayerGameObject->GetTransform()->SetPosition(0.0f, 0.0f, 0.0f);
+    }
+
+    // Activate the new room (enemies will spawn in Update)
+    m_pCurrentRoom->SetState(RoomState::Active);
+
+    wchar_t buffer[128];
+    swprintf_s(buffer, L"[Scene] Room %d activated with %d enemies\n", m_nRoomCount + 1, numEnemies);
+    OutputDebugString(buffer);
 }

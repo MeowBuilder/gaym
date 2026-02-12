@@ -69,8 +69,19 @@ void SkillComponent::Update(float deltaTime)
             size_t index = static_cast<size_t>(m_ActiveSkillSlot);
             if (index < m_Skills.size() && m_Skills[index])
             {
-                // Use stored target position for channel ticks
-                m_Skills[index]->Execute(m_pOwner, m_ChannelTargetPosition, 0.3f);  // 30% damage per tick
+                // Combo-based channel tick damage
+                RuneCombo combo = GetRuneCombo(m_ActiveSkillSlot);
+                float tickMult = 0.3f;
+                if (combo.hasEnhance) tickMult *= 2.0f;
+
+                if (combo.hasPlace)
+                {
+                    m_Skills[index]->Execute(m_pOwner, m_ChannelTargetPosition, -(tickMult * 1.5f));
+                }
+                else
+                {
+                    m_Skills[index]->Execute(m_pOwner, m_ChannelTargetPosition, tickMult);
+                }
             }
         }
 
@@ -154,13 +165,18 @@ void SkillComponent::ProcessSkillInput(InputSystem* pInputSystem, CCamera* pCame
             size_t index = static_cast<size_t>(m_ChargingSlot);
             if (index < m_Skills.size() && m_Skills[index])
             {
+                RuneCombo combo = GetRuneCombo(m_ChargingSlot);
+
                 float chargeRatio = m_fChargeTime / m_fMaxChargeTime;
                 chargeRatio = min(1.0f, chargeRatio);
 
                 // Apply charge multiplier (1.0x to 3.0x based on charge)
                 float damageMultiplier = 1.0f + chargeRatio * 2.0f;
 
-                // Apply enhance multiplier if active
+                // Combo: Charge+Enhance rune
+                if (combo.hasEnhance) damageMultiplier *= 2.0f;
+
+                // Consume existing enhance buff
                 if (m_bIsEnhanced)
                 {
                     damageMultiplier *= m_fEnhanceMultiplier;
@@ -174,8 +190,15 @@ void SkillComponent::ProcessSkillInput(InputSystem* pInputSystem, CCamera* pCame
                     chargeRatio * 100.0f, damageMultiplier);
                 OutputDebugString(buffer);
 
-                // Execute with multiplier
-                m_Skills[index]->Execute(m_pOwner, m_ChargeTargetPosition, damageMultiplier);
+                // Combo: Charge+Place → trap with charge damage
+                if (combo.hasPlace)
+                {
+                    m_Skills[index]->Execute(m_pOwner, m_ChargeTargetPosition, -(damageMultiplier * 1.5f));
+                }
+                else
+                {
+                    m_Skills[index]->Execute(m_pOwner, m_ChargeTargetPosition, damageMultiplier);
+                }
                 m_SkillStates[index] = SkillState::Casting;
                 m_ActiveSkillSlot = m_ChargingSlot;
 
@@ -436,17 +459,39 @@ int SkillComponent::GetEquippedRuneCount(SkillSlot skill) const
 
 ActivationType SkillComponent::GetSkillActivationType(SkillSlot skill) const
 {
+    RuneCombo combo = GetRuneCombo(skill);
+
+    // Priority: Charge > Channel > Place > Enhance > Instant
+    if (combo.hasCharge)   return ActivationType::Charge;
+    if (combo.hasChannel)  return ActivationType::Channel;
+    if (combo.hasPlace)    return ActivationType::Place;
+    if (combo.hasEnhance)  return ActivationType::Enhance;
+    return ActivationType::Instant;
+}
+
+RuneCombo SkillComponent::GetRuneCombo(SkillSlot skill) const
+{
+    RuneCombo combo;
     size_t skillIdx = static_cast<size_t>(skill);
     if (skillIdx >= static_cast<size_t>(SkillSlot::Count))
-        return ActivationType::Instant;
+        return combo;
 
-    // Return the first non-None rune, or Instant if no runes equipped
     for (int i = 0; i < RUNES_PER_SKILL; ++i)
     {
-        if (m_SkillRunes[skillIdx][i] != ActivationType::None)
-            return m_SkillRunes[skillIdx][i];
+        ActivationType type = m_SkillRunes[skillIdx][i];
+        if (type == ActivationType::None) continue;
+
+        switch (type)
+        {
+        case ActivationType::Instant:  combo.hasInstant = true; break;
+        case ActivationType::Charge:   combo.hasCharge = true; break;
+        case ActivationType::Channel:  combo.hasChannel = true; break;
+        case ActivationType::Place:    combo.hasPlace = true; break;
+        case ActivationType::Enhance:  combo.hasEnhance = true; break;
+        }
+        ++combo.count;
     }
-    return ActivationType::Instant;
+    return combo;
 }
 
 float SkillComponent::GetChargeProgress() const
@@ -476,75 +521,88 @@ void SkillComponent::ExecuteWithActivationType(SkillSlot slot, const DirectX::XM
         return;
     }
 
-    float damageMultiplier = 1.0f;
+    RuneCombo combo = GetRuneCombo(slot);
+    bool enhanceOnly = combo.hasEnhance && !combo.hasCharge && !combo.hasChannel && !combo.hasPlace && !combo.hasInstant;
 
-    // Apply enhance multiplier if active
-    // NOTE: For Charge mode, enhancement is applied when released, not when started
-    if (m_bIsEnhanced && m_CurrentActivationType != ActivationType::Charge)
+    if (combo.hasCharge)
     {
-        damageMultiplier = m_fEnhanceMultiplier;
-        m_bIsEnhanced = false;  // Consume enhancement
-        m_fEnhanceTimer = 0.0f;
-        OutputDebugString(L"[Skill] Enhancement consumed! 2x damage!\n");
-    }
-
-    switch (m_CurrentActivationType)
-    {
-    case ActivationType::Instant:
-        // Immediate execution
-        m_Skills[index]->Execute(m_pOwner, targetPosition, damageMultiplier);
-        m_SkillStates[index] = SkillState::Casting;
-        m_ActiveSkillSlot = slot;
-        OutputDebugString(L"[Skill] Instant cast!\n");
-        break;
-
-    case ActivationType::Charge:
-        // Start charging
+        // Charge mode: hold-release (combo modifiers applied on release)
         m_bIsCharging = true;
         m_fChargeTime = 0.0f;
         m_ChargingSlot = slot;
         m_ChargeTargetPosition = targetPosition;
         m_SkillStates[index] = SkillState::Casting;
         OutputDebugString(L"[Skill] Charging started... Hold to charge, release to fire\n");
-        break;
-
-    case ActivationType::Channel:
-        // Start channeling
+    }
+    else if (combo.hasChannel)
+    {
+        // Channel mode: hold-sustain, ticks apply combo modifiers
         m_bIsChanneling = true;
         m_fChannelTime = 0.0f;
         m_fChannelTickAccum = 0.0f;
         m_ActiveSkillSlot = slot;
-        m_ChannelTargetPosition = targetPosition;  // Store target for channel ticks
+        m_ChannelTargetPosition = targetPosition;
         m_SkillStates[index] = SkillState::Casting;
         OutputDebugString(L"[Skill] Channeling started... Hold to continue\n");
+
         // First tick immediately
-        m_Skills[index]->Execute(m_pOwner, targetPosition, damageMultiplier * 0.3f);  // 30% damage per tick
-        break;
-
-    case ActivationType::Place:
-        // Place at target location (trap/turret style)
+        float tickMult = 0.3f;
+        if (combo.hasEnhance) tickMult *= 2.0f;
+        if (m_bIsEnhanced)
         {
-            OutputDebugString(L"[Skill] Placing at target location!\n");
-            // Execute with special flag for placement (use negative multiplier as signal)
-            m_Skills[index]->Execute(m_pOwner, targetPosition, -1.0f);  // -1 signals placement mode
-            m_SkillStates[index] = SkillState::Casting;
-            m_ActiveSkillSlot = slot;
+            tickMult *= m_fEnhanceMultiplier;
+            m_bIsEnhanced = false;
+            m_fEnhanceTimer = 0.0f;
+            OutputDebugString(L"[Skill] Enhancement consumed with Channel!\n");
         }
-        break;
 
-    case ActivationType::Enhance:
-        // Self-buff - enhance next attack
+        if (combo.hasPlace)
+        {
+            m_Skills[index]->Execute(m_pOwner, targetPosition, -(tickMult * 1.5f));
+        }
+        else
+        {
+            m_Skills[index]->Execute(m_pOwner, targetPosition, tickMult);
+        }
+    }
+    else if (enhanceOnly)
+    {
+        // Enhance-only: self buff
         m_bIsEnhanced = true;
         m_fEnhanceTimer = m_fEnhanceDuration;
         m_SkillStates[index] = SkillState::Casting;
         m_ActiveSkillSlot = slot;
 
-        // Visual feedback - execute at self position with 0 damage (just for VFX)
-        {
-            DirectX::XMFLOAT3 selfPos = m_pOwner->GetTransform()->GetPosition();
-            m_Skills[index]->Execute(m_pOwner, selfPos, 0.0f);  // 0 damage, just VFX
-        }
+        DirectX::XMFLOAT3 selfPos = m_pOwner->GetTransform()->GetPosition();
+        m_Skills[index]->Execute(m_pOwner, selfPos, 0.0f);
         OutputDebugString(L"[Skill] Enhanced! Next attack deals 2x damage for 5 seconds\n");
-        break;
+    }
+    else
+    {
+        // Instant / Place / Instant+Place / Instant+Enhance etc.
+        float damageMultiplier = 1.0f;
+        if (combo.hasEnhance) damageMultiplier *= 2.0f;
+
+        // Consume existing enhance buff
+        if (m_bIsEnhanced)
+        {
+            damageMultiplier *= m_fEnhanceMultiplier;
+            m_bIsEnhanced = false;
+            m_fEnhanceTimer = 0.0f;
+            OutputDebugString(L"[Skill] Enhancement consumed! 2x damage!\n");
+        }
+
+        if (combo.hasPlace)
+        {
+            OutputDebugString(L"[Skill] Placing at target location!\n");
+            m_Skills[index]->Execute(m_pOwner, targetPosition, -(damageMultiplier * 1.5f));
+        }
+        else
+        {
+            m_Skills[index]->Execute(m_pOwner, targetPosition, damageMultiplier);
+            OutputDebugString(L"[Skill] Instant cast!\n");
+        }
+        m_SkillStates[index] = SkillState::Casting;
+        m_ActiveSkillSlot = slot;
     }
 }

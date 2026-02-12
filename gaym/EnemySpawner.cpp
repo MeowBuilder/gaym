@@ -8,8 +8,12 @@
 #include "AnimationComponent.h"
 #include "CollisionLayer.h"
 #include "MeleeAttackBehavior.h"
+#include "RushAoEAttackBehavior.h"
+#include "RushFrontAttackBehavior.h"
+#include "RangedAttackBehavior.h"
 #include "Room.h"
 #include "Scene.h"
+#include "ProjectileManager.h"
 #include "Shader.h"
 #include "Mesh.h"
 #include "MeshLoader.h"
@@ -38,6 +42,8 @@ void EnemySpawner::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pComma
     testEnemy.m_Stats.m_fMoveSpeed = 4.0f;
     testEnemy.m_Stats.m_fAttackRange = 3.0f;
     testEnemy.m_Stats.m_fAttackCooldown = 1.5f;
+    testEnemy.m_IndicatorConfig.m_eType = IndicatorType::Circle;
+    testEnemy.m_IndicatorConfig.m_fHitRadius = 3.0f;
     testEnemy.m_fnCreateAttack = []() {
         return std::make_unique<MeleeAttackBehavior>(10.0f, 0.3f, 0.2f, 0.3f);
     };
@@ -63,11 +69,96 @@ void EnemySpawner::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pComma
     airElemental.m_AnimConfig.m_strStaggerClip = "Combat_Stun";
     airElemental.m_AnimConfig.m_strDeathClip = "Death";
 
+    airElemental.m_IndicatorConfig.m_eType = IndicatorType::Circle;
+    airElemental.m_IndicatorConfig.m_fHitRadius = 4.0f;
     airElemental.m_fnCreateAttack = []() {
         return std::make_unique<MeleeAttackBehavior>(15.0f, 0.4f, 0.2f, 0.4f);
     };
 
     RegisterEnemyPreset("AirElemental", airElemental);
+
+    // Register RushAoEEnemy preset (Red - 360 AoE after rush)
+    EnemySpawnData rushAoE;
+    rushAoE.m_strMeshPath = "Assets/Enemies/AirElemental/Models/AirElemental_Bl.bin";
+    rushAoE.m_strAnimationPath = "Assets/Enemies/AirElemental/Animations/AirElemental_Bl_Anim.bin";
+    rushAoE.m_xmf3Scale = XMFLOAT3(3.0f, 3.0f, 3.0f);
+    rushAoE.m_xmf4Color = XMFLOAT4(1.0f, 0.2f, 0.2f, 1.0f);  // Red
+
+    rushAoE.m_Stats.m_fMaxHP = 100.0f;
+    rushAoE.m_Stats.m_fCurrentHP = 100.0f;
+    rushAoE.m_Stats.m_fMoveSpeed = 5.0f;
+    rushAoE.m_Stats.m_fAttackRange = 20.0f;
+    rushAoE.m_Stats.m_fAttackCooldown = 3.0f;
+
+    rushAoE.m_AnimConfig = airElemental.m_AnimConfig;
+
+    // rushSpeed=15, rushDuration=1.2 → rushDistance=18
+    rushAoE.m_IndicatorConfig.m_eType = IndicatorType::RushCircle;
+    rushAoE.m_IndicatorConfig.m_fRushDistance = 18.0f;  // 15 * 1.2
+    rushAoE.m_IndicatorConfig.m_fHitRadius = 5.0f;      // AoE radius
+    rushAoE.m_fnCreateAttack = []() {
+        return std::make_unique<RushAoEAttackBehavior>(15.0f, 15.0f, 1.2f, 0.3f, 0.2f, 0.3f, 5.0f);
+    };
+
+    RegisterEnemyPreset("RushAoEEnemy", rushAoE);
+
+    // Register RushFrontEnemy preset (Green - frontal cone after rush)
+    EnemySpawnData rushFront;
+    rushFront.m_strMeshPath = "Assets/Enemies/AirElemental/Models/AirElemental_Bl.bin";
+    rushFront.m_strAnimationPath = "Assets/Enemies/AirElemental/Animations/AirElemental_Bl_Anim.bin";
+    rushFront.m_xmf3Scale = XMFLOAT3(3.0f, 3.0f, 3.0f);
+    rushFront.m_xmf4Color = XMFLOAT4(0.2f, 1.0f, 0.2f, 1.0f);  // Green
+
+    rushFront.m_Stats.m_fMaxHP = 80.0f;
+    rushFront.m_Stats.m_fCurrentHP = 80.0f;
+    rushFront.m_Stats.m_fMoveSpeed = 5.0f;
+    rushFront.m_Stats.m_fAttackRange = 18.0f;
+    rushFront.m_Stats.m_fAttackCooldown = 2.5f;
+
+    rushFront.m_AnimConfig = airElemental.m_AnimConfig;
+
+    // rushSpeed=18, rushDuration=1.0 → rushDistance=18
+    rushFront.m_IndicatorConfig.m_eType = IndicatorType::RushCone;
+    rushFront.m_IndicatorConfig.m_fRushDistance = 18.0f;  // 18 * 1.0
+    rushFront.m_IndicatorConfig.m_fHitRadius = 4.0f;      // cone range
+    rushFront.m_IndicatorConfig.m_fConeAngle = 90.0f;
+    rushFront.m_fnCreateAttack = []() {
+        return std::make_unique<RushFrontAttackBehavior>(20.0f, 18.0f, 1.0f, 0.2f, 0.2f, 0.3f, 4.0f, 90.0f);
+    };
+
+    RegisterEnemyPreset("RushFrontEnemy", rushFront);
+
+    // Register RangedEnemy preset (Blue - projectile attack)
+    EnemySpawnData ranged;
+    ranged.m_strMeshPath = "Assets/Enemies/AirElemental/Models/AirElemental_Bl.bin";
+    ranged.m_strAnimationPath = "Assets/Enemies/AirElemental/Animations/AirElemental_Bl_Anim.bin";
+    ranged.m_xmf3Scale = XMFLOAT3(3.0f, 3.0f, 3.0f);
+    ranged.m_xmf4Color = XMFLOAT4(0.2f, 0.4f, 1.0f, 1.0f);  // Blue
+
+    ranged.m_Stats.m_fMaxHP = 60.0f;
+    ranged.m_Stats.m_fCurrentHP = 60.0f;
+    ranged.m_Stats.m_fMoveSpeed = 3.0f;
+    ranged.m_Stats.m_fAttackRange = 30.0f;
+    ranged.m_Stats.m_fAttackCooldown = 2.0f;
+
+    ranged.m_AnimConfig = airElemental.m_AnimConfig;
+
+    ProjectileManager* pProjMgr = pScene->GetProjectileManager();
+    ranged.m_fnCreateAttack = [pProjMgr]() {
+        return std::make_unique<RangedAttackBehavior>(pProjMgr, 10.0f, 20.0f, 0.5f, 0.1f, 0.5f);
+    };
+
+    RegisterEnemyPreset("RangedEnemy", ranged);
+
+    // Create shared meshes for attack indicators
+    m_pRingMesh = new RingMesh(pDevice, pCommandList, 1.0f, 0.93f, 48);
+    m_pRingMesh->AddRef();
+
+    m_pLineMesh = new LineMesh(pDevice, pCommandList, 0.4f);
+    m_pLineMesh->AddRef();
+
+    m_pFanMesh = new FanMesh(pDevice, pCommandList, 90.0f, 24);
+    m_pFanMesh->AddRef();
 
     OutputDebugString(L"[EnemySpawner] Initialized with default presets\n");
 }
@@ -238,6 +329,12 @@ void EnemySpawner::SetupEnemyComponents(GameObject* pEnemy, const EnemySpawnData
         pAnimComp->Play(data.m_AnimConfig.m_strIdleClip, data.m_AnimConfig.m_bLoopIdle);
     }
 
+    // Create attack indicators
+    if (data.m_IndicatorConfig.m_eType != IndicatorType::None && pRoom)
+    {
+        SetupAttackIndicators(pEnemy, pEnemyComp, data.m_IndicatorConfig, pRoom);
+    }
+
     OutputDebugString(L"[EnemySpawner] Setup enemy components complete\n");
 }
 
@@ -282,6 +379,9 @@ GameObject* EnemySpawner::CreateMeshEnemy(CRoom* pRoom, const XMFLOAT3& position
     // Add RenderComponents to hierarchy
     AddRenderComponentsToHierarchy(pEnemy);
 
+    // Apply color tint to all meshes in hierarchy
+    ApplyColorToHierarchy(pEnemy, data.m_xmf4Color);
+
     // Add ColliderComponent
     auto* pCollider = pEnemy->AddComponent<ColliderComponent>();
     float colliderScale = data.m_xmf3Scale.x;
@@ -318,5 +418,112 @@ void EnemySpawner::AddRenderComponentsToHierarchy(GameObject* pGameObject)
     if (pGameObject->m_pSibling)
     {
         AddRenderComponentsToHierarchy(pGameObject->m_pSibling);
+    }
+}
+
+void EnemySpawner::ApplyColorToHierarchy(GameObject* pGameObject, const XMFLOAT4& color)
+{
+    if (!pGameObject) return;
+
+    MATERIAL material;
+    material.m_cAmbient = XMFLOAT4(color.x * 0.3f, color.y * 0.3f, color.z * 0.3f, 1.0f);
+    material.m_cDiffuse = color;
+    material.m_cSpecular = XMFLOAT4(0.5f, 0.5f, 0.5f, 32.0f);
+    material.m_cEmissive = XMFLOAT4(color.x * 0.1f, color.y * 0.1f, color.z * 0.1f, 1.0f);
+    pGameObject->SetMaterial(material);
+
+    if (pGameObject->m_pChild)
+    {
+        ApplyColorToHierarchy(pGameObject->m_pChild, color);
+    }
+    if (pGameObject->m_pSibling)
+    {
+        ApplyColorToHierarchy(pGameObject->m_pSibling, color);
+    }
+}
+
+GameObject* EnemySpawner::CreateIndicatorObject(CRoom* pRoom, Mesh* pMesh)
+{
+    if (!m_pDevice || !m_pCommandList || !m_pScene || !pMesh || !m_pShader) return nullptr;
+
+    CRoom* pPrevRoom = m_pScene->GetCurrentRoom();
+    m_pScene->SetCurrentRoom(pRoom);
+
+    GameObject* pIndicator = m_pScene->CreateGameObject(m_pDevice, m_pCommandList);
+
+    m_pScene->SetCurrentRoom(pPrevRoom);
+
+    if (!pIndicator) return nullptr;
+
+    // Start hidden (below ground)
+    TransformComponent* pTransform = pIndicator->GetTransform();
+    if (pTransform)
+    {
+        pTransform->SetPosition(0.0f, -1000.0f, 0.0f);
+    }
+
+    // Set mesh
+    pMesh->AddRef();
+    pIndicator->SetMesh(pMesh);
+
+    // Red emissive material
+    MATERIAL redMaterial;
+    redMaterial.m_cAmbient = XMFLOAT4(0.3f, 0.0f, 0.0f, 1.0f);
+    redMaterial.m_cDiffuse = XMFLOAT4(1.0f, 0.1f, 0.1f, 1.0f);
+    redMaterial.m_cSpecular = XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f);
+    redMaterial.m_cEmissive = XMFLOAT4(0.8f, 0.0f, 0.0f, 1.0f);
+    pIndicator->SetMaterial(redMaterial);
+
+    // Add render component
+    auto* pRenderComp = pIndicator->AddComponent<RenderComponent>();
+    pRenderComp->SetMesh(pMesh);
+    m_pShader->AddRenderComponent(pRenderComp);
+
+    return pIndicator;
+}
+
+void EnemySpawner::SetupAttackIndicators(GameObject* pEnemy, EnemyComponent* pEnemyComp,
+                                          const AttackIndicatorConfig& config, CRoom* pRoom)
+{
+    pEnemyComp->SetIndicatorConfig(config);
+
+    if (config.m_eType == IndicatorType::Circle)
+    {
+        // Melee: ring around enemy (positioned by ShowIndicators on attack start)
+        GameObject* pHitZone = CreateIndicatorObject(pRoom, m_pRingMesh);
+        if (pHitZone)
+        {
+            pEnemyComp->SetHitZoneIndicator(pHitZone);
+        }
+    }
+    else if (config.m_eType == IndicatorType::RushCircle)
+    {
+        // Rush + 360 AoE: line + ring at destination
+        GameObject* pLine = CreateIndicatorObject(pRoom, m_pLineMesh);
+        if (pLine)
+        {
+            pEnemyComp->SetRushLineIndicator(pLine);
+        }
+
+        GameObject* pHitZone = CreateIndicatorObject(pRoom, m_pRingMesh);
+        if (pHitZone)
+        {
+            pEnemyComp->SetHitZoneIndicator(pHitZone);
+        }
+    }
+    else if (config.m_eType == IndicatorType::RushCone)
+    {
+        // Rush + cone: line + fan at destination
+        GameObject* pLine = CreateIndicatorObject(pRoom, m_pLineMesh);
+        if (pLine)
+        {
+            pEnemyComp->SetRushLineIndicator(pLine);
+        }
+
+        GameObject* pHitZone = CreateIndicatorObject(pRoom, m_pFanMesh);
+        if (pHitZone)
+        {
+            pEnemyComp->SetHitZoneIndicator(pHitZone);
+        }
     }
 }

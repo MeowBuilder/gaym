@@ -53,6 +53,12 @@ void EnemyComponent::ChangeState(EnemyState newState)
     EnemyState oldState = m_eCurrentState;
     m_eCurrentState = newState;
 
+    // Hide indicators when leaving Attack state
+    if (oldState == EnemyState::Attack)
+    {
+        HideIndicators();
+    }
+
     // Debug output
     const wchar_t* stateNames[] = { L"Idle", L"Chase", L"Attack", L"Stagger", L"Dead" };
     wchar_t buffer[128];
@@ -99,6 +105,7 @@ void EnemyComponent::ChangeState(EnemyState newState)
         {
             m_pAttackBehavior->Execute(this);
         }
+        ShowIndicators();
         break;
     }
 }
@@ -274,9 +281,101 @@ void EnemyComponent::UpdateDead(float dt)
     // For now, just wait for cleanup
 }
 
+void EnemyComponent::ShowIndicators()
+{
+    if (!m_pOwner || !m_pTarget) return;
+    if (m_IndicatorConfig.m_eType == IndicatorType::None) return;
+
+    TransformComponent* pMyTransform = m_pOwner->GetTransform();
+    TransformComponent* pTargetTransform = m_pTarget->GetTransform();
+    if (!pMyTransform || !pTargetTransform) return;
+
+    XMFLOAT3 myPos = pMyTransform->GetPosition();
+    XMFLOAT3 targetPos = pTargetTransform->GetPosition();
+
+    // Direction from enemy to target on XZ plane (fixed at attack start)
+    XMFLOAT2 dir = MathUtils::Direction2D(myPos, targetPos);
+    if (dir.x == 0.0f && dir.y == 0.0f) return;
+
+    float yawRad = atan2f(dir.x, dir.y);
+    float yawDeg = XMConvertToDegrees(yawRad);
+
+    if (m_IndicatorConfig.m_eType == IndicatorType::Circle)
+    {
+        // Circle around enemy at current position
+        if (m_pHitZoneIndicator)
+        {
+            TransformComponent* pT = m_pHitZoneIndicator->GetTransform();
+            if (pT)
+            {
+                pT->SetPosition(myPos.x, 0.15f, myPos.z);
+                float r = m_IndicatorConfig.m_fHitRadius;
+                pT->SetScale(r, 1.0f, r);
+            }
+        }
+    }
+    else if (m_IndicatorConfig.m_eType == IndicatorType::RushCircle ||
+             m_IndicatorConfig.m_eType == IndicatorType::RushCone)
+    {
+        float rushDist = m_IndicatorConfig.m_fRushDistance;
+
+        // Rush line: from enemy position, pointing toward target
+        if (m_pRushLineIndicator)
+        {
+            TransformComponent* pT = m_pRushLineIndicator->GetTransform();
+            if (pT)
+            {
+                pT->SetPosition(myPos.x, 0.15f, myPos.z);
+                pT->SetRotation(0.0f, yawDeg, 0.0f);
+                pT->SetScale(1.0f, 1.0f, rushDist);
+            }
+        }
+
+        // Hit zone: at rush destination
+        if (m_pHitZoneIndicator)
+        {
+            float destX = myPos.x + dir.x * rushDist;
+            float destZ = myPos.z + dir.y * rushDist;
+            TransformComponent* pT = m_pHitZoneIndicator->GetTransform();
+            if (pT)
+            {
+                pT->SetPosition(destX, 0.15f, destZ);
+                float r = m_IndicatorConfig.m_fHitRadius;
+                pT->SetScale(r, 1.0f, r);
+
+                if (m_IndicatorConfig.m_eType == IndicatorType::RushCone)
+                {
+                    pT->SetRotation(0.0f, yawDeg, 0.0f);
+                }
+            }
+        }
+    }
+}
+
+void EnemyComponent::HideIndicators()
+{
+    if (m_pRushLineIndicator)
+    {
+        TransformComponent* pT = m_pRushLineIndicator->GetTransform();
+        if (pT)
+            pT->SetPosition(0.0f, -1000.0f, 0.0f);
+    }
+    if (m_pHitZoneIndicator)
+    {
+        TransformComponent* pT = m_pHitZoneIndicator->GetTransform();
+        if (pT)
+            pT->SetPosition(0.0f, -1000.0f, 0.0f);
+    }
+}
+
 void EnemyComponent::Die()
 {
     OutputDebugString(L"[Enemy] Died!\n");
+
+    // Hide and release indicators
+    HideIndicators();
+    m_pRushLineIndicator = nullptr;
+    m_pHitZoneIndicator = nullptr;
 
     // Notify room/callback
     if (m_OnDeathCallback)
