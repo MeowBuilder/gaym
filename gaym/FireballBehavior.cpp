@@ -29,8 +29,8 @@ void FireballBehavior::Execute(GameObject* caster, const DirectX::XMFLOAT3& targ
     // Handle different activation modes based on damageMultiplier
     if (damageMultiplier < 0.0f)
     {
-        // Placement mode (trap/turret)
-        ExecutePlacement(caster, targetPosition);
+        // Placement mode (trap/turret) - absolute value is the actual multiplier
+        ExecutePlacement(caster, targetPosition, fabsf(damageMultiplier));
     }
     else if (damageMultiplier == 0.0f)
     {
@@ -109,7 +109,7 @@ void FireballBehavior::ExecuteInstant(GameObject* caster, const DirectX::XMFLOAT
     );
 }
 
-void FireballBehavior::ExecutePlacement(GameObject* caster, const DirectX::XMFLOAT3& targetPosition)
+void FireballBehavior::ExecutePlacement(GameObject* caster, const DirectX::XMFLOAT3& targetPosition, float damageMultiplier)
 {
     if (!m_pProjectileManager)
     {
@@ -117,28 +117,32 @@ void FireballBehavior::ExecutePlacement(GameObject* caster, const DirectX::XMFLO
         return;
     }
 
+    float finalDamage = m_SkillData.damage * damageMultiplier;
+    // Scale visual size proportional to damage multiplier
+    float scale = 1.5f + (damageMultiplier - 1.0f) * 0.2f;
+    if (scale < 1.0f) scale = 1.0f;
+
     wchar_t buffer[256];
     swprintf_s(buffer, 256,
-        L"[Skill] Placing Fire Trap at (%.1f, %.1f, %.1f)\n",
-        targetPosition.x, targetPosition.y, targetPosition.z);
+        L"[Skill] Placing Fire Trap at (%.1f, %.1f, %.1f) DMG=%.0f (%.1fx)\n",
+        targetPosition.x, targetPosition.y, targetPosition.z, finalDamage, damageMultiplier);
     OutputDebugString(buffer);
 
     // Spawn a stationary "projectile" that acts as a trap
-    // Use very slow speed and spawn at target position
     DirectX::XMFLOAT3 trapPos = targetPosition;
     trapPos.y += 0.5f;  // Slightly above ground
 
     m_pProjectileManager->SpawnProjectile(
         trapPos,                    // Start at target
         trapPos,                    // Same target (stationary)
-        m_SkillData.damage * 1.5f,  // 150% damage for trap
+        finalDamage,                // Combo-based damage
         0.1f,                       // Very slow (almost stationary)
         1.5f,                       // Larger trigger radius
         m_SkillData.radius * 2.0f,  // Larger explosion
         m_SkillData.element,
         caster,
         true,
-        1.5f                        // Larger visual scale
+        scale                       // Damage-proportional visual scale
     );
 }
 

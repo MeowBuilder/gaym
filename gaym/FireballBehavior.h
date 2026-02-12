@@ -26,7 +26,7 @@ public:
 private:
     // Execute helpers for different activation modes
     void ExecuteInstant(GameObject* caster, const DirectX::XMFLOAT3& targetPosition, float damageMultiplier);
-    void ExecutePlacement(GameObject* caster, const DirectX::XMFLOAT3& targetPosition);
+    void ExecutePlacement(GameObject* caster, const DirectX::XMFLOAT3& targetPosition, float damageMultiplier);
     void ExecuteEnhanceVFX(GameObject* caster, const DirectX::XMFLOAT3& selfPosition);
 
 private:

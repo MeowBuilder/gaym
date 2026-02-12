@@ -71,6 +71,11 @@ public:
     bool IsInteractionCubeActive() const { return m_bInteractionCubeActive; }
     void TriggerInteraction();
 
+    // Portal interaction system
+    bool IsNearPortalCube() const;
+    void TriggerPortalInteraction();
+    void TransitionToNextRoom();
+
     // Drop interaction system
     DropInteractionState GetDropInteractionState() const { return m_eDropState; }
     bool IsNearDropItem() const;
@@ -97,6 +102,7 @@ private:
     std::vector<std::unique_ptr<GameObject>> m_vGameObjects; // Global Objects (Player, etc.)
     std::vector<std::unique_ptr<CRoom>> m_vRooms; // Room List
     CRoom* m_pCurrentRoom = nullptr; // Pointer to the current active room
+    int m_nRoomCount = 0; // Room counter for tracking progression
 
     // Interaction Cube
     GameObject* m_pInteractionCube = nullptr;

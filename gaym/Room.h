@@ -62,6 +62,12 @@ public:
     bool HasDropItem() const { return m_pDropItem != nullptr; }
     void ClearDropItem() { m_pDropItem = nullptr; }
 
+    // Portal cube system
+    void SpawnPortalCube();
+    GameObject* GetPortalCube() const { return m_pPortalCube; }
+    bool HasPortalCube() const { return m_pPortalCube != nullptr; }
+    void ClearPortalCube() { m_pPortalCube = nullptr; }
+
 protected:
     std::vector<std::unique_ptr<GameObject>> m_vGameObjects; // 방에 속한 모든 오브젝트
     RoomState m_eState = RoomState::Inactive;
@@ -79,4 +85,7 @@ protected:
     // Drop item system
     Scene* m_pScene = nullptr;
     GameObject* m_pDropItem = nullptr;
+
+    // Portal cube system
+    GameObject* m_pPortalCube = nullptr;
 };

@@ -384,6 +384,10 @@ void Dx12App::FrameAdvance()
             {
                 m_pScene->StartDropInteraction();
             }
+            else if (m_pScene->IsNearPortalCube())
+            {
+                m_pScene->TriggerPortalInteraction();
+            }
             else if (m_pScene->IsNearInteractionCube())
             {
                 m_pScene->TriggerInteraction();
@@ -732,6 +736,15 @@ void Dx12App::RenderText()
                 XMFLOAT2(screenCenterX - XMVectorGetX(textSize) / 2.0f, screenCenterY + 100.0f),
                 DirectX::Colors::Cyan);
         }
+        else if (m_pScene->IsNearPortalCube())
+        {
+            // Show portal prompt
+            const wchar_t* portalText = L"[F] Enter Portal";
+            XMVECTOR textSize = m_spriteFont->MeasureString(portalText);
+            m_spriteFont->DrawString(m_spriteBatch.get(), portalText,
+                XMFLOAT2(screenCenterX - XMVectorGetX(textSize) / 2.0f, screenCenterY + 100.0f),
+                DirectX::Colors::DodgerBlue);
+        }
     }
 
     // ========== Skill UI ==========
@@ -750,7 +763,6 @@ void Dx12App::RenderText()
                 float leftY = (float)m_nWndClientHeight - 240.0f;
 
                 const wchar_t* slotNames[] = { L"Q", L"E", L"R", L"RMB" };
-                ActivationType activationType = pSkill->GetActivationType();
 
                 for (size_t i = 0; i < static_cast<size_t>(SkillSlot::Count); ++i)
                 {
@@ -775,50 +787,67 @@ void Dx12App::RenderText()
                         }
                         else
                         {
-                            // Calculate final damage based on rune
+                            // Calculate final damage based on per-skill rune combo
+                            RuneCombo combo = pSkill->GetRuneCombo(slot);
                             float baseDamage = data.damage;
                             float finalDamage = baseDamage;
-                            const wchar_t* dmgNote = L"";
+                            std::wstringstream dmgNote;
 
-                            switch (activationType)
+                            bool enhanceOnly = combo.hasEnhance && !combo.hasCharge && !combo.hasChannel && !combo.hasPlace && !combo.hasInstant;
+
+                            if (combo.hasCharge)
                             {
-                            case ActivationType::Instant:
-                                finalDamage = baseDamage;
-                                break;
-                            case ActivationType::Charge:
                                 if (pSkill->IsCharging())
                                 {
                                     float mult = 1.0f + pSkill->GetChargeProgress() * 2.0f;
+                                    if (combo.hasEnhance) mult *= 2.0f;
+                                    if (combo.hasPlace) mult *= 1.5f;
                                     finalDamage = baseDamage * mult;
-                                    dmgNote = L" (charging)";
+                                    dmgNote << L" (charging)";
                                 }
                                 else
                                 {
-                                    finalDamage = baseDamage;
-                                    dmgNote = L"~";  // Can go up to 3x
+                                    float maxMult = 3.0f;
+                                    if (combo.hasEnhance) maxMult *= 2.0f;
+                                    if (combo.hasPlace) maxMult *= 1.5f;
+                                    finalDamage = baseDamage * maxMult;
+                                    dmgNote << L"~";
                                 }
-                                break;
-                            case ActivationType::Channel:
-                                finalDamage = baseDamage * 0.3f;
-                                dmgNote = L"/tick";
-                                break;
-                            case ActivationType::Place:
-                                finalDamage = baseDamage * 1.5f;
-                                dmgNote = L" (trap)";
-                                break;
-                            case ActivationType::Enhance:
+                                if (combo.hasPlace) dmgNote << L"+Place";
+                                if (combo.hasEnhance) dmgNote << L"+Enh";
+                            }
+                            else if (combo.hasChannel)
+                            {
+                                float tickMult = 0.3f;
+                                if (combo.hasEnhance) tickMult *= 2.0f;
+                                if (combo.hasPlace) tickMult *= 1.5f;
+                                finalDamage = baseDamage * tickMult;
+                                dmgNote << L"/tick";
+                                if (combo.hasPlace) dmgNote << L"+Place";
+                                if (combo.hasEnhance) dmgNote << L"+Enh";
+                            }
+                            else if (enhanceOnly)
+                            {
                                 finalDamage = baseDamage * 2.0f;
-                                dmgNote = L" (buff)";
-                                break;
+                                dmgNote << L" (buff)";
+                            }
+                            else
+                            {
+                                float mult = 1.0f;
+                                if (combo.hasEnhance) mult *= 2.0f;
+                                if (combo.hasPlace) mult *= 1.5f;
+                                finalDamage = baseDamage * mult;
+                                if (combo.hasPlace) dmgNote << L" (trap)";
+                                if (combo.hasEnhance && !combo.hasPlace) dmgNote << L"+Enh";
                             }
 
-                            // Apply enhance multiplier if active
-                            if (pSkill->IsEnhanced() && activationType != ActivationType::Enhance)
+                            // Apply existing enhance buff
+                            if (pSkill->IsEnhanced() && !enhanceOnly)
                             {
                                 finalDamage *= 2.0f;
                             }
 
-                            slotText << L"  DMG: " << (int)finalDamage << dmgNote;
+                            slotText << L"  DMG: " << (int)finalDamage << dmgNote.str();
                             m_spriteFont->DrawString(m_spriteBatch.get(), slotText.str().c_str(),
                                 XMFLOAT2(leftX, leftY), DirectX::Colors::White);
                         }
@@ -835,29 +864,47 @@ void Dx12App::RenderText()
 
                 // ========== Rune Info (right bottom) ==========
                 float rightX = (float)m_nWndClientWidth - 400.0f;
-                float rightY = (float)m_nWndClientHeight - 180.0f;
+                float rightY = (float)m_nWndClientHeight - 240.0f;
 
                 const wchar_t* activationNames[] = { L"None", L"Instant", L"Charge", L"Channel", L"Place", L"Enhance" };
-                const wchar_t* runeDescriptions[] = {
-                    L"No rune equipped",
-                    L"1x damage",
-                    L"Hold: 1x~3x damage",
-                    L"Hold: 0.3x per tick",
-                    L"1.5x trap damage",
-                    L"Buff: 2x next attack"
-                };
+                const wchar_t* runeSlotNames[] = { L"Q", L"E", L"R", L"RMB" };
 
-                // Show current activation type
-                std::wstringstream runeText;
-                runeText << L"[Rune] " << activationNames[static_cast<int>(activationType)];
-                m_spriteFont->DrawString(m_spriteBatch.get(), runeText.str().c_str(),
+                m_spriteFont->DrawString(m_spriteBatch.get(), L"[Rune Combos]",
                     XMFLOAT2(rightX, rightY), DirectX::Colors::Cyan);
-                rightY += lineHeight;
+                rightY += lineHeight * 0.8f;
 
-                // Rune description
-                m_spriteFont->DrawString(m_spriteBatch.get(), runeDescriptions[static_cast<int>(activationType)],
-                    XMFLOAT2(rightX, rightY), DirectX::Colors::LightGray);
-                rightY += lineHeight;
+                // Per-skill rune combo display
+                for (size_t si = 0; si < static_cast<size_t>(SkillSlot::Count); ++si)
+                {
+                    SkillSlot sSlot = static_cast<SkillSlot>(si);
+                    RuneCombo combo = pSkill->GetRuneCombo(sSlot);
+
+                    std::wstringstream comboLine;
+                    comboLine << runeSlotNames[si] << L": ";
+
+                    if (combo.count == 0)
+                    {
+                        comboLine << L"(none)";
+                        m_spriteFont->DrawString(m_spriteBatch.get(), comboLine.str().c_str(),
+                            XMFLOAT2(rightX, rightY), DirectX::Colors::DarkGray);
+                    }
+                    else
+                    {
+                        // List equipped rune types
+                        bool first = true;
+                        if (combo.hasCharge)  { if (!first) comboLine << L"+"; comboLine << L"Charge"; first = false; }
+                        if (combo.hasChannel) { if (!first) comboLine << L"+"; comboLine << L"Channel"; first = false; }
+                        if (combo.hasPlace)   { if (!first) comboLine << L"+"; comboLine << L"Place"; first = false; }
+                        if (combo.hasEnhance) { if (!first) comboLine << L"+"; comboLine << L"Enhance"; first = false; }
+                        if (combo.hasInstant) { if (!first) comboLine << L"+"; comboLine << L"Instant"; first = false; }
+
+                        m_spriteFont->DrawString(m_spriteBatch.get(), comboLine.str().c_str(),
+                            XMFLOAT2(rightX, rightY), DirectX::Colors::LightGray);
+                    }
+                    rightY += lineHeight * 0.7f;
+                }
+
+                rightY += lineHeight * 0.3f;
 
                 // Status indicators
                 if (pSkill->IsCharging())
