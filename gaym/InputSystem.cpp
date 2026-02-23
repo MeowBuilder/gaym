@@ -69,7 +69,7 @@ void InputSystem::OnMouseButtonUp(int button)
     {
         m_mouseButtonState[button] = false;
     }
-}
+} 
 
 bool InputSystem::IsMouseButtonDown(int button) const
 {

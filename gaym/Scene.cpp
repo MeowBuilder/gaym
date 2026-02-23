@@ -25,6 +25,7 @@ Scene::Scene()
     m_pEnemySpawner = std::make_unique<EnemySpawner>();
     m_pProjectileManager = std::make_unique<ProjectileManager>();
     m_pParticleSystem = std::make_unique<ParticleSystem>();
+    m_pDebugRenderer = std::make_unique<DebugRenderer>();
 }
 
 Scene::~Scene()
@@ -157,6 +158,10 @@ void Scene::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList)
     m_pProjectileManager->Init(this, pDevice, pCommandList, m_pDescriptorHeap.get(), nProjectileDescriptorStart);
     OutputDebugString(L"[Scene] Projectile system initialized\n");
 
+    // Initialize Debug Renderer (F1 to toggle collider visualization)
+    m_pDebugRenderer->Init(pDevice, pCommandList);
+    OutputDebugString(L"[Scene] Debug renderer initialized (F1 to toggle)\n");
+
     // Store the shader
     m_vShaders.push_back(std::move(pShader));
 
@@ -262,6 +267,13 @@ void Scene::AddRenderComponentsToHierarchy(ID3D12Device* pDevice, ID3D12Graphics
 
 void Scene::Update(float deltaTime, InputSystem* pInputSystem)
 {
+    // Toggle debug collider visualization with F1
+    if (pInputSystem && pInputSystem->IsKeyPressed(VK_F1))
+    {
+        m_pDebugRenderer->Toggle();
+        OutputDebugString(m_pDebugRenderer->IsEnabled() ? L"[Debug] Colliders ON\n" : L"[Debug] Colliders OFF\n");
+    }
+
     // Update camera
     if (m_pCamera && pInputSystem)
     {
@@ -453,6 +465,30 @@ void Scene::Render(ID3D12GraphicsCommandList* pCommandList)
     if (m_pParticleSystem)
     {
         m_pParticleSystem->Render(pCommandList);
+    }
+
+    // Render debug colliders (F1 to toggle)
+    if (m_pDebugRenderer && m_pDebugRenderer->IsEnabled())
+    {
+        std::vector<ColliderComponent*> allColliders;
+
+        // Collect from global objects
+        for (auto& gameObject : m_vGameObjects)
+        {
+            CollectColliders(gameObject.get(), allColliders);
+        }
+
+        // Collect from current room
+        if (m_pCurrentRoom)
+        {
+            const auto& roomObjects = m_pCurrentRoom->GetGameObjects();
+            for (const auto& obj : roomObjects)
+            {
+                CollectColliders(obj.get(), allColliders);
+            }
+        }
+
+        m_pDebugRenderer->Render(pCommandList, GetPassCBVAddress(), allColliders);
     }
 }
 

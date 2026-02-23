@@ -14,6 +14,7 @@
 #include "EnemySpawner.h" // Added EnemySpawner include
 #include "ProjectileManager.h" // Added ProjectileManager include
 #include "ParticleSystem.h" // Added ParticleSystem include
+#include "DebugRenderer.h" // Added DebugRenderer include
 
 struct ID3D12Device;
 struct ID3D12GraphicsCommandList;
@@ -139,6 +140,9 @@ private:
 
     // Particle System
     std::unique_ptr<ParticleSystem> m_pParticleSystem;
+
+    // Debug Renderer (F1 to toggle)
+    std::unique_ptr<DebugRenderer> m_pDebugRenderer;
 
     void AddRenderComponentsToHierarchy(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList, GameObject* pGameObject, Shader* pShader);
     void PrintHierarchy(GameObject* pGameObject, int nDepth);

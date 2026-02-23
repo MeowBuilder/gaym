@@ -193,6 +193,7 @@ xcopy /Y /I /E "$(ProjectDir)Assets\*.*" "$(OutDir)Assets\"</Command>
     <ClInclude Include="MathUtils.h" />
     <ClInclude Include="InteractableComponent.h" />
     <ClInclude Include="HealthBarUI.h" />
+    <ClInclude Include="DebugRenderer.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Animation.cpp" />
@@ -235,6 +236,7 @@ xcopy /Y /I /E "$(ProjectDir)Assets\*.*" "$(OutDir)Assets\"</Command>
     <ClCompile Include="DropItemComponent.cpp" />
     <ClCompile Include="InteractableComponent.cpp" />
     <ClCompile Include="HealthBarUI.cpp" />
+    <ClCompile Include="DebugRenderer.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="gaym.rc" />
