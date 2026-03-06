@@ -5,6 +5,7 @@
 #include "IAttackBehavior.h"
 #include "AnimationComponent.h"
 #include "Room.h"
+#include "Scene.h"
 #include "MathUtils.h"
 
 EnemyComponent::EnemyComponent(GameObject* pOwner)
@@ -282,8 +283,36 @@ void EnemyComponent::UpdateDead(float dt)
 {
     m_fDeadTimer -= dt;
 
-    // Could add death animation or fade out here
-    // For now, just wait for cleanup
+    // When timer expires, request deletion
+    if (m_fDeadTimer <= 0.0f)
+    {
+        Scene* pScene = nullptr;
+        if (m_pRoom)
+        {
+            pScene = m_pRoom->GetScene();
+        }
+
+        if (pScene)
+        {
+            // Mark indicator objects for deletion first
+            if (m_pRushLineIndicator)
+            {
+                pScene->MarkForDeletion(m_pRushLineIndicator);
+                m_pRushLineIndicator = nullptr;
+            }
+            if (m_pHitZoneIndicator)
+            {
+                pScene->MarkForDeletion(m_pHitZoneIndicator);
+                m_pHitZoneIndicator = nullptr;
+            }
+
+            // Mark self for deletion (will also clean up child hierarchy)
+            if (m_pOwner)
+            {
+                pScene->MarkForDeletion(m_pOwner);
+            }
+        }
+    }
 }
 
 void EnemyComponent::ShowIndicators()

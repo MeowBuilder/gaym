@@ -23,6 +23,7 @@ public:
 
     // 오브젝트 관리
     void AddGameObject(std::unique_ptr<GameObject> pGameObject);
+    void RemoveGameObject(GameObject* pGameObject);
     const std::vector<std::unique_ptr<GameObject>>& GetGameObjects() const { return m_vGameObjects; }
 
     // 상태 및 영역 설정
@@ -57,6 +58,7 @@ public:
 
     // Drop item system
     void SetScene(Scene* pScene) { m_pScene = pScene; }
+    Scene* GetScene() const { return m_pScene; }
     void SpawnDropItem();
     GameObject* GetDropItem() const { return m_pDropItem; }
     bool HasDropItem() const { return m_pDropItem != nullptr; }

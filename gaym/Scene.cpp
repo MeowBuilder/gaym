@@ -423,6 +423,9 @@ void Scene::Update(float deltaTime, InputSystem* pInputSystem)
         // Run collision detection
         m_pCollisionManager->Update(globalColliders, roomColliders);
     }
+
+    // Process pending deletions at end of frame
+    ProcessPendingDeletions();
 }
 
 void Scene::Render(ID3D12GraphicsCommandList* pCommandList)
@@ -966,4 +969,67 @@ void Scene::TransitionToNextRoom()
     swprintf_s(buffer, L"[Scene] Transitioned to map: %hs (room #%d)\n",
                m_strCurrentMap.c_str(), m_nRoomCount + 1);
     OutputDebugString(buffer);
+}
+
+void Scene::MarkForDeletion(GameObject* pGameObject)
+{
+    if (!pGameObject) return;
+
+    // Avoid duplicates
+    for (auto* pObj : m_vPendingDeletions)
+    {
+        if (pObj == pGameObject) return;
+    }
+
+    m_vPendingDeletions.push_back(pGameObject);
+    OutputDebugString(L"[Scene] GameObject marked for deletion\n");
+}
+
+// Helper function to recursively unregister colliders from hierarchy
+static void UnregisterCollidersRecursive(GameObject* pObj, CollisionManager* pCollisionMgr)
+{
+    if (!pObj || !pCollisionMgr) return;
+
+    auto* pCollider = pObj->GetComponent<ColliderComponent>();
+    if (pCollider)
+    {
+        pCollisionMgr->UnregisterCollider(pCollider);
+    }
+
+    if (pObj->m_pChild) UnregisterCollidersRecursive(pObj->m_pChild, pCollisionMgr);
+    if (pObj->m_pSibling) UnregisterCollidersRecursive(pObj->m_pSibling, pCollisionMgr);
+}
+
+void Scene::ProcessPendingDeletions()
+{
+    if (m_vPendingDeletions.empty()) return;
+
+    for (GameObject* pObj : m_vPendingDeletions)
+    {
+        if (!pObj) continue;
+
+        // Unregister colliders from this object and its hierarchy
+        UnregisterCollidersRecursive(pObj, m_pCollisionManager.get());
+
+        // Try to remove from Scene's global objects
+        bool bFound = false;
+        for (auto it = m_vGameObjects.begin(); it != m_vGameObjects.end(); ++it)
+        {
+            if (it->get() == pObj)
+            {
+                m_vGameObjects.erase(it);
+                bFound = true;
+                OutputDebugString(L"[Scene] Deleted GameObject from Scene\n");
+                break;
+            }
+        }
+
+        // If not found in Scene, try current room
+        if (!bFound && m_pCurrentRoom)
+        {
+            m_pCurrentRoom->RemoveGameObject(pObj);
+        }
+    }
+
+    m_vPendingDeletions.clear();
 }

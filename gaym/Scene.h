@@ -92,6 +92,10 @@ public:
 
     GameObject* CreateGameObject(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList);
 
+    // GameObject deletion (deferred to end of frame)
+    void MarkForDeletion(GameObject* pGameObject);
+    CollisionManager* GetCollisionManager() { return m_pCollisionManager.get(); }
+
     // MapLoader support
     CRoom* CreateRoomFromBounds(const XMFLOAT3& center, const XMFLOAT3& extents);
     EnemySpawner* GetEnemySpawner() { return m_pEnemySpawner.get(); }
@@ -107,6 +111,7 @@ public:
 private:
 
     std::vector<std::unique_ptr<GameObject>> m_vGameObjects; // Global Objects (Player, etc.)
+    std::vector<GameObject*> m_vPendingDeletions; // Objects marked for deletion (processed at end of frame)
     std::vector<std::unique_ptr<CRoom>> m_vRooms; // Room List
     CRoom* m_pCurrentRoom = nullptr; // Pointer to the current active room
     int m_nRoomCount = 0; // Room counter for tracking progression
@@ -165,6 +170,7 @@ private:
     void AddRenderComponentsToHierarchy(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList, GameObject* pGameObject, Shader* pShader);
     void PrintHierarchy(GameObject* pGameObject, int nDepth);
     void CollectColliders(GameObject* pGameObject, std::vector<ColliderComponent*>& outColliders);
+    void ProcessPendingDeletions();
 public:
     D3D12_GPU_VIRTUAL_ADDRESS GetPassCBVAddress() const { if(m_pd3dcbPass) return m_pd3dcbPass->GetGPUVirtualAddress(); return 0; }
 };

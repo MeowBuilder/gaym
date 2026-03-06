@@ -61,6 +61,33 @@ void CRoom::AddGameObject(std::unique_ptr<GameObject> pGameObject)
     m_vGameObjects.push_back(std::move(pGameObject));
 }
 
+void CRoom::RemoveGameObject(GameObject* pGameObject)
+{
+    if (!pGameObject) return;
+
+    // Also remove from enemies list if it's an enemy
+    auto* pEnemyComp = pGameObject->GetComponent<EnemyComponent>();
+    if (pEnemyComp)
+    {
+        auto it = std::find(m_vEnemies.begin(), m_vEnemies.end(), pEnemyComp);
+        if (it != m_vEnemies.end())
+        {
+            m_vEnemies.erase(it);
+        }
+    }
+
+    // Remove from game objects list
+    for (auto it = m_vGameObjects.begin(); it != m_vGameObjects.end(); ++it)
+    {
+        if (it->get() == pGameObject)
+        {
+            m_vGameObjects.erase(it);
+            OutputDebugString(L"[Room] Deleted GameObject from Room\n");
+            return;
+        }
+    }
+}
+
 void CRoom::SetState(RoomState state)
 {
     if (m_eState == state) return;
