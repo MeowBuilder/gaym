@@ -371,8 +371,10 @@ DirectX::XMFLOAT3 SkillComponent::CalculateTargetPosition(InputSystem* pInputSys
     XMVECTOR rayEnd = XMVector3TransformCoord(XMVectorSet(ndcX, ndcY, 1.0f, 1.0f), invViewProjMatrix);
     XMVECTOR rayDir = XMVector3Normalize(rayEnd - rayOrigin);
 
-    // Define the ground plane (Y=0)
-    XMVECTOR groundPlane = XMPlaneFromPointNormal(XMVectorSet(0.0f, 0.0f, 0.0f, 0.0f), XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f));
+    // Define the ground plane at the owner's actual floor height
+    float ownerY = (m_pOwner && m_pOwner->GetTransform())
+        ? m_pOwner->GetTransform()->GetPosition().y : 0.0f;
+    XMVECTOR groundPlane = XMPlaneFromPointNormal(XMVectorSet(0.0f, ownerY, 0.0f, 0.0f), XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f));
 
     // Find intersection of the ray and the ground plane
     XMVECTOR intersectionPoint = XMPlaneIntersectLine(groundPlane, rayOrigin, rayOrigin + rayDir * 1000.0f);

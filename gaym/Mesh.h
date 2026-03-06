@@ -153,6 +153,45 @@ protected:
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// OBJ mesh loaded from file – same buffer layout as CubeMesh/RingMesh
+class ObjMesh : public Mesh
+{
+public:
+    ObjMesh() {}
+    virtual ~ObjMesh() {}
+
+    // Called by MapLoader after parsing the OBJ file
+    void Build(ID3D12Device* pd3dDevice,
+               ID3D12GraphicsCommandList* pd3dCommandList,
+               const std::vector<XMFLOAT3>& positions,
+               const std::vector<XMFLOAT3>& normals,
+               const std::vector<XMFLOAT2>& uvs,
+               const std::vector<UINT>&     indices);
+
+    virtual void ReleaseUploadBuffers() override;
+    virtual void Render(ID3D12GraphicsCommandList* pd3dCommandList, int nSubSet = 0) override;
+
+protected:
+    ComPtr<ID3D12Resource> m_pd3dPositionBuffer;
+    ComPtr<ID3D12Resource> m_pd3dPositionUploadBuffer;
+    D3D12_VERTEX_BUFFER_VIEW m_d3dPositionBufferView{};
+
+    ComPtr<ID3D12Resource> m_pd3dNormalBuffer;
+    ComPtr<ID3D12Resource> m_pd3dNormalUploadBuffer;
+    D3D12_VERTEX_BUFFER_VIEW m_d3dNormalBufferView{};
+
+    ComPtr<ID3D12Resource> m_pd3dTexCoordBuffer;
+    ComPtr<ID3D12Resource> m_pd3dTexCoordUploadBuffer;
+    D3D12_VERTEX_BUFFER_VIEW m_d3dTexCoordBufferView{};
+
+    ComPtr<ID3D12Resource> m_pd3dIndexBuffer;
+    ComPtr<ID3D12Resource> m_pd3dIndexUploadBuffer;
+    D3D12_INDEX_BUFFER_VIEW m_d3dIndexBufferView{};
+
+    UINT m_nIndices = 0;
+};
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Flat line (thin rectangle) on XZ plane for rush path visualization
 // Unit length along +Z (0 to 1), width along X. Scale Z to match rush distance.
 class LineMesh : public Mesh

@@ -34,6 +34,8 @@ Scene::~Scene()
 }
 
 #include "MeshLoader.h"
+#include "MapLoader.h"
+#include "Dx12App.h"
 
 void Scene::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList)
 {
@@ -54,10 +56,10 @@ void Scene::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList)
     pShader->Build(pDevice);
 
     // --------------------------------------------------------------------------
-    // 1. Create Room
+    // 1. Create default room (will be overwritten by MapLoader if map.json exists)
     // --------------------------------------------------------------------------
     auto pRoom = std::make_unique<CRoom>();
-    pRoom->SetState(RoomState::Inactive);  // Start inactive, activate on interaction
+    pRoom->SetState(RoomState::Inactive);
     pRoom->SetBoundingBox(BoundingBox(XMFLOAT3(0, 0, 0), XMFLOAT3(100.0f, 100.0f, 100.0f)));
     m_vRooms.push_back(std::move(pRoom));
 
@@ -127,117 +129,158 @@ void Scene::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList)
     m_pCurrentRoom = m_vRooms[0].get();
 
     // --------------------------------------------------------------------------
-    // Initialize Enemy Spawner and configure room spawns
+    // Initialize Enemy Spawner
     // --------------------------------------------------------------------------
     m_pEnemySpawner->Init(pDevice, pCommandList, this, pShader.get());
 
-    // Configure spawn points for the room (diverse enemy types)
-    RoomSpawnConfig spawnConfig;
-    spawnConfig.AddSpawn("RushAoEEnemy", 10.0f, 0.0f, 5.0f);     // Red - right side (melee rush)
-    spawnConfig.AddSpawn("RushFrontEnemy", -10.0f, 0.0f, 5.0f);  // Green - left side (melee rush)
-    spawnConfig.AddSpawn("RangedEnemy", 0.0f, 0.0f, 20.0f);      // Blue - far back (ranged)
+    // --------------------------------------------------------------------------
+    // 영속 리소스(Particles, Projectiles, Interaction Cube)를 먼저 초기화하여
+    // 디스크립터 힙의 앞부분에 고정 배치합니다.
+    // 이 이후에 맵 오브젝트(MapLoader)가 오도록 순서를 맞춤으로써,
+    // 맵 전환 시 m_nPersistentDescriptorEnd 이후 슬롯만 재활용할 수 있습니다.
+    // --------------------------------------------------------------------------
 
-    // Apply configuration to room
-    m_pCurrentRoom->SetSpawnConfig(spawnConfig);
-    m_pCurrentRoom->SetEnemySpawner(m_pEnemySpawner.get());
-    m_pCurrentRoom->SetPlayerTarget(m_pPlayerGameObject);
-    m_pCurrentRoom->SetScene(this);
-
-    OutputDebugString(L"[Scene] Enemy spawn system initialized\n");
-
-    // Initialize Particle System (before Projectile Manager so it can use particles)
+    // Particle System (512 reserved slots)
     UINT nParticleDescriptorStart = m_nNextDescriptorIndex;
-    m_nNextDescriptorIndex += 512;  // Reserve 512 descriptors for particles
+    m_nNextDescriptorIndex += 512;
     m_pParticleSystem->Init(pDevice, pCommandList, m_pDescriptorHeap.get(), nParticleDescriptorStart);
     OutputDebugString(L"[Scene] Particle system initialized\n");
 
-    // Initialize Projectile Manager with rendering resources
-    // Reserve descriptor indices for projectiles (64 max rendered projectiles)
+    // Projectile Manager (64 reserved slots)
     UINT nProjectileDescriptorStart = m_nNextDescriptorIndex;
-    m_nNextDescriptorIndex += 64;  // Reserve 64 descriptors for projectiles
+    m_nNextDescriptorIndex += 64;
     m_pProjectileManager->Init(this, pDevice, pCommandList, m_pDescriptorHeap.get(), nProjectileDescriptorStart);
     OutputDebugString(L"[Scene] Projectile system initialized\n");
 
-    // Initialize Debug Renderer (F1 to toggle collider visualization)
+    // Debug Renderer (no descriptors)
     m_pDebugRenderer->Init(pDevice, pCommandList);
     OutputDebugString(L"[Scene] Debug renderer initialized (F1 to toggle)\n");
 
-    // Store the shader
-    m_vShaders.push_back(std::move(pShader));
-
-    // Initialize all components for global game objects
-    for (auto& gameObject : m_vGameObjects)
-    {
-        gameObject->Init(pDevice, pCommandList);
-    }
-    
-    // Init Room Objects
-    for (auto& room : m_vRooms)
-    {
-       // Room objects initialization (implicit via CreateGameObject or MeshLoader)
-    }
-
-    // Initialize SpotLight parameters
-    m_pcbMappedPass->m_SpotLight.m_xmf4SpotLightColor = XMFLOAT4(0.5f, 0.0f, 0.0f, 1.0f); // Red spotlight
+    // SpotLight parameters
+    m_pcbMappedPass->m_SpotLight.m_xmf4SpotLightColor = XMFLOAT4(0.5f, 0.0f, 0.0f, 1.0f);
     m_pcbMappedPass->m_SpotLight.m_fSpotLightRange = 100.0f;
-    m_pcbMappedPass->m_SpotLight.m_fSpotLightInnerCone = cosf(XMConvertToRadians(20.0f)); // Inner cone angle
-    m_pcbMappedPass->m_SpotLight.m_fSpotLightOuterCone = cosf(XMConvertToRadians(30.0f)); // Outer cone angle
+    m_pcbMappedPass->m_SpotLight.m_fSpotLightInnerCone = cosf(XMConvertToRadians(20.0f));
+    m_pcbMappedPass->m_SpotLight.m_fSpotLightOuterCone = cosf(XMConvertToRadians(30.0f));
     m_pcbMappedPass->m_SpotLight.m_fPad5 = 0.0f;
     m_pcbMappedPass->m_SpotLight.m_fPad6 = 0.0f;
 
-    // --------------------------------------------------------------------------
-    // Create Interaction Cube (Blue Cube) - as global object (not in room)
-    // --------------------------------------------------------------------------
-    CRoom* pTempRoom = m_pCurrentRoom;
-    m_pCurrentRoom = nullptr;  // Temporarily set to null so cube is created as global object
-    m_pInteractionCube = CreateGameObject(pDevice, pCommandList);
-    m_pCurrentRoom = pTempRoom;  // Restore
+    // Store the shader (needed before Interaction Cube creation)
+    m_vShaders.push_back(std::move(pShader));
 
-    m_pInteractionCube->GetTransform()->SetPosition(0.0f, 1.0f, 10.0f);  // In front of player
+    // Initialize global GameObjects (player hierarchy)
+    for (auto& gameObject : m_vGameObjects)
+        gameObject->Init(pDevice, pCommandList);
+
+    // --------------------------------------------------------------------------
+    // Create Interaction Cube (Blue Cube) – global object, permanent slot
+    // --------------------------------------------------------------------------
+    {
+        CRoom* pTempRoom = m_pCurrentRoom;
+        m_pCurrentRoom = nullptr;  // global object, not in any room
+        m_pInteractionCube = CreateGameObject(pDevice, pCommandList);
+        m_pCurrentRoom = pTempRoom;
+    }
+
+    m_pInteractionCube->GetTransform()->SetPosition(0.0f, 0.0f, 0.0f);  // repositioned after MapLoader
     m_pInteractionCube->GetTransform()->SetScale(2.0f, 2.0f, 2.0f);
 
-    // Create blue cube mesh
-    CubeMesh* pCubeMesh = new CubeMesh(pDevice, pCommandList, 1.0f, 1.0f, 1.0f);
-    m_pInteractionCube->SetMesh(pCubeMesh);
+    {
+        CubeMesh* pCubeMesh = new CubeMesh(pDevice, pCommandList, 1.0f, 1.0f, 1.0f);
+        m_pInteractionCube->SetMesh(pCubeMesh);
 
-    // Set blue material
-    MATERIAL blueMaterial;
-    blueMaterial.m_cAmbient = XMFLOAT4(0.0f, 0.0f, 0.2f, 1.0f);
-    blueMaterial.m_cDiffuse = XMFLOAT4(0.2f, 0.4f, 1.0f, 1.0f);  // Blue color
-    blueMaterial.m_cSpecular = XMFLOAT4(0.5f, 0.5f, 0.5f, 32.0f);
-    blueMaterial.m_cEmissive = XMFLOAT4(0.0f, 0.1f, 0.3f, 1.0f);  // Slight glow
-    m_pInteractionCube->SetMaterial(blueMaterial);
+        MATERIAL blueMaterial;
+        blueMaterial.m_cAmbient  = XMFLOAT4(0.0f, 0.0f, 0.2f, 1.0f);
+        blueMaterial.m_cDiffuse  = XMFLOAT4(0.2f, 0.4f, 1.0f, 1.0f);
+        blueMaterial.m_cSpecular = XMFLOAT4(0.5f, 0.5f, 0.5f, 32.0f);
+        blueMaterial.m_cEmissive = XMFLOAT4(0.0f, 0.1f, 0.3f, 1.0f);
+        m_pInteractionCube->SetMaterial(blueMaterial);
 
-    // Add render component
-    m_pInteractionCube->AddComponent<RenderComponent>()->SetMesh(pCubeMesh);
-    m_vShaders[0]->AddRenderComponent(m_pInteractionCube->GetComponent<RenderComponent>());
+        m_pInteractionCube->AddComponent<RenderComponent>()->SetMesh(pCubeMesh);
+        m_vShaders[0]->AddRenderComponent(m_pInteractionCube->GetComponent<RenderComponent>());
 
-    // Add interactable component
-    auto* pInteractable = m_pInteractionCube->AddComponent<InteractableComponent>();
-    pInteractable->SetPromptText(L"[F] Interact");
-    pInteractable->SetInteractionDistance(m_fInteractionDistance);
-    pInteractable->SetOnInteract([this](InteractableComponent* pComp) {
-        // Activate room when interacted
-        if (m_pCurrentRoom && m_pCurrentRoom->GetState() == RoomState::Inactive)
-        {
-            m_pCurrentRoom->SetState(RoomState::Active);
-            OutputDebugString(L"[Scene] Room activated via InteractableComponent!\n");
-        }
-        pComp->Hide();
-    });
-
+        auto* pInteractable = m_pInteractionCube->AddComponent<InteractableComponent>();
+        pInteractable->SetPromptText(L"[F] Interact");
+        pInteractable->SetInteractionDistance(m_fInteractionDistance);
+        pInteractable->SetOnInteract([this](InteractableComponent* pComp) {
+            if (m_pCurrentRoom && m_pCurrentRoom->GetState() == RoomState::Inactive)
+            {
+                m_pCurrentRoom->SetState(RoomState::Active);
+                OutputDebugString(L"[Scene] Room activated via InteractableComponent!\n");
+            }
+            pComp->Hide();
+        });
+    }
     m_bInteractionCubeActive = true;
     m_bEnemiesSpawned = false;
+
+    // --------------------------------------------------------------------------
+    // 영속 디스크립터 워터마크 기록
+    // 이 시점 이후의 슬롯(맵 오브젝트·적·포탈 등)은 맵 전환 시 재활용됩니다.
+    // --------------------------------------------------------------------------
+    m_nPersistentDescriptorEnd = m_nNextDescriptorIndex;
+
+    // --------------------------------------------------------------------------
+    // Map pool – 여기에 맵 JSON 경로를 추가하세요
+    // --------------------------------------------------------------------------
+    m_vMapPool.push_back("Assets/MapData/map.json");
+    // m_vMapPool.push_back("Assets/MapData/map2.json");
+    // m_vMapPool.push_back("Assets/MapData/map3.json");
+
+    // --------------------------------------------------------------------------
+    // Load map from JSON (recyclable slots from m_nPersistentDescriptorEnd onward)
+    // --------------------------------------------------------------------------
+    m_strCurrentMap = m_vMapPool[0];
+    bool bMapLoaded = MapLoader::LoadIntoScene(
+        m_strCurrentMap.c_str(), this, pDevice, pCommandList, m_vShaders[0].get());
+
+    if (!bMapLoaded) {
+        OutputDebugString(L"[Scene] Map load failed – using default test room\n");
+        RoomSpawnConfig spawnConfig;
+        spawnConfig.AddSpawn("RushAoEEnemy",  10.0f, 0.0f,  5.0f);
+        spawnConfig.AddSpawn("RushFrontEnemy",-10.0f, 0.0f,  5.0f);
+        spawnConfig.AddSpawn("RangedEnemy",    0.0f, 0.0f, 20.0f);
+        m_pCurrentRoom->SetSpawnConfig(spawnConfig);
+        m_pCurrentRoom->SetEnemySpawner(m_pEnemySpawner.get());
+        m_pCurrentRoom->SetPlayerTarget(m_pPlayerGameObject);
+        m_pCurrentRoom->SetScene(this);
+    }
+
+    // 맵 정적 오브젝트의 상수 버퍼를 한 번 초기화
+    // (CRoom::Update는 Inactive 상태에서 스킵하므로, 맵 로드 직후 딱 한 번 강제 갱신)
+    if (m_pCurrentRoom)
+    {
+        for (const auto& pGO : m_pCurrentRoom->GetGameObjects())
+            pGO->Update(0.0f);
+    }
+
+    // 인터랙션 큐브를 플레이어 스폰 근처로 이동 (MapLoader가 플레이어 위치를 결정한 후)
+    if (m_pPlayerGameObject)
+    {
+        XMFLOAT3 playerSpawn = m_pPlayerGameObject->GetTransform()->GetPosition();
+        m_pInteractionCube->GetTransform()->SetPosition(
+            playerSpawn.x + 5.0f, playerSpawn.y, playerSpawn.z);
+    }
+
+    OutputDebugString(L"[Scene] Enemy spawn system initialized\n");
 
     OutputDebugString(L"[Scene] Interaction cube created\n");
 }
 
 void Scene::LoadSceneFromFile(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList, const char* pstrFileName)
 {
-    // This function is now primarily for loading other scene elements, not the player.
-    // The player is loaded directly in Init.
-    // If we want to load other objects, we can use this.
-    // For now, it's empty as the player is handled separately.
+}
+
+CRoom* Scene::CreateRoomFromBounds(const XMFLOAT3& center, const XMFLOAT3& extents)
+{
+    auto pRoom = std::make_unique<CRoom>();
+    pRoom->SetState(RoomState::Inactive);
+    pRoom->SetBoundingBox(BoundingBox(center, extents));
+    CRoom* pRaw = pRoom.get();
+    m_vRooms.push_back(std::move(pRoom));
+    // First room from map becomes the current room
+    if (!m_pCurrentRoom)
+        m_pCurrentRoom = pRaw;
+    return pRaw;
 }
 
 void Scene::AddRenderComponentsToHierarchy(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList,
@@ -497,15 +540,30 @@ GameObject* Scene::CreateGameObject(ID3D12Device* pDevice, ID3D12GraphicsCommand
     // Note: We use raw pointer here, but ownership is transferred to unique_ptr below
     GameObject* newGameObject = new GameObject();
 
-    // Create the constant buffer and its view
-    D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle = m_pDescriptorHeap->GetCPUHandle(m_nNextDescriptorIndex);
-    newGameObject->CreateConstantBuffer(pDevice, pCommandList, sizeof(ObjectConstants), cpuHandle);
+    UINT slot = m_nNextDescriptorIndex;
+    bool bRecyclable = (slot >= m_nPersistentDescriptorEnd);
 
-    // Set the GPU handle for rendering
-    D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle = m_pDescriptorHeap->GetGPUHandle(m_nNextDescriptorIndex);
+    auto cacheIt = bRecyclable ? m_vCBCache.find(slot) : m_vCBCache.end();
+    if (cacheIt != m_vCBCache.end())
+    {
+        // 같은 슬롯 번호에 이미 생성된 리소스 재사용
+        // CBV는 힙에 그대로 → CreateConstantBufferView 불필요
+        ObjectConstants* pMapped = nullptr;
+        cacheIt->second->Map(0, nullptr, (void**)&pMapped);
+        newGameObject->ReuseConstantBuffer(cacheIt->second, pMapped);
+    }
+    else
+    {
+        // 처음 사용하는 슬롯 — 리소스 + CBV 생성
+        D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle = m_pDescriptorHeap->GetCPUHandle(slot);
+        newGameObject->CreateConstantBuffer(pDevice, pCommandList, sizeof(ObjectConstants), cpuHandle);
+        if (bRecyclable)
+            m_vCBCache[slot] = newGameObject->GetConstantBufferResource();
+    }
+
+    D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle = m_pDescriptorHeap->GetGPUHandle(slot);
     newGameObject->SetGpuDescriptorHandle(gpuHandle);
 
-    // Increment for the next object
     m_nNextDescriptorIndex++;
 
     // Add to Room or Scene
@@ -808,58 +866,104 @@ void Scene::TriggerPortalInteraction()
     }
 }
 
+void Scene::ReAddRenderComponentsToShader(GameObject* pGO)
+{
+    if (!pGO) return;
+    auto* pRC = pGO->GetComponent<RenderComponent>();
+    if (pRC) m_vShaders[0]->AddRenderComponent(pRC);
+    ReAddRenderComponentsToShader(pGO->m_pChild);
+    ReAddRenderComponentsToShader(pGO->m_pSibling);
+}
+
 void Scene::TransitionToNextRoom()
 {
     OutputDebugString(L"[Scene] Transitioning to next room...\n");
 
     m_nRoomCount++;
 
-    // Create new room
-    auto pNewRoom = std::make_unique<CRoom>();
-    pNewRoom->SetBoundingBox(BoundingBox(XMFLOAT3(0, 0, 0), XMFLOAT3(100.0f, 100.0f, 100.0f)));
-
-    // Configure spawn points - vary based on room count
-    RoomSpawnConfig spawnConfig;
-    int baseEnemies = 3;
-    int extraEnemies = m_nRoomCount; // More enemies as rooms progress (capped at reasonable number)
-    if (extraEnemies > 5) extraEnemies = 5;
-
-    // Cycle through different enemy combinations
-    const char* enemyTypes[] = { "RushAoEEnemy", "RushFrontEnemy", "RangedEnemy" };
-    int numEnemies = baseEnemies + extraEnemies;
-    if (numEnemies > 8) numEnemies = 8;
-
-    for (int i = 0; i < numEnemies; ++i)
+    if (m_vMapPool.empty())
     {
-        const char* type = enemyTypes[i % 3];
-        float angle = (float)i * (6.28318f / (float)numEnemies);
-        float radius = 10.0f + (i % 2) * 5.0f;
-        float x = cosf(angle) * radius;
-        float z = sinf(angle) * radius + 10.0f;
-        spawnConfig.AddSpawn(type, x, 0.0f, z);
+        OutputDebugString(L"[Scene] Map pool is empty – cannot transition\n");
+        return;
     }
 
-    // Apply configuration to new room
-    CRoom* pRoomPtr = pNewRoom.get();
-    pRoomPtr->SetSpawnConfig(spawnConfig);
-    pRoomPtr->SetEnemySpawner(m_pEnemySpawner.get());
-    pRoomPtr->SetPlayerTarget(m_pPlayerGameObject);
-    pRoomPtr->SetScene(this);
+    // ── 1. 셰이더 RC 목록 전체 클리어 (룸 오브젝트 RC가 댕글링 포인터가 되기 전에)
+    m_vShaders[0]->ClearRenderComponents();
 
-    // Add to room list and set as current
-    m_vRooms.push_back(std::move(pNewRoom));
-    m_pCurrentRoom = pRoomPtr;
+    // ── 2. 기존 룸 전체 파기 (룸 오브젝트, 적, 맵 메시 등)
+    m_vRooms.clear();
+    m_pCurrentRoom = nullptr;
 
-    // Reset player position to origin
+    // ── 2b. 디스크립터 인덱스를 워터마크로 리셋 (맵 슬롯 재활용)
+    m_nNextDescriptorIndex = m_nPersistentDescriptorEnd;
+
+    // ── 3. 인터랙션 큐브 숨기기 (다음 맵에서 다시 보여야 하는 시작 큐브)
+    if (m_pInteractionCube)
+    {
+        auto* pInteractable = m_pInteractionCube->GetComponent<InteractableComponent>();
+        if (pInteractable) pInteractable->SetActive(true);
+        m_bInteractionCubeActive = true;
+    }
+
+    // ── 4. 영속 오브젝트의 RC를 셰이더에 다시 등록
+    //       (플레이어 계층 전체, 인터랙션 큐브)
+    for (auto& pGO : m_vGameObjects)
+        ReAddRenderComponentsToShader(pGO.get());
+
+    // ── 5. 풀에서 랜덤 맵 선택 (현재 맵과 다른 것 우선)
+    std::string nextMap = m_strCurrentMap;
+    if (m_vMapPool.size() > 1)
+    {
+        // 현재 맵이 아닌 것 중에서 랜덤 선택
+        std::vector<std::string> candidates;
+        for (const auto& path : m_vMapPool)
+            if (path != m_strCurrentMap) candidates.push_back(path);
+        nextMap = candidates[rand() % candidates.size()];
+    }
+    // (풀에 맵이 1개뿐이면 같은 맵 재로드)
+    m_strCurrentMap = nextMap;
+
+    // ── 6. 새 맵 로드
+    ID3D12Device*               pDevice      = Dx12App::GetInstance()->GetDevice();
+    ID3D12GraphicsCommandList*  pCommandList = Dx12App::GetInstance()->GetCommandList();
+
+    bool bLoaded = MapLoader::LoadIntoScene(
+        m_strCurrentMap.c_str(), this, pDevice, pCommandList, m_vShaders[0].get());
+
+    if (!bLoaded)
+    {
+        OutputDebugString(L"[Scene] Map load failed during transition – keeping current state\n");
+        return;
+    }
+
+    // ── 7. 맵 정적 오브젝트 상수 버퍼 초기화 (Inactive 상태에서는 Update가 스킵되므로)
+    if (m_pCurrentRoom)
+    {
+        for (const auto& pGO : m_pCurrentRoom->GetGameObjects())
+            pGO->Update(0.0f);
+    }
+
+    // ── 8. 포탈을 통해 입장하면 즉시 몬스터 스폰 (인터랙션 큐브 단계 없이)
+    if (m_pCurrentRoom)
+        m_pCurrentRoom->SetState(RoomState::Active);
+
+    // ── 9. 인터랙션 큐브는 이후 맵에서 숨김 (첫 맵 전용)
+    if (m_pInteractionCube)
+    {
+        auto* pInteractable = m_pInteractionCube->GetComponent<InteractableComponent>();
+        if (pInteractable) pInteractable->Hide();
+        m_bInteractionCubeActive = false;
+    }
+
+    // ── 10. 플레이어 groundY 리셋 (새 맵 바닥 높이 재캡처)
     if (m_pPlayerGameObject)
     {
-        m_pPlayerGameObject->GetTransform()->SetPosition(0.0f, 0.0f, 0.0f);
+        auto* pPC = m_pPlayerGameObject->GetComponent<PlayerComponent>();
+        if (pPC) pPC->ResetGroundY();
     }
 
-    // Activate the new room (enemies will spawn in Update)
-    m_pCurrentRoom->SetState(RoomState::Active);
-
     wchar_t buffer[128];
-    swprintf_s(buffer, L"[Scene] Room %d activated with %d enemies\n", m_nRoomCount + 1, numEnemies);
+    swprintf_s(buffer, L"[Scene] Transitioned to map: %hs (room #%d)\n",
+               m_strCurrentMap.c_str(), m_nRoomCount + 1);
     OutputDebugString(buffer);
 }

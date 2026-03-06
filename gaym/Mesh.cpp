@@ -182,6 +182,75 @@ void MeshIlluminatedFromFile::Render(ID3D12GraphicsCommandList *pd3dCommandList,
     }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
+// ObjMesh - loaded from file
+
+void ObjMesh::Build(ID3D12Device* pd3dDevice,
+                    ID3D12GraphicsCommandList* pd3dCommandList,
+                    const std::vector<XMFLOAT3>& positions,
+                    const std::vector<XMFLOAT3>& normals,
+                    const std::vector<XMFLOAT2>& uvs,
+                    const std::vector<UINT>&     indices)
+{
+    m_nVertices = (UINT)positions.size();
+    m_nIndices  = (UINT)indices.size();
+    m_nType     = VERTEXT_POSITION | VERTEXT_NORMAL | VERTEXT_TEXTURE_COORD0;
+
+    m_pd3dPositionBuffer = Dx12App::CreateBufferResource(
+        (void*)positions.data(), sizeof(XMFLOAT3) * m_nVertices,
+        D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER,
+        &m_pd3dPositionUploadBuffer);
+    m_d3dPositionBufferView.BufferLocation = m_pd3dPositionBuffer->GetGPUVirtualAddress();
+    m_d3dPositionBufferView.StrideInBytes  = sizeof(XMFLOAT3);
+    m_d3dPositionBufferView.SizeInBytes    = sizeof(XMFLOAT3) * m_nVertices;
+
+    const std::vector<XMFLOAT3>& nrmSrc = normals.empty()
+        ? std::vector<XMFLOAT3>(m_nVertices, XMFLOAT3(0,1,0)) : normals;
+    m_pd3dNormalBuffer = Dx12App::CreateBufferResource(
+        (void*)nrmSrc.data(), sizeof(XMFLOAT3) * m_nVertices,
+        D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER,
+        &m_pd3dNormalUploadBuffer);
+    m_d3dNormalBufferView.BufferLocation = m_pd3dNormalBuffer->GetGPUVirtualAddress();
+    m_d3dNormalBufferView.StrideInBytes  = sizeof(XMFLOAT3);
+    m_d3dNormalBufferView.SizeInBytes    = sizeof(XMFLOAT3) * m_nVertices;
+
+    const std::vector<XMFLOAT2>& uvSrc = uvs.empty()
+        ? std::vector<XMFLOAT2>(m_nVertices, XMFLOAT2(0,0)) : uvs;
+    m_pd3dTexCoordBuffer = Dx12App::CreateBufferResource(
+        (void*)uvSrc.data(), sizeof(XMFLOAT2) * m_nVertices,
+        D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER,
+        &m_pd3dTexCoordUploadBuffer);
+    m_d3dTexCoordBufferView.BufferLocation = m_pd3dTexCoordBuffer->GetGPUVirtualAddress();
+    m_d3dTexCoordBufferView.StrideInBytes  = sizeof(XMFLOAT2);
+    m_d3dTexCoordBufferView.SizeInBytes    = sizeof(XMFLOAT2) * m_nVertices;
+
+    m_pd3dIndexBuffer = Dx12App::CreateBufferResource(
+        (void*)indices.data(), sizeof(UINT) * m_nIndices,
+        D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_INDEX_BUFFER,
+        &m_pd3dIndexUploadBuffer);
+    m_d3dIndexBufferView.BufferLocation = m_pd3dIndexBuffer->GetGPUVirtualAddress();
+    m_d3dIndexBufferView.Format         = DXGI_FORMAT_R32_UINT;
+    m_d3dIndexBufferView.SizeInBytes    = sizeof(UINT) * m_nIndices;
+}
+
+void ObjMesh::ReleaseUploadBuffers()
+{
+    if (m_pd3dPositionUploadBuffer) m_pd3dPositionUploadBuffer = nullptr;
+    if (m_pd3dNormalUploadBuffer)   m_pd3dNormalUploadBuffer   = nullptr;
+    if (m_pd3dTexCoordUploadBuffer) m_pd3dTexCoordUploadBuffer = nullptr;
+    if (m_pd3dIndexUploadBuffer)    m_pd3dIndexUploadBuffer    = nullptr;
+}
+
+void ObjMesh::Render(ID3D12GraphicsCommandList* pd3dCommandList, int /*nSubSet*/)
+{
+    pd3dCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    D3D12_VERTEX_BUFFER_VIEW vbvs[3] = {
+        m_d3dPositionBufferView, m_d3dNormalBufferView, m_d3dTexCoordBufferView };
+    pd3dCommandList->IASetVertexBuffers(0, 3, vbvs);
+    pd3dCommandList->IASetIndexBuffer(&m_d3dIndexBufferView);
+    pd3dCommandList->DrawIndexedInstanced(m_nIndices, 1, 0, 0, 0);
+}
+
+/////////////////////////////////////////////////////////////////////////////////////////////////
 // CubeMesh - Procedural cube mesh
 CubeMesh::CubeMesh(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, float fWidth, float fHeight, float fDepth)
 {

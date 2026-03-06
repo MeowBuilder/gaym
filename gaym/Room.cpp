@@ -173,7 +173,7 @@ void CRoom::SpawnDropItem()
     if (m_pPlayerTarget)
     {
         spawnPos = m_pPlayerTarget->GetTransform()->GetPosition();
-        spawnPos.y = 1.5f;  // Slightly above ground
+        spawnPos.y += 1.5f;  // Float slightly above the floor (player's actual Y)
     }
 
     // Create drop item as a room object
@@ -229,7 +229,7 @@ void CRoom::SpawnPortalCube()
     if (m_pPlayerTarget)
     {
         spawnPos = m_pPlayerTarget->GetTransform()->GetPosition();
-        spawnPos.y = 1.5f;
+        spawnPos.y += 1.5f;  // Float slightly above the floor (player's actual Y)
         spawnPos.z += 5.0f;  // Offset in Z to avoid overlapping with drop item
     }
 

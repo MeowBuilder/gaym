@@ -1,0 +1,632 @@
+#include "stdafx.h"
+#include "MapLoader.h"
+#include "Scene.h"
+#include "Room.h"
+#include "Shader.h"
+#include "Mesh.h"
+#include "GameObject.h"
+#include "RenderComponent.h"
+#include "ColliderComponent.h"
+#include "CollisionLayer.h"
+#include "TransformComponent.h"
+#include "EnemySpawnData.h"
+#include "EnemySpawner.h"
+#include "MeleeAttackBehavior.h"
+#include "RangedAttackBehavior.h"
+#include "RushAoEAttackBehavior.h"
+#include "RushFrontAttackBehavior.h"
+#include "Dx12App.h"
+
+#include <fstream>
+#include <sstream>
+#include <map>
+#include <tuple>
+#include <functional>
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  JSON parser implementation
+// ─────────────────────────────────────────────────────────────────────────────
+
+const JsonVal& JsonVal::operator[](const std::string& k) const
+{
+    static JsonVal sNull;
+    auto it = obj.find(k);
+    return it != obj.end() ? it->second : sNull;
+}
+
+namespace {
+
+struct JParser
+{
+    const char* p;
+    const char* end;
+
+    JParser(const char* s, size_t n) : p(s), end(s + n) {}
+
+    void skipWS()
+    {
+        while (p < end && ((unsigned char)*p <= 0x20 ||
+               (unsigned char)*p == 0xEF ||   // UTF-8 BOM bytes
+               (unsigned char)*p == 0xBB ||
+               (unsigned char)*p == 0xBF))
+            p++;
+    }
+
+    JsonVal parseValue()
+    {
+        skipWS();
+        if (p >= end) return {};
+        switch (*p) {
+        case '{': return parseObject();
+        case '[': return parseArray();
+        case '"': return parseString();
+        case 't': { p += 4; JsonVal v; v.type = JsonVal::T::Bool; v.b = true;  return v; }
+        case 'f': { p += 5; JsonVal v; v.type = JsonVal::T::Bool; v.b = false; return v; }
+        case 'n': { p += 4; return {}; }
+        default:  return parseNumber();
+        }
+    }
+
+    JsonVal parseObject()
+    {
+        JsonVal v; v.type = JsonVal::T::Obj;
+        p++; // skip '{'
+        while (p < end) {
+            skipWS();
+            if (*p == '}') { p++; break; }
+            if (*p == ',') { p++; continue; }
+            if (*p != '"') { p++; continue; } // malformed – skip
+            std::string key = parseString().str;
+            skipWS();
+            if (p < end && *p == ':') p++;
+            v.obj[key] = parseValue();
+        }
+        return v;
+    }
+
+    JsonVal parseArray()
+    {
+        JsonVal v; v.type = JsonVal::T::Arr;
+        p++; // skip '['
+        while (p < end) {
+            skipWS();
+            if (*p == ']') { p++; break; }
+            if (*p == ',') { p++; continue; }
+            v.arr.push_back(parseValue());
+        }
+        return v;
+    }
+
+    JsonVal parseString()
+    {
+        JsonVal v; v.type = JsonVal::T::Str;
+        p++; // skip opening '"'
+        while (p < end && *p != '"') {
+            if (*p == '\\') {
+                p++;
+                if (p >= end) break;
+                switch (*p) {
+                case '"':  v.str += '"';  break;
+                case '\\': v.str += '\\'; break;
+                case '/':  v.str += '/';  break;
+                case 'n':  v.str += '\n'; break;
+                case 'r':  v.str += '\r'; break;
+                case 't':  v.str += '\t'; break;
+                default:   v.str += *p;   break;
+                }
+                p++;
+            } else {
+                v.str += *p++;
+            }
+        }
+        if (p < end) p++; // skip closing '"'
+        return v;
+    }
+
+    JsonVal parseNumber()
+    {
+        JsonVal v; v.type = JsonVal::T::Num;
+        char* endptr = nullptr;
+        v.num = strtod(p, &endptr);
+        if (endptr > p) p = endptr;
+        else p++; // skip unknown char to avoid infinite loop
+        return v;
+    }
+};
+
+} // anonymous namespace
+
+JsonVal JsonVal::parse(const std::string& text)
+{
+    if (text.empty()) return {};
+    JParser jp(text.data(), text.size());
+    return jp.parseValue();
+}
+
+JsonVal JsonVal::parseFile(const char* path)
+{
+    std::ifstream fs(path, std::ios::binary);
+    if (!fs.is_open()) {
+        char buf[256];
+        sprintf_s(buf, "[MapLoader] Cannot open: %s\n", path);
+        OutputDebugStringA(buf);
+        return {};
+    }
+    std::ostringstream ss;
+    ss << fs.rdbuf();
+    return parse(ss.str());
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  OBJ mesh builder helper
+//  Parses an OBJ file and returns GPU mesh buffers (position, normal, uv, index).
+//  Uses the same buffer layout as CubeMesh / RingMesh.
+// ─────────────────────────────────────────────────────────────────────────────
+
+namespace {
+
+// OBJ load result: mesh + local-space AABB
+struct ObjResult {
+    Mesh*    pMesh = nullptr;
+    XMFLOAT3 aabbMin{0,0,0};
+    XMFLOAT3 aabbMax{0,0,0};
+    bool     valid = false;
+};
+std::map<std::string, ObjResult> s_meshCache;
+static std::map<std::string, JsonVal>  s_jsonCache;  // 파싱된 JSON 재사용
+
+struct ObjRawData {
+    std::vector<XMFLOAT3> positions;
+    std::vector<XMFLOAT3> normals;
+    std::vector<XMFLOAT2> uvs;
+
+    // Expanded (per-draw-vertex) output
+    std::vector<XMFLOAT3> outPos;
+    std::vector<XMFLOAT3> outNrm;
+    std::vector<XMFLOAT2> outUV;
+    std::vector<UINT>     outIdx;
+};
+
+// Deduplication key: (posIdx, uvIdx, nrmIdx)
+struct FaceKey {
+    int p, t, n;
+    bool operator==(const FaceKey& o) const { return p==o.p && t==o.t && n==o.n; }
+};
+struct FaceKeyHash {
+    size_t operator()(const FaceKey& k) const {
+        size_t h = (size_t)(k.p * 73856093) ^ (size_t)(k.t * 19349663) ^ (size_t)(k.n * 83492791);
+        return h;
+    }
+};
+
+// Parse one "v/t/n" token (1-based OBJ indices, 0 means absent)
+FaceKey parseFaceToken(const char* tok)
+{
+    FaceKey k{0,0,0};
+    // Try v/t/n, v//n, v/t, v
+    if (sscanf_s(tok, "%d/%d/%d", &k.p, &k.t, &k.n) == 3) {}
+    else if (sscanf_s(tok, "%d//%d", &k.p, &k.n) == 2) {}
+    else if (sscanf_s(tok, "%d/%d",  &k.p, &k.t) == 2) {}
+    else sscanf_s(tok, "%d", &k.p);
+    return k;
+}
+
+ObjResult LoadObjMesh(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList,
+                      const std::string& path)
+{
+    // Cache lookup
+    auto it = s_meshCache.find(path);
+    if (it != s_meshCache.end()) return it->second;
+
+    std::ifstream fs(path, std::ios::in);
+    if (!fs.is_open()) {
+        char buf[512];
+        sprintf_s(buf, "[MapLoader] OBJ not found: %s\n", path.c_str());
+        OutputDebugStringA(buf);
+        s_meshCache[path] = {};
+        return {};
+    }
+
+    ObjRawData raw;
+    std::unordered_map<FaceKey, UINT, FaceKeyHash> vertexMap;
+
+    std::string line;
+    while (std::getline(fs, line)) {
+        if (line.empty() || line[0] == '#') continue;
+
+        char type[8] = {};
+        if (sscanf_s(line.c_str(), "%7s", type, (unsigned)sizeof(type)) != 1) continue;
+        const char* rest = line.c_str() + strlen(type);
+        while (*rest == ' ') rest++;
+
+        if (strcmp(type, "v") == 0) {
+            XMFLOAT3 v;
+            sscanf_s(rest, "%f %f %f", &v.x, &v.y, &v.z);
+            raw.positions.push_back(v);
+        } else if (strcmp(type, "vn") == 0) {
+            XMFLOAT3 n;
+            sscanf_s(rest, "%f %f %f", &n.x, &n.y, &n.z);
+            raw.normals.push_back(n);
+        } else if (strcmp(type, "vt") == 0) {
+            XMFLOAT2 uv;
+            sscanf_s(rest, "%f %f", &uv.x, &uv.y);
+            raw.uvs.push_back(uv);
+        } else if (strcmp(type, "f") == 0) {
+            // Triangulate: fan from first vertex
+            char tok[4][64] = {};
+            int n = sscanf_s(rest, "%63s %63s %63s %63s",
+                             tok[0], (unsigned)64, tok[1], (unsigned)64,
+                             tok[2], (unsigned)64, tok[3], (unsigned)64);
+            if (n < 3) continue;
+
+            FaceKey keys[4];
+            for (int i = 0; i < n; i++) keys[i] = parseFaceToken(tok[i]);
+
+            // Fan triangulate: (0,1,2) and (0,2,3) if quad
+            int triCount = n - 2;
+            for (int t = 0; t < triCount; t++) {
+                FaceKey tri[3] = { keys[0], keys[t+1], keys[t+2] };
+                for (auto& k : tri) {
+                    auto vit = vertexMap.find(k);
+                    if (vit == vertexMap.end()) {
+                        UINT idx = (UINT)raw.outPos.size();
+                        vertexMap[k] = idx;
+
+                        // Position (1-based → 0-based)
+                        if (k.p > 0 && k.p <= (int)raw.positions.size())
+                            raw.outPos.push_back(raw.positions[k.p - 1]);
+                        else
+                            raw.outPos.push_back(XMFLOAT3(0,0,0));
+
+                        // Normal
+                        if (k.n > 0 && k.n <= (int)raw.normals.size())
+                            raw.outNrm.push_back(raw.normals[k.n - 1]);
+                        else
+                            raw.outNrm.push_back(XMFLOAT3(0,1,0));
+
+                        // UV
+                        if (k.t > 0 && k.t <= (int)raw.uvs.size())
+                            raw.outUV.push_back(raw.uvs[k.t - 1]);
+                        else
+                            raw.outUV.push_back(XMFLOAT2(0,0));
+
+                        raw.outIdx.push_back(idx);
+                    } else {
+                        raw.outIdx.push_back(vit->second);
+                    }
+                }
+            }
+        }
+    }
+
+    if (raw.outPos.empty() || raw.outIdx.empty()) {
+        char buf[512];
+        sprintf_s(buf, "[MapLoader] OBJ empty geometry: %s\n", path.c_str());
+        OutputDebugStringA(buf);
+        s_meshCache[path] = {};
+        return {};
+    }
+
+    // Compute local-space AABB from raw position data (before vertex expansion)
+    ObjResult result;
+    result.aabbMin = raw.positions[0];
+    result.aabbMax = raw.positions[0];
+    for (const auto& v : raw.positions) {
+        result.aabbMin.x = (std::min)(result.aabbMin.x, v.x);
+        result.aabbMin.y = (std::min)(result.aabbMin.y, v.y);
+        result.aabbMin.z = (std::min)(result.aabbMin.z, v.z);
+        result.aabbMax.x = (std::max)(result.aabbMax.x, v.x);
+        result.aabbMax.y = (std::max)(result.aabbMax.y, v.y);
+        result.aabbMax.z = (std::max)(result.aabbMax.z, v.z);
+    }
+
+    // Build GPU mesh (same layout as CubeMesh)
+    ObjMesh* pMesh = new ObjMesh();
+    pMesh->Build(pDevice, pCommandList, raw.outPos, raw.outNrm, raw.outUV, raw.outIdx);
+
+    result.pMesh = pMesh;
+    result.valid = true;
+    s_meshCache[path] = result;
+    return result;
+}
+
+} // anonymous namespace
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  MapLoader::LoadIntoScene
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ─── Global map scale ────────────────────────────────────────────────────────
+// Increase to make the entire map larger relative to the character.
+// All positions, object scales, room bounds, and obstacle sizes are multiplied.
+static constexpr float MAP_SCALE = 3.0f;
+// ─────────────────────────────────────────────────────────────────────────────
+
+bool MapLoader::LoadIntoScene(
+    const char*                 jsonPath,
+    Scene*                      pScene,
+    ID3D12Device*               pDevice,
+    ID3D12GraphicsCommandList*  pCommandList,
+    Shader*                     pShader)
+{
+    // s_meshCache / s_jsonCache / s_textureCache — cleared 하지 않고 재사용
+
+    auto jsonIt = s_jsonCache.find(jsonPath);
+    if (jsonIt == s_jsonCache.end())
+    {
+        JsonVal parsed = JsonVal::parseFile(jsonPath);
+        if (parsed.isNull()) {
+            OutputDebugStringA("[MapLoader] Failed to parse map.json\n");
+            return false;
+        }
+        s_jsonCache[jsonPath] = std::move(parsed);
+    }
+    const JsonVal& root = s_jsonCache[jsonPath];
+
+    // ── 1. Rooms ─────────────────────────────────────────────────────────────
+    const JsonVal& rooms = root["rooms"];
+    for (size_t i = 0; i < rooms.size(); i++) {
+        const JsonVal& r = rooms[i];
+        const JsonVal& bMin = r["boundsMin"];
+        const JsonVal& bMax = r["boundsMax"];
+        XMFLOAT3 mn(bMin[0].f()*MAP_SCALE, bMin[1].f()*MAP_SCALE, bMin[2].f()*MAP_SCALE);
+        XMFLOAT3 mx(bMax[0].f()*MAP_SCALE, bMax[1].f()*MAP_SCALE, bMax[2].f()*MAP_SCALE);
+        XMFLOAT3 center((mn.x+mx.x)*0.5f, (mn.y+mx.y)*0.5f, (mn.z+mx.z)*0.5f);
+        XMFLOAT3 extents(fabsf(mx.x-mn.x)*0.5f, fabsf(mx.y-mn.y)*0.5f, fabsf(mx.z-mn.z)*0.5f);
+
+        pScene->CreateRoomFromBounds(center, extents);
+    }
+
+    // Default to first room for objects below
+    if (!pScene->GetCurrentRoom() && !pScene->GetRooms().empty())
+        pScene->SetCurrentRoom(pScene->GetRooms()[0].get());
+
+    // ── 2. Player spawn ───────────────────────────────────────────────────────
+    if (root.has("playerSpawn")) {
+        const JsonVal& ps = root["playerSpawn"];
+        const JsonVal& pos = ps["position"];
+        if (pScene->GetPlayer()) {
+            pScene->GetPlayer()->GetTransform()->SetPosition(
+                pos[0].f()*MAP_SCALE, pos[1].f()*MAP_SCALE, pos[2].f()*MAP_SCALE);
+        }
+    }
+
+    // ── 3. Map objects (renderable geometry) ─────────────────────────────────
+    // Get the directory of the JSON file to resolve relative mesh paths
+    std::string jsonDir = jsonPath;
+    size_t lastSlash = jsonDir.find_last_of("/\\");
+    if (lastSlash != std::string::npos)
+        jsonDir = jsonDir.substr(0, lastSlash + 1);
+    else
+        jsonDir = "";
+
+    const JsonVal& mapObjs = root["mapObjects"];
+    for (size_t i = 0; i < mapObjs.size(); i++) {
+        const JsonVal& mo = mapObjs[i];
+        std::string meshRelPath = mo["meshFile"].str;
+        std::string meshPath = jsonDir + meshRelPath;
+
+        ObjResult objRes = LoadObjMesh(pDevice, pCommandList, meshPath);
+        if (!objRes.valid || !objRes.pMesh) continue;
+
+        GameObject* pGO = pScene->CreateGameObject(pDevice, pCommandList);
+
+        // Transform
+        const JsonVal& pos = mo["position"];
+        const JsonVal& rot = mo["rotation"];
+        const JsonVal& scl = mo["scale"];
+        float sx = scl[0].f()*MAP_SCALE, sy = scl[1].f()*MAP_SCALE, sz = scl[2].f()*MAP_SCALE;
+        pGO->GetTransform()->SetPosition(
+            pos[0].f()*MAP_SCALE, pos[1].f()*MAP_SCALE, pos[2].f()*MAP_SCALE);
+        pGO->GetTransform()->SetRotation(XMFLOAT4(rot[0].f(), rot[1].f(), rot[2].f(), rot[3].f()));
+        pGO->GetTransform()->SetScale(sx, sy, sz);
+
+        // Render
+        pGO->SetMesh(objRes.pMesh);
+        auto* pRC = pGO->AddComponent<RenderComponent>();
+        pRC->SetMesh(objRes.pMesh);
+        pShader->AddRenderComponent(pRC);
+
+        // Apply material from JSON (color + smoothness/metallic exported from Unity)
+        {
+            float r = 1.f, g = 1.f, b = 1.f;
+            if (mo.has("color")) {
+                const JsonVal& col = mo["color"];
+                r = col[0].f() / 255.f;
+                g = col[1].f() / 255.f;
+                b = col[2].f() / 255.f;
+            }
+            float smooth   = mo.has("smoothness") ? mo["smoothness"].f() : 0.5f;
+            float metallic = mo.has("metallic")   ? mo["metallic"].f()   : 0.0f;
+
+            // Convert PBR smoothness → specular power (rough approximation)
+            float specPow = 2.0f + smooth * smooth * 254.0f;  // [2..256]
+            float specStr = (1.0f - metallic) * 0.1f + metallic * 0.9f;
+
+            MATERIAL mat;
+            mat.m_cAmbient  = XMFLOAT4(r * 0.25f, g * 0.25f, b * 0.25f, 1.0f);
+            mat.m_cDiffuse  = XMFLOAT4(r, g, b, 1.0f);
+            mat.m_cSpecular = XMFLOAT4(specStr, specStr, specStr, specPow);
+            mat.m_cEmissive = XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f);
+            pGO->SetMaterial(mat);
+        }
+
+        // Load texture if exported from Unity (_MainTex / _BaseMap)
+        if (mo.has("texture") && !mo["texture"].str.empty()) {
+            std::string texRelPath = mo["texture"].str;
+            std::string texFullPath = jsonDir + texRelPath;
+
+            pGO->SetTextureName(texFullPath);
+
+            D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle;
+            D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle;
+            pScene->AllocateDescriptor(&cpuHandle, &gpuHandle);
+
+            pGO->LoadTexture(pDevice, pCommandList, cpuHandle);
+            pGO->SetSrvGpuDescriptorHandle(gpuHandle);
+        }
+
+        // Collider: SetExtents uses LOCAL-space extents; ColliderComponent::Update()
+        // transforms them by the full world matrix (which already includes sx/sy/sz),
+        // so do NOT pre-multiply by scale here (that would square the scale).
+        XMFLOAT3 localExt(
+            (objRes.aabbMax.x - objRes.aabbMin.x) * 0.5f,
+            (objRes.aabbMax.y - objRes.aabbMin.y) * 0.5f,
+            (objRes.aabbMax.z - objRes.aabbMin.z) * 0.5f);
+        XMFLOAT3 localCenter(
+            (objRes.aabbMin.x + objRes.aabbMax.x) * 0.5f,
+            (objRes.aabbMin.y + objRes.aabbMax.y) * 0.5f,
+            (objRes.aabbMin.z + objRes.aabbMax.z) * 0.5f);
+
+        // World-space approximate extents (for skip checks only)
+        float worldExtX = localExt.x * sx;
+        float worldExtY = localExt.y * sy;
+        float worldExtZ = localExt.z * sz;
+        float maxWorldExt = worldExtX;
+        if (worldExtY > maxWorldExt) maxWorldExt = worldExtY;
+        if (worldExtZ > maxWorldExt) maxWorldExt = worldExtZ;
+
+        // Skip tiny objects (decorations, grass blades, pebbles)
+        if (maxWorldExt > 0.3f) {
+            // Skip horizontal surfaces (floors, ceilings) – they cause the player to
+            // be flung sideways when the push-back MTV picks the smaller XZ axis.
+            // A mesh is "horizontal" if its world Y-extent is much smaller than XZ.
+            float maxWorldXZ = worldExtX > worldExtZ ? worldExtX : worldExtZ;
+            bool isHorizontal = (worldExtY * 4.0f < maxWorldXZ);
+            if (!isHorizontal) {
+            auto* pCol = pGO->AddComponent<ColliderComponent>();
+            pCol->SetExtents(localExt.x, localExt.y, localExt.z);
+            pCol->SetCenter(localCenter.x, localCenter.y, localCenter.z);
+            pCol->SetLayer(CollisionLayer::Wall);
+            pCol->SetCollisionMask(CollisionMask::Wall);
+            } // !isHorizontal
+        } // maxWorldExt > 0.3f
+    }
+
+    // ── 4. Obstacles (collision only) ────────────────────────────────────────
+    const JsonVal& obstacles = root["obstacles"];
+    for (size_t i = 0; i < obstacles.size(); i++) {
+        const JsonVal& obs = obstacles[i];
+        const JsonVal& center = obs["center"];
+        const JsonVal& size   = obs["size"];
+
+        GameObject* pGO = pScene->CreateGameObject(pDevice, pCommandList);
+        pGO->GetTransform()->SetPosition(
+            center[0].f()*MAP_SCALE, center[1].f()*MAP_SCALE, center[2].f()*MAP_SCALE);
+
+        auto* pCol = pGO->AddComponent<ColliderComponent>();
+        pCol->SetExtents(size[0].f()*MAP_SCALE*0.5f, size[1].f()*MAP_SCALE*0.5f, size[2].f()*MAP_SCALE*0.5f);
+        pCol->SetCenter(0.0f, 0.0f, 0.0f);
+        pCol->SetLayer(CollisionLayer::Wall);
+        pCol->SetCollisionMask(CollisionMask::Wall);
+    }
+
+    // ── 5. Enemy spawns → RoomSpawnConfig ────────────────────────────────────
+    const JsonVal& enemySpawns = root["enemySpawns"];
+    RoomSpawnConfig spawnConfig;
+
+    for (size_t i = 0; i < enemySpawns.size(); i++) {
+        const JsonVal& es = enemySpawns[i];
+        std::string presetName = es["presetName"].str;
+        int count = es.has("count") ? es["count"].i() : 1;
+        const JsonVal& pos = es["position"];
+        XMFLOAT3 spawnPos(pos[0].f()*MAP_SCALE, pos[1].f()*MAP_SCALE, pos[2].f()*MAP_SCALE);
+
+        // Register preset if not already registered
+        if (!pScene->GetEnemySpawner()->HasPreset(presetName)) {
+            EnemySpawnData data;
+
+            // Stats
+            if (es.has("stats")) {
+                const JsonVal& stats = es["stats"];
+                data.m_Stats.m_fMaxHP          = stats["maxHP"].f();
+                data.m_Stats.m_fCurrentHP      = stats["maxHP"].f();
+                data.m_Stats.m_fMoveSpeed      = stats["moveSpeed"].f();
+                data.m_Stats.m_fAttackRange    = stats["attackRange"].f();
+                data.m_Stats.m_fAttackCooldown = stats["attackCooldown"].f();
+                data.m_Stats.m_fDetectionRange = stats["detectionRange"].f();
+            }
+
+            // Attack behavior factory (use default parameters; stats are applied via EnemyComponent)
+            std::string attackType = es.has("attackType") ? es["attackType"].str : "Melee";
+            ProjectileManager* pProjMgr = pScene->GetProjectileManager();
+            if (attackType == "RushFront") {
+                data.m_fnCreateAttack = []() -> std::unique_ptr<IAttackBehavior> {
+                    return std::make_unique<RushFrontAttackBehavior>();
+                };
+            } else if (attackType == "RushAoE") {
+                data.m_fnCreateAttack = []() -> std::unique_ptr<IAttackBehavior> {
+                    return std::make_unique<RushAoEAttackBehavior>();
+                };
+            } else if (attackType == "Ranged") {
+                data.m_fnCreateAttack = [pProjMgr]() -> std::unique_ptr<IAttackBehavior> {
+                    return std::make_unique<RangedAttackBehavior>(pProjMgr);
+                };
+            } else { // Melee (default)
+                data.m_fnCreateAttack = []() -> std::unique_ptr<IAttackBehavior> {
+                    return std::make_unique<MeleeAttackBehavior>();
+                };
+            }
+
+            // Attack indicator
+            if (es.has("indicator")) {
+                const JsonVal& ind = es["indicator"];
+                std::string indType = ind["type"].str;
+                if      (indType == "Circle")     data.m_IndicatorConfig.m_eType = IndicatorType::Circle;
+                else if (indType == "RushCircle") data.m_IndicatorConfig.m_eType = IndicatorType::RushCircle;
+                else if (indType == "RushCone")   data.m_IndicatorConfig.m_eType = IndicatorType::RushCone;
+                else                              data.m_IndicatorConfig.m_eType = IndicatorType::None;
+
+                data.m_IndicatorConfig.m_fRushDistance = ind["rushDistance"].f();
+                data.m_IndicatorConfig.m_fHitRadius    = ind["hitRadius"].f();
+                data.m_IndicatorConfig.m_fConeAngle    = ind["coneAngle"].f();
+            }
+
+            // Animation clips
+            if (es.has("animClips")) {
+                const JsonVal& clips = es["animClips"];
+                if (clips.has("idle"))    data.m_AnimConfig.m_strIdleClip    = clips["idle"].str;
+                if (clips.has("chase"))   data.m_AnimConfig.m_strChaseClip   = clips["chase"].str;
+                if (clips.has("attack"))  data.m_AnimConfig.m_strAttackClip  = clips["attack"].str;
+                if (clips.has("stagger")) data.m_AnimConfig.m_strStaggerClip = clips["stagger"].str;
+                if (clips.has("death"))   data.m_AnimConfig.m_strDeathClip   = clips["death"].str;
+            }
+
+            // Visual
+            if (es.has("visual")) {
+                const JsonVal& vis = es["visual"];
+                data.m_strMeshPath      = vis["meshPath"].str;
+                data.m_strAnimationPath = vis["animationPath"].str;
+                const JsonVal& scl = vis["scale"];
+                data.m_xmf3Scale = XMFLOAT3(scl[0].f(), scl[1].f(), scl[2].f());
+                const JsonVal& col = vis["color"];
+                data.m_xmf4Color = XMFLOAT4(col[0].f()/255.f, col[1].f()/255.f, col[2].f()/255.f, col[3].f()/255.f);
+            }
+
+            pScene->GetEnemySpawner()->RegisterEnemyPreset(presetName, data);
+        }
+
+        // Add spawn positions (one per count)
+        for (int c = 0; c < count; c++) {
+            // Spread multiple of same preset slightly
+            XMFLOAT3 p = spawnPos;
+            p.x += c * 2.0f * MAP_SCALE;
+            spawnConfig.AddSpawn(presetName, p);
+        }
+    }
+
+    // Assign spawn config to current room
+    CRoom* pRoom = pScene->GetCurrentRoom();
+    if (pRoom) {
+        pRoom->SetSpawnConfig(spawnConfig);
+        pRoom->SetEnemySpawner(pScene->GetEnemySpawner());
+        pRoom->SetPlayerTarget(pScene->GetPlayer());
+        pRoom->SetScene(pScene);
+    }
+
+    char buf[128];
+    sprintf_s(buf, "[MapLoader] Loaded: %zu rooms, %zu mapObjects, %zu obstacles, %zu enemySpawns\n",
+        rooms.size(), mapObjs.size(), obstacles.size(), enemySpawns.size());
+    OutputDebugStringA(buf);
+    return true;
+}

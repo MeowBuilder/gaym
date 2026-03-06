@@ -18,6 +18,10 @@ void PlayerComponent::PlayerUpdate(float deltaTime, InputSystem* pInputSystem, C
     TransformComponent* pTransform = m_pOwner->GetTransform();
     if (!pTransform) return;
 
+    // Capture ground height on first update
+    if (m_fGroundY <= -FLT_MAX + 1.0f)
+        m_fGroundY = pTransform->GetPosition().y;
+
     // --- Aim-at-cursor Rotation Logic ---
 
     // 1. Get mouse position in screen space
@@ -37,8 +41,8 @@ void PlayerComponent::PlayerUpdate(float deltaTime, InputSystem* pInputSystem, C
     XMVECTOR rayEnd = XMVector3TransformCoord(XMVectorSet(ndcX, ndcY, 1.0f, 1.0f), invViewProjMatrix);    // Far plane
     XMVECTOR rayDir = XMVector3Normalize(rayEnd - rayOrigin);
 
-    // 4. Define the ground plane (Y=0)
-    XMVECTOR groundPlane = XMPlaneFromPointNormal(XMVectorSet(0.0f, 0.0f, 0.0f, 0.0f), XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f));
+    // 4. Define the ground plane at player's actual floor height
+    XMVECTOR groundPlane = XMPlaneFromPointNormal(XMVectorSet(0.0f, m_fGroundY, 0.0f, 0.0f), XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f));
 
     // 5. Find intersection of the ray and the ground plane
 	// XMPlaneIntersectLine requires two points on the line, not a point and a direction.
@@ -98,9 +102,9 @@ void PlayerComponent::PlayerUpdate(float deltaTime, InputSystem* pInputSystem, C
         displacement = moveDir * moveSpeed * deltaTime;
     }
 
-    // Apply displacement
+    // Apply displacement, locking Y to ground height
     currentPosition += displacement;
-    pTransform->SetPosition(XMFLOAT3(XMVectorGetX(currentPosition), XMVectorGetY(currentPosition), XMVectorGetZ(currentPosition)));
+    pTransform->SetPosition(XMFLOAT3(XMVectorGetX(currentPosition), m_fGroundY, XMVectorGetZ(currentPosition)));
 
     // --- Skill Input Processing ---
     SkillComponent* pSkillComponent = m_pOwner->GetComponent<SkillComponent>();

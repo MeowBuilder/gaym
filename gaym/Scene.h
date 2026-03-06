@@ -2,6 +2,7 @@
 
 #include <vector>
 #include <memory>
+#include <unordered_map>
 #include "GameObject.h"
 #include "SkillTypes.h"  // For ActivationType
 #include "Shader.h"
@@ -91,6 +92,11 @@ public:
 
     GameObject* CreateGameObject(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList);
 
+    // MapLoader support
+    CRoom* CreateRoomFromBounds(const XMFLOAT3& center, const XMFLOAT3& extents);
+    EnemySpawner* GetEnemySpawner() { return m_pEnemySpawner.get(); }
+    const std::vector<std::unique_ptr<CRoom>>& GetRooms() const { return m_vRooms; }
+
     void AllocateDescriptor(D3D12_CPU_DESCRIPTOR_HANDLE* pCpuHandle, D3D12_GPU_DESCRIPTOR_HANDLE* pGpuHandle)
     {
         *pCpuHandle = m_pDescriptorHeap->GetCPUHandle(m_nNextDescriptorIndex);
@@ -117,10 +123,22 @@ private:
     float m_fDropInteractionDistance = 5.0f;
     ActivationType m_eSelectedRune = ActivationType::None;  // Selected rune waiting for skill assignment
 
+    // ── Map pool ──────────────────────────────────────────────────────────────
+    // Add map JSON paths here. TransitionToNextRoom picks one at random.
+    std::vector<std::string> m_vMapPool;
+    std::string              m_strCurrentMap;   // Path of the currently loaded map
+
+    void ReAddRenderComponentsToShader(GameObject* pGO);  // Traverse hierarchy
+
     std::vector<std::unique_ptr<Shader>> m_vShaders;
 
     std::unique_ptr<CDescriptorHeap> m_pDescriptorHeap;
     UINT m_nNextDescriptorIndex = 0;
+    UINT m_nPersistentDescriptorEnd = 0;  // Watermark after permanent objects; recyclable slots start here
+
+    // 재활용 구간의 CB 리소스 캐시 — 맵 전환마다 CreateCommittedResource 호출 방지
+    // key = 디스크립터 슬롯 번호 (SRV 슬롯이 끼어들어도 정확히 매핑됨)
+    std::unordered_map<UINT, ComPtr<ID3D12Resource>> m_vCBCache;
 
     // Pass Constant Buffer
     ComPtr<ID3D12Resource> m_pd3dcbPass = nullptr;

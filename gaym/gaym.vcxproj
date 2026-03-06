@@ -168,6 +168,7 @@ xcopy /Y /I /E "$(ProjectDir)Assets\*.*" "$(OutDir)Assets\"</Command>
     <ClInclude Include="RangedAttackBehavior.h" />
     <ClInclude Include="Mesh.h" />
     <ClInclude Include="MeshLoader.h" />
+    <ClInclude Include="MapLoader.h" />
     <ClInclude Include="PlayerComponent.h" />
     <ClInclude Include="SkillTypes.h" />
     <ClInclude Include="SkillData.h" />
@@ -214,6 +215,7 @@ xcopy /Y /I /E "$(ProjectDir)Assets\*.*" "$(OutDir)Assets\"</Command>
     <ClCompile Include="RangedAttackBehavior.cpp" />
     <ClCompile Include="Mesh.cpp" />
     <ClCompile Include="MeshLoader.cpp" />
+    <ClCompile Include="MapLoader.cpp" />
     <ClCompile Include="PlayerComponent.cpp" />
     <ClCompile Include="SkillComponent.cpp" />
     <ClCompile Include="FireballBehavior.cpp" />

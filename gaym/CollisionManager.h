@@ -48,8 +48,9 @@ public:
     void ClearCollisionState();
 
 private:
-    // Helper to check collision between two colliders and manage callbacks
     void CheckCollision(ColliderComponent* pA, ColliderComponent* pB);
+    // Push a dynamic object (Player/Enemy) out of a Wall collider on the XZ plane
+    static void ResolveWallPenetration(ColliderComponent* pDynamic, ColliderComponent* pWall);
 
     // Collision state tracking
     std::set<CollisionPair> m_previousFrameCollisions;

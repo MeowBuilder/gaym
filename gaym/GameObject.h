@@ -47,6 +47,14 @@ public:
 	TransformComponent* GetTransform() { return m_pTransform; }
 
 	void CreateConstantBuffer(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList, UINT nBufferSize, D3D12_CPU_DESCRIPTOR_HANDLE d3dCbvCPUDescriptorHandle);
+	// 기존 리소스 재사용 (맵 전환 시 CB 풀링용) — CBV는 이미 힙에 있으므로 재생성 불필요
+	void ReuseConstantBuffer(const ComPtr<ID3D12Resource>& pCB, ObjectConstants* pMapped)
+	{
+		m_pd3dcbGameObject = pCB;
+		m_pcbMappedGameObject = pMapped;
+	}
+	ComPtr<ID3D12Resource> GetConstantBufferResource() const { return m_pd3dcbGameObject; }
+
 	D3D12_GPU_DESCRIPTOR_HANDLE GetGpuDescriptorHandle() const { return m_cbvGPUDescriptorHandle; }
 	void SetGpuDescriptorHandle(D3D12_GPU_DESCRIPTOR_HANDLE handle) { m_cbvGPUDescriptorHandle = handle; }
 	void SetMaterialIndex(UINT index) { m_nMaterialIndex = index; }

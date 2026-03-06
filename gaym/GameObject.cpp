@@ -4,6 +4,10 @@
 #include "TransformComponent.h"
 #include "WICTextureLoader12.h"
 #include "D3dx12.h"
+#include <map>
+
+// GPU 텍스처 캐시 — 맵 전환 시 동일 파일을 재업로드하지 않도록 유지
+static std::map<std::wstring, ComPtr<ID3D12Resource>> s_textureCache;
 
 GameObject::GameObject()
     : m_Material({XMFLOAT4(0.1f, 0.1f, 0.1f, 1.0f), // Ambient
@@ -166,28 +170,38 @@ void GameObject::LoadTexture(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
         return;
     }
 
-    std::unique_ptr<uint8_t[]> decodedData;
-    D3D12_SUBRESOURCE_DATA subresource;
-
-    HRESULT hr = DirectX::LoadWICTextureFromFile(pd3dDevice, wstrTextureName.c_str(), m_pd3dTexture.GetAddressOf(), decodedData, subresource);
-    if (FAILED(hr))
+    // 캐시에 이미 있으면 디스크 I/O + GPU 업로드 없이 재사용
+    auto cacheIt = s_textureCache.find(wstrTextureName);
+    if (cacheIt != s_textureCache.end())
     {
-        char buffer[512];
-        sprintf_s(buffer, "Failed to load texture: %ls\n", wstrTextureName.c_str());
-        OutputDebugStringA(buffer);
-        return;
+        m_pd3dTexture = cacheIt->second;
+    }
+    else
+    {
+        std::unique_ptr<uint8_t[]> decodedData;
+        D3D12_SUBRESOURCE_DATA subresource;
+
+        HRESULT hr = DirectX::LoadWICTextureFromFile(pd3dDevice, wstrTextureName.c_str(), m_pd3dTexture.GetAddressOf(), decodedData, subresource);
+        if (FAILED(hr))
+        {
+            char buffer[512];
+            sprintf_s(buffer, "Failed to load texture: %ls\n", wstrTextureName.c_str());
+            OutputDebugStringA(buffer);
+            return;
+        }
+
+        UINT64 nBytes = GetRequiredIntermediateSize(m_pd3dTexture.Get(), 0, 1);
+        m_pd3dTextureUploadBuffer = CreateBufferResource(pd3dDevice, pd3dCommandList, NULL, nBytes, D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATE_GENERIC_READ, NULL);
+        UpdateSubresources(pd3dCommandList, m_pd3dTexture.Get(), m_pd3dTextureUploadBuffer.Get(), 0, 0, 1, &subresource);
+
+        D3D12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition(m_pd3dTexture.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+        pd3dCommandList->ResourceBarrier(1, &barrier);
+
+        // 캐시에 등록 (이후 전환에서 재사용)
+        s_textureCache[wstrTextureName] = m_pd3dTexture;
     }
 
-    UINT64 nBytes = GetRequiredIntermediateSize(m_pd3dTexture.Get(), 0, 1);
-
-    m_pd3dTextureUploadBuffer = CreateBufferResource(pd3dDevice, pd3dCommandList, NULL, nBytes, D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATE_GENERIC_READ, NULL);
-
-    UpdateSubresources(pd3dCommandList, m_pd3dTexture.Get(), m_pd3dTextureUploadBuffer.Get(), 0, 0, 1, &subresource);
-
-    D3D12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition(m_pd3dTexture.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-    pd3dCommandList->ResourceBarrier(1, &barrier);
-
-    // Create Shader Resource View (SRV) at the specified handle
+    // SRV는 새 디스크립터 슬롯에 항상 새로 생성 (슬롯이 매번 달라지므로)
     D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
     srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
     srvDesc.Format = m_pd3dTexture->GetDesc().Format;

@@ -1,6 +1,9 @@
 #include "stdafx.h"
 #include "CollisionManager.h"
 #include "ColliderComponent.h"
+#include "TransformComponent.h"
+#include "GameObject.h"
+#include "CollisionLayer.h"
 #include <algorithm>
 
 CollisionManager::CollisionManager()
@@ -108,18 +111,62 @@ void CollisionManager::CheckCollision(ColliderComponent* pA, ColliderComponent* 
     // Check if this is a new collision or ongoing
     bool wasColliding = (m_previousFrameCollisions.find(pair) != m_previousFrameCollisions.end());
 
+    // ── Physical resolution: push dynamic objects out of walls (XZ only) ──────
+    bool aIsWall = (pA->GetLayer() == CollisionLayer::Wall);
+    bool bIsWall = (pB->GetLayer() == CollisionLayer::Wall);
+    bool aIsDynamic = (pA->GetLayer() == CollisionLayer::Player ||
+                       pA->GetLayer() == CollisionLayer::Enemy);
+    bool bIsDynamic = (pB->GetLayer() == CollisionLayer::Player ||
+                       pB->GetLayer() == CollisionLayer::Enemy);
+
+    if (aIsWall && bIsDynamic) ResolveWallPenetration(pB, pA);
+    else if (bIsWall && aIsDynamic) ResolveWallPenetration(pA, pB);
+
     if (wasColliding)
     {
-        // Collision Stay
         pA->NotifyCollisionStay(pB);
         pB->NotifyCollisionStay(pA);
     }
     else
     {
-        // Collision Enter
         pA->NotifyCollisionEnter(pB);
         pB->NotifyCollisionEnter(pA);
     }
+}
+
+void CollisionManager::ResolveWallPenetration(ColliderComponent* pDynamic, ColliderComponent* pWall)
+{
+    if (!pDynamic || !pWall) return;
+
+    auto* pTransform = pDynamic->GetOwner()
+        ? pDynamic->GetOwner()->GetComponent<TransformComponent>()
+        : nullptr;
+    if (!pTransform) return;
+
+    const auto& dynBox  = pDynamic->GetBoundingBox();
+    const auto& wallBox = pWall->GetBoundingBox();
+
+    // Compute penetration depth on XZ axes only (Y is managed separately)
+    float overlapX = (dynBox.Extents.x + wallBox.Extents.x) - fabsf(dynBox.Center.x - wallBox.Center.x);
+    float overlapZ = (dynBox.Extents.z + wallBox.Extents.z) - fabsf(dynBox.Center.z - wallBox.Center.z);
+
+    if (overlapX <= 0.0f || overlapZ <= 0.0f) return;
+
+    XMFLOAT3 pos = pTransform->GetPosition();
+
+    // Push along the axis with the smallest penetration (minimum translation vector)
+    if (overlapX < overlapZ)
+    {
+        float sign = (dynBox.Center.x >= wallBox.Center.x) ? 1.0f : -1.0f;
+        pos.x += sign * overlapX;
+    }
+    else
+    {
+        float sign = (dynBox.Center.z >= wallBox.Center.z) ? 1.0f : -1.0f;
+        pos.z += sign * overlapZ;
+    }
+
+    pTransform->SetPosition(pos);
 }
 
 void CollisionManager::ClearCollisionState()

@@ -191,10 +191,15 @@ void EnemyComponent::MoveTowardsTarget(float dt)
     XMFLOAT2 dir = MathUtils::Direction2D(myPos, targetPos);
     if (dir.x == 0.0f && dir.y == 0.0f) return;
 
-    // Move towards target
+    // Capture ground height on first move
+    if (m_fGroundY <= -FLT_MAX + 1.0f)
+        m_fGroundY = myPos.y;
+
+    // Move towards target, locking Y to ground height
     float moveAmount = m_Stats.m_fMoveSpeed * dt;
     myPos.x += dir.x * moveAmount;
     myPos.z += dir.y * moveAmount;
+    myPos.y = m_fGroundY;
 
     pMyTransform->SetPosition(myPos);
 }
@@ -308,7 +313,7 @@ void EnemyComponent::ShowIndicators()
             TransformComponent* pT = m_pHitZoneIndicator->GetTransform();
             if (pT)
             {
-                pT->SetPosition(myPos.x, 0.15f, myPos.z);
+                pT->SetPosition(myPos.x, myPos.y + 0.15f, myPos.z);
                 float r = m_IndicatorConfig.m_fHitRadius;
                 pT->SetScale(r, 1.0f, r);
             }
@@ -325,7 +330,7 @@ void EnemyComponent::ShowIndicators()
             TransformComponent* pT = m_pRushLineIndicator->GetTransform();
             if (pT)
             {
-                pT->SetPosition(myPos.x, 0.15f, myPos.z);
+                pT->SetPosition(myPos.x, myPos.y + 0.15f, myPos.z);
                 pT->SetRotation(0.0f, yawDeg, 0.0f);
                 pT->SetScale(1.0f, 1.0f, rushDist);
             }
@@ -339,7 +344,7 @@ void EnemyComponent::ShowIndicators()
             TransformComponent* pT = m_pHitZoneIndicator->GetTransform();
             if (pT)
             {
-                pT->SetPosition(destX, 0.15f, destZ);
+                pT->SetPosition(destX, myPos.y + 0.15f, destZ);
                 float r = m_IndicatorConfig.m_fHitRadius;
                 pT->SetScale(r, 1.0f, r);
 

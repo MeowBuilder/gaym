@@ -19,7 +19,11 @@ public:
     float GetMaxHP() const { return m_fMaxHP; }
     bool IsDead() const { return m_fCurrentHP <= 0.0f; }
 
+    // Call when player is teleported to a new map so the new floor Y is re-captured
+    void ResetGroundY() { m_fGroundY = -FLT_MAX; }
+
 private:
     float m_fMaxHP = 100.0f;
     float m_fCurrentHP = 100.0f;
+    float m_fGroundY = -FLT_MAX;  // Captured on first update, used to lock Y
 };

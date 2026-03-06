@@ -150,4 +150,6 @@ private:
 
     // Callbacks
     DeathCallback m_OnDeathCallback;
+
+    float m_fGroundY = -FLT_MAX;  // Captured on first move, used to lock Y
 };
