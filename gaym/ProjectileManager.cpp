@@ -5,6 +5,7 @@
 #include "Room.h"
 #include "GameObject.h"
 #include "EnemyComponent.h"
+#include "PlayerComponent.h"
 #include "TransformComponent.h"
 #include "Mesh.h"
 #include "DescriptorHeap.h"
@@ -255,11 +256,17 @@ void ProjectileManager::CheckProjectileCollisions(Projectile& projectile)
         {
             projectile.isActive = false;
 
-            wchar_t buffer[128];
-            swprintf_s(buffer, 128, L"[ProjectileManager] Enemy projectile hit player! Damage: %.0f\n", projectile.damage);
-            OutputDebugString(buffer);
+            // Deal damage to player
+            PlayerComponent* pPlayerComp = pPlayer->GetComponent<PlayerComponent>();
+            if (pPlayerComp)
+            {
+                pPlayerComp->TakeDamage(projectile.damage);
 
-            // TODO: PlayerComponent::TakeDamage
+                wchar_t buffer[128];
+                swprintf_s(buffer, 128, L"[ProjectileManager] Enemy projectile hit player! Dealt %.0f damage (HP: %.1f/%.1f)\n",
+                    projectile.damage, pPlayerComp->GetCurrentHP(), pPlayerComp->GetMaxHP());
+                OutputDebugString(buffer);
+            }
             return;
         }
     }

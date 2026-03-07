@@ -3,6 +3,7 @@
 #include "EnemyComponent.h"
 #include "GameObject.h"
 #include "TransformComponent.h"
+#include "PlayerComponent.h"
 #include "MathUtils.h"
 
 RushAoEAttackBehavior::RushAoEAttackBehavior(float fDamage, float fRushSpeed, float fRushDuration,
@@ -150,9 +151,15 @@ void RushAoEAttackBehavior::DealAoEDamage(EnemyComponent* pEnemy)
         return;
     }
 
-    wchar_t buffer[128];
-    swprintf_s(buffer, L"[RushAoE] AoE HIT! Dealing %.1f damage (dist: %.1f)\n", m_fDamage, distance);
-    OutputDebugString(buffer);
+    // Deal damage to player
+    PlayerComponent* pPlayer = pTarget->GetComponent<PlayerComponent>();
+    if (pPlayer)
+    {
+        pPlayer->TakeDamage(m_fDamage);
 
-    // TODO: PlayerComponent::TakeDamage
+        wchar_t buffer[128];
+        swprintf_s(buffer, L"[RushAoE] AoE HIT! Dealt %.1f damage (HP: %.1f/%.1f)\n",
+            m_fDamage, pPlayer->GetCurrentHP(), pPlayer->GetMaxHP());
+        OutputDebugString(buffer);
+    }
 }

@@ -6,6 +6,7 @@
 #include "AnimationComponent.h"
 #include "Room.h"
 #include "Scene.h"
+#include "Dx12App.h"
 #include "MathUtils.h"
 
 EnemyComponent::EnemyComponent(GameObject* pOwner)
@@ -286,10 +287,17 @@ void EnemyComponent::UpdateDead(float dt)
     // When timer expires, request deletion
     if (m_fDeadTimer <= 0.0f)
     {
+        // Try to get Scene from Room first, fallback to Dx12App if not available
         Scene* pScene = nullptr;
         if (m_pRoom)
         {
             pScene = m_pRoom->GetScene();
+        }
+
+        // Fallback: get Scene directly from Dx12App if Room doesn't have it
+        if (!pScene)
+        {
+            pScene = Dx12App::GetInstance()->GetScene();
         }
 
         if (pScene)

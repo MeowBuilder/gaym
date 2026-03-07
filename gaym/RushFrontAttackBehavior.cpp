@@ -3,6 +3,7 @@
 #include "EnemyComponent.h"
 #include "GameObject.h"
 #include "TransformComponent.h"
+#include "PlayerComponent.h"
 #include "MathUtils.h"
 
 RushFrontAttackBehavior::RushFrontAttackBehavior(float fDamage, float fRushSpeed, float fRushDuration,
@@ -176,9 +177,15 @@ void RushFrontAttackBehavior::DealConeDamage(EnemyComponent* pEnemy)
         return;
     }
 
-    wchar_t buffer[128];
-    swprintf_s(buffer, L"[RushFront] Cone HIT! Dealing %.1f damage (dist: %.1f, dot: %.2f)\n", m_fDamage, distance, dot);
-    OutputDebugString(buffer);
+    // Deal damage to player
+    PlayerComponent* pPlayer = pTarget->GetComponent<PlayerComponent>();
+    if (pPlayer)
+    {
+        pPlayer->TakeDamage(m_fDamage);
 
-    // TODO: PlayerComponent::TakeDamage
+        wchar_t buffer[128];
+        swprintf_s(buffer, L"[RushFront] Cone HIT! Dealt %.1f damage (HP: %.1f/%.1f)\n",
+            m_fDamage, pPlayer->GetCurrentHP(), pPlayer->GetMaxHP());
+        OutputDebugString(buffer);
+    }
 }

@@ -84,12 +84,14 @@ void MeleeAttackBehavior::DealDamage(EnemyComponent* pEnemy)
     }
 
     // Deal damage to player
-    // For now, just output debug message since we don't have player health yet
-    wchar_t buffer[128];
-    swprintf_s(buffer, L"[MeleeAttack] HIT! Dealing %.1f damage to player\n", m_fDamage);
-    OutputDebugString(buffer);
+    PlayerComponent* pPlayer = pTarget->GetComponent<PlayerComponent>();
+    if (pPlayer)
+    {
+        pPlayer->TakeDamage(m_fDamage);
 
-    // TODO: Add player health system and deal actual damage
-    // PlayerComponent* pPlayer = pTarget->GetComponent<PlayerComponent>();
-    // if (pPlayer) pPlayer->TakeDamage(m_fDamage);
+        wchar_t buffer[128];
+        swprintf_s(buffer, L"[MeleeAttack] HIT! Dealt %.1f damage (HP: %.1f/%.1f)\n",
+            m_fDamage, pPlayer->GetCurrentHP(), pPlayer->GetMaxHP());
+        OutputDebugString(buffer);
+    }
 }

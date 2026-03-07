@@ -1000,16 +1000,42 @@ static void UnregisterCollidersRecursive(GameObject* pObj, CollisionManager* pCo
     if (pObj->m_pSibling) UnregisterCollidersRecursive(pObj->m_pSibling, pCollisionMgr);
 }
 
+// Helper function to collect all child/sibling GameObjects for deletion
+static void CollectHierarchyForDeletion(GameObject* pObj, std::vector<GameObject*>& outList)
+{
+    if (!pObj) return;
+    outList.push_back(pObj);
+    if (pObj->m_pChild) CollectHierarchyForDeletion(pObj->m_pChild, outList);
+    if (pObj->m_pSibling) CollectHierarchyForDeletion(pObj->m_pSibling, outList);
+}
+
 void Scene::ProcessPendingDeletions()
 {
     if (m_vPendingDeletions.empty()) return;
 
+    // Collect all objects to delete (including children/siblings)
+    std::vector<GameObject*> allToDelete;
     for (GameObject* pObj : m_vPendingDeletions)
     {
         if (!pObj) continue;
 
-        // Unregister colliders from this object and its hierarchy
-        UnregisterCollidersRecursive(pObj, m_pCollisionManager.get());
+        // Collect this object and all its children/siblings
+        // (MeshLoader creates each Frame as separate GameObject in Room)
+        if (pObj->m_pChild) CollectHierarchyForDeletion(pObj->m_pChild, allToDelete);
+        // Note: Don't add siblings of root - they are separate entities
+        allToDelete.push_back(pObj);
+    }
+
+    for (GameObject* pObj : allToDelete)
+    {
+        if (!pObj) continue;
+
+        // Unregister colliders from this object
+        auto* pCollider = pObj->GetComponent<ColliderComponent>();
+        if (pCollider && m_pCollisionManager)
+        {
+            m_pCollisionManager->UnregisterCollider(pCollider);
+        }
 
         // Try to remove from Scene's global objects
         bool bFound = false;
