@@ -152,6 +152,11 @@ void CollisionManager::ResolveWallPenetration(ColliderComponent* pDynamic, Colli
 
     if (overlapX <= 0.0f || overlapZ <= 0.0f) return;
 
+    // 밀어내기 양 제한 (텔레포트 방지)
+    const float MAX_PUSH = 0.5f;
+    overlapX = min(overlapX, MAX_PUSH);
+    overlapZ = min(overlapZ, MAX_PUSH);
+
     XMFLOAT3 pos = pTransform->GetPosition();
 
     // Push along the axis with the smallest penetration (minimum translation vector)

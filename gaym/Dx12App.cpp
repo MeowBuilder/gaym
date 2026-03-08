@@ -303,11 +303,12 @@ void Dx12App::FrameAdvance()
             XMFLOAT2 mousePos = m_inputSystem.GetMousePosition();
 
             // Check if clicking on one of the 3 rune options
+            float optionLineHeight = 55.0f;  // 렌더링과 동일하게
             for (int i = 0; i < 3; ++i)
             {
-                float optionY = screenCenterY + i * 40.0f;
-                float optionHeight = 36.0f;
-                float optionWidth = 400.0f;
+                float optionY = screenCenterY + i * optionLineHeight;
+                float optionHeight = 45.0f;
+                float optionWidth = 500.0f;
 
                 if (mousePos.x >= screenCenterX - optionWidth / 2.0f &&
                     mousePos.x <= screenCenterX + optionWidth / 2.0f &&
@@ -349,7 +350,7 @@ void Dx12App::FrameAdvance()
             float screenCenterX = (float)m_nWndClientWidth / 2.0f;
             float screenCenterY = (float)m_nWndClientHeight / 2.0f;
             float slotStartY = screenCenterY - 20.0f;
-            float lineHeight = 40.0f;
+            float lineHeight = 50.0f;  // 렌더링과 동일하게
 
             for (int skillIdx = 0; skillIdx < static_cast<int>(SkillSlot::Count); ++skillIdx)
             {
@@ -357,9 +358,9 @@ void Dx12App::FrameAdvance()
 
                 for (int runeIdx = 0; runeIdx < RUNES_PER_SKILL; ++runeIdx)
                 {
-                    float runeX = screenCenterX - 80.0f + runeIdx * 80.0f;
-                    float runeWidth = 70.0f;
-                    float runeHeight = 28.0f;
+                    float runeX = screenCenterX - 140.0f + runeIdx * 140.0f;
+                    float runeWidth = 120.0f;
+                    float runeHeight = 35.0f;
 
                     if (mousePos.x >= runeX && mousePos.x <= runeX + runeWidth &&
                         mousePos.y >= slotY && mousePos.y <= slotY + runeHeight)
@@ -686,6 +687,7 @@ void Dx12App::RenderText()
 
                         // Rune options (clickable)
                         XMFLOAT2 mousePos = m_inputSystem.GetMousePosition();
+                        float optionLineHeight = 55.0f;  // 간격 넓힘 (40 -> 55)
                         for (int i = 0; i < 3; ++i)
                         {
                             ActivationType runeType = pDropComp->GetRuneOption(i);
@@ -694,7 +696,7 @@ void Dx12App::RenderText()
                             std::wstringstream optionText;
                             optionText << L"> " << typeNames[typeIndex] << L" - " << typeDescs[typeIndex];
 
-                            float optionY = screenCenterY + i * 40.0f;
+                            float optionY = screenCenterY + i * optionLineHeight;
                             XMVECTOR optionSize = m_spriteFont->MeasureString(optionText.str().c_str());
                             float optionWidth = XMVectorGetX(optionSize);
 
@@ -713,7 +715,7 @@ void Dx12App::RenderText()
                         const wchar_t* cancelText = L"[ESC] Cancel";
                         XMVECTOR cancelSize = m_spriteFont->MeasureString(cancelText);
                         m_spriteFont->DrawString(m_spriteBatch.get(), cancelText,
-                            XMFLOAT2(screenCenterX - XMVectorGetX(cancelSize) / 2.0f, screenCenterY + 140.0f),
+                            XMFLOAT2(screenCenterX - XMVectorGetX(cancelSize) / 2.0f, screenCenterY + 180.0f),
                             DirectX::Colors::Gray);
                     }
                 }
@@ -745,7 +747,7 @@ void Dx12App::RenderText()
 
             XMFLOAT2 mousePos = m_inputSystem.GetMousePosition();
             float slotStartY = screenCenterY - 20.0f;
-            float lineHeight = 40.0f;
+            float lineHeight = 50.0f;  // 간격 넓힘 (40 -> 50)
 
             for (int skillIdx = 0; skillIdx < static_cast<int>(SkillSlot::Count); ++skillIdx)
             {
@@ -755,14 +757,14 @@ void Dx12App::RenderText()
                 std::wstringstream skillText;
                 skillText << L"[" << slotNames[skillIdx] << L"] ";
                 m_spriteFont->DrawString(m_spriteBatch.get(), skillText.str().c_str(),
-                    XMFLOAT2(screenCenterX - 150.0f, slotY), DirectX::Colors::White);
+                    XMFLOAT2(screenCenterX - 250.0f, slotY), DirectX::Colors::White);
 
                 // Rune slots (3 boxes)
                 for (int runeIdx = 0; runeIdx < RUNES_PER_SKILL; ++runeIdx)
                 {
-                    float runeX = screenCenterX - 80.0f + runeIdx * 80.0f;
-                    float runeWidth = 70.0f;
-                    float runeHeight = 28.0f;
+                    float runeX = screenCenterX - 140.0f + runeIdx * 140.0f;
+                    float runeWidth = 120.0f;
+                    float runeHeight = 35.0f;
 
                     ActivationType runeType = pSkill ? pSkill->GetRuneSlot(static_cast<SkillSlot>(skillIdx), runeIdx) : ActivationType::None;
 
@@ -784,7 +786,7 @@ void Dx12App::RenderText()
             const wchar_t* cancelText = L"[ESC] Cancel";
             XMVECTOR cancelSize = m_spriteFont->MeasureString(cancelText);
             m_spriteFont->DrawString(m_spriteBatch.get(), cancelText,
-                XMFLOAT2(screenCenterX - XMVectorGetX(cancelSize) / 2.0f, slotStartY + 180.0f),
+                XMFLOAT2(screenCenterX - XMVectorGetX(cancelSize) / 2.0f, slotStartY + 220.0f),
                 DirectX::Colors::Gray);
         }
         else if (m_pScene->IsNearDropItem())
