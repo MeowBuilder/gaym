@@ -4,6 +4,8 @@
 class InputSystem; // Forward declaration for InputSystem
 class CCamera;     // Forward declaration for CCamera
 
+enum class PlayerAnimState { Idle, Walk, Attack };
+
 class PlayerComponent : public Component
 {
 public:
@@ -26,4 +28,11 @@ private:
     float m_fMaxHP = 100.0f;
     float m_fCurrentHP = 100.0f;
     float m_fGroundY = -FLT_MAX;  // Captured on first update, used to lock Y
+
+    // Animation state machine
+    PlayerAnimState m_eAnimState = PlayerAnimState::Idle;
+    float m_fAttackTimer = 0.0f;
+    static constexpr float kAttackAnimDuration = 0.92f;  // Attack1 clip duration
+
+    void UpdateAnimation(float deltaTime, bool bMoving, bool bAttackTriggered);
 };

@@ -69,7 +69,7 @@ void Scene::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList)
     // --------------------------------------------------------------------------
     m_pCurrentRoom = nullptr; 
 
-    GameObject* pPlayer = MeshLoader::LoadGeometryFromFile(this, pDevice, pCommandList, NULL, "Assets/Player/Models/Vampire A Lusth.bin");
+    GameObject* pPlayer = MeshLoader::LoadGeometryFromFile(this, pDevice, pCommandList, NULL, "Assets/Player/MageBlue.bin");
     if (pPlayer)
     {
         OutputDebugString(L"Player model loaded successfully!\n");
@@ -78,10 +78,9 @@ void Scene::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList)
         pPlayer->AddComponent<PlayerComponent>();
         m_pPlayerGameObject = pPlayer;
 
-        // Add Animation Component
-        pPlayer->AddComponent<AnimationComponent>();
-        pPlayer->GetComponent<AnimationComponent>()->LoadAnimation("Assets/Player/Animations/Walking_Anim.bin");
-        pPlayer->GetComponent<AnimationComponent>()->Play("mixamo.com");
+        auto* pAnim = pPlayer->AddComponent<AnimationComponent>();
+        pAnim->LoadAnimation("Assets/Player/MageBlue_Anim.bin");
+        pAnim->Play("Idle", true);
 
         // Add Collider Component for Player
         auto* pPlayerCollider = pPlayer->AddComponent<ColliderComponent>();

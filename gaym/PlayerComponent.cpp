@@ -5,6 +5,7 @@
 #include "TransformComponent.h" // Needed for TransformComponent
 #include "Camera.h" // Needed for CCamera
 #include "SkillComponent.h" // Needed for SkillComponent
+#include "AnimationComponent.h"
 
 PlayerComponent::PlayerComponent(GameObject* pOwner)
     : Component(pOwner)
@@ -95,8 +96,10 @@ void PlayerComponent::PlayerUpdate(float deltaTime, InputSystem* pInputSystem, C
     if (pInputSystem->IsKeyDown('A')) moveDir -= camRight;
     if (pInputSystem->IsKeyDown('D')) moveDir += camRight;
 
+    bool bMoving = XMVectorGetX(XMVector3LengthSq(moveDir)) > 0.001f;
+
     // Normalize movement direction to keep speed consistent (even diagonally)
-    if (XMVectorGetX(XMVector3LengthSq(moveDir)) > 0.001f)
+    if (bMoving)
     {
         moveDir = XMVector3Normalize(moveDir);
         displacement = moveDir * moveSpeed * deltaTime;
@@ -107,11 +110,18 @@ void PlayerComponent::PlayerUpdate(float deltaTime, InputSystem* pInputSystem, C
     pTransform->SetPosition(XMFLOAT3(XMVectorGetX(currentPosition), m_fGroundY, XMVectorGetZ(currentPosition)));
 
     // --- Skill Input Processing ---
+    bool bAttackTriggered = pInputSystem->IsKeyPressed('Q')
+                         || pInputSystem->IsKeyPressed('E')
+                         || pInputSystem->IsKeyPressed('R')
+                         || pInputSystem->IsMouseButtonPressed(1);
+
     SkillComponent* pSkillComponent = m_pOwner->GetComponent<SkillComponent>();
     if (pSkillComponent)
     {
         pSkillComponent->ProcessSkillInput(pInputSystem, pCamera);
     }
+
+    UpdateAnimation(deltaTime, bMoving, bAttackTriggered);
 }
 
 void PlayerComponent::TakeDamage(float fDamage)
@@ -133,5 +143,51 @@ void PlayerComponent::Heal(float fAmount)
     if (m_fCurrentHP > m_fMaxHP)
     {
         m_fCurrentHP = m_fMaxHP;
+    }
+}
+
+void PlayerComponent::UpdateAnimation(float deltaTime, bool bMoving, bool bAttackTriggered)
+{
+    AnimationComponent* pAnim = m_pOwner->GetComponent<AnimationComponent>();
+    if (!pAnim) return;
+
+    // Tick down attack timer
+    if (m_fAttackTimer > 0.0f)
+        m_fAttackTimer -= deltaTime;
+
+    // Determine desired state (Attack > Walk > Idle)
+    PlayerAnimState desiredState;
+    if (bAttackTriggered)
+    {
+        m_fAttackTimer = kAttackAnimDuration;
+        desiredState = PlayerAnimState::Attack;
+    }
+    else if (m_fAttackTimer > 0.0f)
+    {
+        desiredState = PlayerAnimState::Attack;
+    }
+    else if (bMoving)
+    {
+        desiredState = PlayerAnimState::Walk;
+    }
+    else
+    {
+        desiredState = PlayerAnimState::Idle;
+    }
+
+    if (desiredState == m_eAnimState) return;
+    m_eAnimState = desiredState;
+
+    switch (m_eAnimState)
+    {
+    case PlayerAnimState::Idle:
+        pAnim->CrossFade("Idle", 0.2f, true);
+        break;
+    case PlayerAnimState::Walk:
+        pAnim->CrossFade("Walk", 0.15f, true);
+        break;
+    case PlayerAnimState::Attack:
+        pAnim->CrossFade("Attack1", 0.1f, false);
+        break;
     }
 }

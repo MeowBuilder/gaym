@@ -113,6 +113,7 @@ void MeshIlluminatedFromFile::Render(ID3D12GraphicsCommandList *pd3dCommandList,
 {
 	pd3dCommandList->IASetPrimitiveTopology(m_d3dPrimitiveTopology);
 	D3D12_VERTEX_BUFFER_VIEW pVertexBufferViews[3] = { m_d3dPositionBufferView, m_d3dNormalBufferView, m_d3dTextureCoord0BufferView };
+	pd3dCommandList->IASetVertexBuffers(m_nSlot, 3, pVertexBufferViews);
     	if ((m_nSubMeshes > 0) && (nSubSet < m_nSubMeshes))
     	{
     		pd3dCommandList->IASetIndexBuffer(&(m_pd3dSubSetIndexBufferViews[nSubSet]));
