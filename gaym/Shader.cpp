@@ -1,6 +1,7 @@
 #include "stdafx.h"
 #include "Shader.h"
 #include "RenderComponent.h"
+#include <algorithm>
 
 Shader::Shader()
 {
@@ -13,6 +14,14 @@ Shader::~Shader()
 void Shader::AddRenderComponent(RenderComponent* pRenderComponent)
 {
     m_vRenderComponents.push_back(pRenderComponent);
+    pRenderComponent->SetOwnerShader(this);
+}
+
+void Shader::RemoveRenderComponent(RenderComponent* pRenderComponent)
+{
+    m_vRenderComponents.erase(
+        std::remove(m_vRenderComponents.begin(), m_vRenderComponents.end(), pRenderComponent),
+        m_vRenderComponents.end());
 }
 
 void Shader::Render(ID3D12GraphicsCommandList* pCommandList, D3D12_GPU_VIRTUAL_ADDRESS d3dPassCBVAddress, D3D12_GPU_DESCRIPTOR_HANDLE shadowSrvHandle)

@@ -3,6 +3,7 @@
 #include "GameObject.h"
 #include "TransformComponent.h"
 #include "Mesh.h"
+#include "Shader.h"
 
 RenderComponent::RenderComponent(GameObject* pOwner) : Component(pOwner)
 {
@@ -10,6 +11,8 @@ RenderComponent::RenderComponent(GameObject* pOwner) : Component(pOwner)
 
 RenderComponent::~RenderComponent()
 {
+    if (m_pOwnerShader)
+        m_pOwnerShader->RemoveRenderComponent(this);
 }
 
 void RenderComponent::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList)

@@ -14,7 +14,8 @@ public:
     void RenderShadowPass(ID3D12GraphicsCommandList* pCommandList, D3D12_GPU_VIRTUAL_ADDRESS d3dPassCBVAddress);
 
     void AddRenderComponent(RenderComponent* pRenderComponent);
-    void ClearRenderComponents() { m_vRenderComponents.clear(); } // Added method
+    void RemoveRenderComponent(RenderComponent* pRenderComponent);
+    void ClearRenderComponents() { m_vRenderComponents.clear(); }
 
     virtual void Build(ID3D12Device* pDevice);
 

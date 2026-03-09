@@ -3,6 +3,8 @@
 #include "Mesh.h"
 #include <memory>
 
+class Shader;
+
 class RenderComponent : public Component
 {
 public:
@@ -19,7 +21,10 @@ public:
     void SetCastsShadow(bool bCasts) { m_bCastsShadow = bCasts; }
     bool CastsShadow() const { return m_bCastsShadow; }
 
+    void SetOwnerShader(Shader* pShader) { m_pOwnerShader = pShader; }
+
 private:
     Mesh* m_pMesh = nullptr;
-    bool m_bCastsShadow = false;  // 기본값: 그림자 안 드리움
+    bool m_bCastsShadow = false;
+    Shader* m_pOwnerShader = nullptr;
 };
