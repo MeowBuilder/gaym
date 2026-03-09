@@ -40,13 +40,16 @@ void Dx12App::OnCreate(HINSTANCE hInstance, HWND hMainWnd)
     CreateRtvAndDsvDescriptorHeaps();
     CreateRenderTargetViews();
     CreateDepthStencilView();
-    
+    CreateShadowMap();
 
     // CommandList를 열고 리소스 생성을 기록합니다.
     CHECK_HR(m_pd3dCommandList->Reset(m_pd3dCommandAllocator.Get(), NULL));
 
     m_pScene = std::make_unique<Scene>();
     m_pScene->Init(m_pd3dDevice.Get(), m_pd3dCommandList.Get());
+
+    // Create Shadow Map SRV in Scene's descriptor heap
+    CreateShadowMapSRV();
 
     // CommandList를 닫고 실행하여 리소스 업로드를 완료합니다.
     CHECK_HR(m_pd3dCommandList->Close());
@@ -191,6 +194,83 @@ void Dx12App::CreateDepthStencilView()
     m_pd3dDevice->CreateDepthStencilView(m_pd3dDepthStencilBuffer.Get(), &d3dDepthStencilViewDesc, d3dDsvCPUDescriptorHandle);
 }
 
+void Dx12App::CreateShadowMap()
+{
+    // Create Shadow Map texture resource
+    D3D12_RESOURCE_DESC shadowMapDesc;
+    shadowMapDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+    shadowMapDesc.Alignment = 0;
+    shadowMapDesc.Width = kShadowMapSize;
+    shadowMapDesc.Height = kShadowMapSize;
+    shadowMapDesc.DepthOrArraySize = 1;
+    shadowMapDesc.MipLevels = 1;
+    shadowMapDesc.Format = DXGI_FORMAT_R32_TYPELESS;  // Typeless for DSV/SRV compatibility
+    shadowMapDesc.SampleDesc.Count = 1;
+    shadowMapDesc.SampleDesc.Quality = 0;
+    shadowMapDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+    shadowMapDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
+
+    D3D12_HEAP_PROPERTIES heapProperties;
+    ::ZeroMemory(&heapProperties, sizeof(D3D12_HEAP_PROPERTIES));
+    heapProperties.Type = D3D12_HEAP_TYPE_DEFAULT;
+    heapProperties.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
+    heapProperties.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
+    heapProperties.CreationNodeMask = 1;
+    heapProperties.VisibleNodeMask = 1;
+
+    D3D12_CLEAR_VALUE clearValue;
+    clearValue.Format = DXGI_FORMAT_D32_FLOAT;
+    clearValue.DepthStencil.Depth = 1.0f;
+    clearValue.DepthStencil.Stencil = 0;
+
+    CHECK_HR(m_pd3dDevice->CreateCommittedResource(
+        &heapProperties,
+        D3D12_HEAP_FLAG_NONE,
+        &shadowMapDesc,
+        D3D12_RESOURCE_STATE_DEPTH_WRITE,
+        &clearValue,
+        __uuidof(ID3D12Resource),
+        (void**)&m_pd3dShadowMap));
+
+    // Create Shadow DSV Heap
+    D3D12_DESCRIPTOR_HEAP_DESC dsvHeapDesc;
+    ::ZeroMemory(&dsvHeapDesc, sizeof(D3D12_DESCRIPTOR_HEAP_DESC));
+    dsvHeapDesc.NumDescriptors = 1;
+    dsvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV;
+    dsvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
+    CHECK_HR(m_pd3dDevice->CreateDescriptorHeap(&dsvHeapDesc, __uuidof(ID3D12DescriptorHeap), (void**)&m_pd3dShadowDsvHeap));
+
+    // Create Shadow DSV
+    D3D12_DEPTH_STENCIL_VIEW_DESC dsvDesc;
+    ::ZeroMemory(&dsvDesc, sizeof(D3D12_DEPTH_STENCIL_VIEW_DESC));
+    dsvDesc.Format = DXGI_FORMAT_D32_FLOAT;
+    dsvDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
+    dsvDesc.Flags = D3D12_DSV_FLAG_NONE;
+
+    m_shadowDsvHandle = m_pd3dShadowDsvHeap->GetCPUDescriptorHandleForHeapStart();
+    m_pd3dDevice->CreateDepthStencilView(m_pd3dShadowMap.Get(), &dsvDesc, m_shadowDsvHandle);
+}
+
+void Dx12App::CreateShadowMapSRV()
+{
+    // Allocate descriptor from Scene's heap
+    D3D12_CPU_DESCRIPTOR_HANDLE srvCpuHandle;
+    m_pScene->AllocateDescriptor(&srvCpuHandle, &m_shadowSrvGpuHandle);
+
+    // Create Shadow SRV in Scene's descriptor heap
+    D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc;
+    ::ZeroMemory(&srvDesc, sizeof(D3D12_SHADER_RESOURCE_VIEW_DESC));
+    srvDesc.Format = DXGI_FORMAT_R32_FLOAT;
+    srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+    srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    srvDesc.Texture2D.MostDetailedMip = 0;
+    srvDesc.Texture2D.MipLevels = 1;
+    srvDesc.Texture2D.ResourceMinLODClamp = 0.0f;
+    srvDesc.Texture2D.PlaneSlice = 0;
+
+    m_pd3dDevice->CreateShaderResourceView(m_pd3dShadowMap.Get(), &srvDesc, srvCpuHandle);
+}
+
 
 
 void Dx12App::WaitForGpuComplete()
@@ -250,6 +330,42 @@ void Dx12App::FrameAdvance()
     CHECK_HR(m_pd3dCommandAllocator->Reset());
     CHECK_HR(m_pd3dCommandList->Reset(m_pd3dCommandAllocator.Get(), NULL));
 
+    // Update scene first (calculates light matrices)
+    m_pScene->Update(m_GameTimer.GetTimeElapsed(), &m_inputSystem);
+
+    // ========================================================================
+    // Shadow Pass: Render depth from light's perspective
+    // ========================================================================
+    {
+        // Set shadow map viewport
+        D3D12_VIEWPORT shadowViewport = { 0, 0, (FLOAT)kShadowMapSize, (FLOAT)kShadowMapSize, 0.0f, 1.0f };
+        m_pd3dCommandList->RSSetViewports(1, &shadowViewport);
+        D3D12_RECT shadowScissorRect = { 0, 0, (LONG)kShadowMapSize, (LONG)kShadowMapSize };
+        m_pd3dCommandList->RSSetScissorRects(1, &shadowScissorRect);
+
+        // Clear shadow map
+        m_pd3dCommandList->ClearDepthStencilView(m_shadowDsvHandle, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, NULL);
+
+        // Set shadow map as render target (no color target)
+        m_pd3dCommandList->OMSetRenderTargets(0, nullptr, FALSE, &m_shadowDsvHandle);
+
+        // Render shadow casters
+        m_pScene->RenderShadowPass(m_pd3dCommandList.Get());
+
+        // Transition shadow map from depth write to shader resource
+        D3D12_RESOURCE_BARRIER shadowBarrier;
+        shadowBarrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        shadowBarrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+        shadowBarrier.Transition.pResource = m_pd3dShadowMap.Get();
+        shadowBarrier.Transition.StateBefore = D3D12_RESOURCE_STATE_DEPTH_WRITE;
+        shadowBarrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+        shadowBarrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+        m_pd3dCommandList->ResourceBarrier(1, &shadowBarrier);
+    }
+
+    // ========================================================================
+    // Main Pass: Render scene with shadows
+    // ========================================================================
     D3D12_VIEWPORT viewport = { 0, 0, (FLOAT)m_nWndClientWidth, (FLOAT)m_nWndClientHeight, 0.0f, 1.0f };
     m_pd3dCommandList->RSSetViewports(1, &viewport);
     D3D12_RECT scissorRect = { 0, 0, (LONG)m_nWndClientWidth, (LONG)m_nWndClientHeight };
@@ -274,8 +390,6 @@ void Dx12App::FrameAdvance()
     m_pd3dCommandList->ClearDepthStencilView(d3dDsvCPUDescriptorHandle, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, NULL);
 
     m_pd3dCommandList->OMSetRenderTargets(1, &d3dRtvCPUDescriptorHandle, FALSE, &d3dDsvCPUDescriptorHandle);
-
-    m_pScene->Update(m_GameTimer.GetTimeElapsed(), &m_inputSystem);
 
     // Handle drop interaction state
     DropInteractionState dropState = m_pScene->GetDropInteractionState();
@@ -416,7 +530,18 @@ void Dx12App::FrameAdvance()
         }
     }
 
-    m_pScene->Render(m_pd3dCommandList.Get());
+    // Render scene with shadow map
+    m_pScene->Render(m_pd3dCommandList.Get(), m_shadowSrvGpuHandle);
+
+    // Transition shadow map back to depth write for next frame
+    D3D12_RESOURCE_BARRIER shadowBarrierBack;
+    shadowBarrierBack.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    shadowBarrierBack.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+    shadowBarrierBack.Transition.pResource = m_pd3dShadowMap.Get();
+    shadowBarrierBack.Transition.StateBefore = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+    shadowBarrierBack.Transition.StateAfter = D3D12_RESOURCE_STATE_DEPTH_WRITE;
+    shadowBarrierBack.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+    m_pd3dCommandList->ResourceBarrier(1, &shadowBarrierBack);
 
     // Text rendering (2D overlay on top of 3D scene)
     RenderText();

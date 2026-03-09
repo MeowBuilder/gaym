@@ -408,6 +408,7 @@ void EnemySpawner::AddRenderComponentsToHierarchy(GameObject* pGameObject)
     {
         auto* pRenderComp = pGameObject->AddComponent<RenderComponent>();
         pRenderComp->SetMesh(pGameObject->GetMesh());
+        pRenderComp->SetCastsShadow(true);  // Enemies cast shadows
         m_pShader->AddRenderComponent(pRenderComp);
     }
 

@@ -42,6 +42,7 @@ private:
     void CreateRtvAndDsvDescriptorHeaps();
     void CreateRenderTargetViews();
     void CreateDepthStencilView();
+    void CreateShadowMap();
     
     void WaitForGpuComplete();
     void UpdateFrameRate();
@@ -62,6 +63,15 @@ private:
 
     ComPtr<ID3D12Resource> m_pd3dDepthStencilBuffer;
     ComPtr<ID3D12DescriptorHeap> m_pd3dDsvDescriptorHeap;
+
+    // Shadow Map resources
+    static const UINT kShadowMapSize = 2048;
+    ComPtr<ID3D12Resource> m_pd3dShadowMap;
+    ComPtr<ID3D12DescriptorHeap> m_pd3dShadowDsvHeap;
+    D3D12_CPU_DESCRIPTOR_HANDLE m_shadowDsvHandle;
+    D3D12_GPU_DESCRIPTOR_HANDLE m_shadowSrvGpuHandle;
+
+    void CreateShadowMapSRV();  // Called after Scene init
 
     ComPtr<ID3D12CommandAllocator> m_pd3dCommandAllocator;
     ComPtr<ID3D12GraphicsCommandList> m_pd3dCommandList;

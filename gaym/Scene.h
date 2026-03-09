@@ -40,6 +40,7 @@ struct SpotLight
 struct PassConstants
 {
     XMFLOAT4X4 m_xmf4x4ViewProj;
+    XMFLOAT4X4 m_xmf4x4LightViewProj;  // Shadow Map용 Light View-Projection
     XMFLOAT4 m_xmf4LightColor;
     XMFLOAT3 m_xmf3LightDirection; float m_fPad0;
     XMFLOAT4 m_xmf4PointLightColor;
@@ -59,7 +60,8 @@ public:
     void Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList);
     void LoadSceneFromFile(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList, const char* pstrFileName);
     void Update(float deltaTime, InputSystem* pInputSystem);
-    void Render(ID3D12GraphicsCommandList* pCommandList);
+    void RenderShadowPass(ID3D12GraphicsCommandList* pCommandList);
+    void Render(ID3D12GraphicsCommandList* pCommandList, D3D12_GPU_DESCRIPTOR_HANDLE shadowSrvHandle);
 
     CCamera* GetCamera() const { return m_pCamera.get(); } // Added getter for CCamera
     CRoom* GetCurrentRoom() const { return m_pCurrentRoom; } // Added getter for current room
@@ -167,7 +169,7 @@ private:
     // Debug Renderer (F1 to toggle)
     std::unique_ptr<DebugRenderer> m_pDebugRenderer;
 
-    void AddRenderComponentsToHierarchy(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList, GameObject* pGameObject, Shader* pShader);
+    void AddRenderComponentsToHierarchy(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList, GameObject* pGameObject, Shader* pShader, bool bCastsShadow = false);
     void PrintHierarchy(GameObject* pGameObject, int nDepth);
     void CollectColliders(GameObject* pGameObject, std::vector<ColliderComponent*>& outColliders);
     void ProcessPendingDeletions();

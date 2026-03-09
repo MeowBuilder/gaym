@@ -16,6 +16,10 @@ public:
     void SetMesh(Mesh* pMesh) { m_pMesh = pMesh; }
     Mesh* GetMesh() { return m_pMesh; }
 
+    void SetCastsShadow(bool bCasts) { m_bCastsShadow = bCasts; }
+    bool CastsShadow() const { return m_bCastsShadow; }
+
 private:
     Mesh* m_pMesh = nullptr;
+    bool m_bCastsShadow = false;  // 기본값: 그림자 안 드리움
 };

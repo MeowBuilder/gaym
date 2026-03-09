@@ -23,6 +23,7 @@ cbuffer cbGameObject : register(b0)
 cbuffer cbPass : register(b1)
 {
     matrix ViewProj;
+    matrix LightViewProj; // Shadow Map용 Light View-Projection
     float4 g_LightColor; // Directional Light Color
     float3 g_LightDirection; float pad0; // Directional Light Direction
     float4 g_PointLightColor; // Point Light Color
@@ -39,7 +40,9 @@ cbuffer cbPass : register(b1)
 };
 
 Texture2D gAlbedoMap : register(t0);
+Texture2D gShadowMap : register(t1);
 SamplerState gSampler : register(s0);
+SamplerComparisonState gShadowSampler : register(s1);
 
 struct VS_INPUT
 {
@@ -56,6 +59,7 @@ struct PS_INPUT
     float3 worldNormal : NORMAL;
     float3 worldPosition : POSITION; // Added for point light calculation
     float2 uv : TEXCOORD;
+    float4 posLightSpace : TEXCOORD1; // Shadow Map용 Light 공간 위치
 };
 
 PS_INPUT VS(VS_INPUT input)
@@ -92,10 +96,79 @@ PS_INPUT VS(VS_INPUT input)
 
     // Pass world position for point light calculation
     output.worldPosition = worldPos.xyz;
-    
+
     output.uv = input.uv;
 
+    // Calculate position in light space for shadow mapping
+    output.posLightSpace = mul(worldPos, LightViewProj);
+
     return output;
+}
+
+// Shadow Pass Vertex Shader (depth only)
+float4 VS_Shadow(VS_INPUT input) : SV_POSITION
+{
+    float3 posL = input.position;
+
+    if (bIsSkinned)
+    {
+        posL = float3(0.0f, 0.0f, 0.0f);
+
+        for (int i = 0; i < 4; ++i)
+        {
+            int idx = input.boneIndices[i];
+            float weight = input.boneWeights[i];
+
+            if (weight > 0.0f)
+            {
+                posL += weight * mul(float4(input.position, 1.0f), gBoneTransforms[idx]).xyz;
+            }
+        }
+    }
+
+    float4 worldPos = mul(float4(posL, 1.0f), World);
+    return mul(worldPos, LightViewProj);
+}
+
+// PCF 3x3 Shadow Calculation
+float CalculateShadow(float4 posLightSpace)
+{
+    // Perspective divide
+    float3 projCoords = posLightSpace.xyz / posLightSpace.w;
+
+    // Transform to [0, 1] range for texture sampling
+    projCoords.x = projCoords.x * 0.5f + 0.5f;
+    projCoords.y = projCoords.y * -0.5f + 0.5f;  // Y is flipped in DirectX
+
+    // Check if outside shadow map bounds
+    if (projCoords.x < 0.0f || projCoords.x > 1.0f ||
+        projCoords.y < 0.0f || projCoords.y > 1.0f ||
+        projCoords.z < 0.0f || projCoords.z > 1.0f)
+    {
+        return 1.0f;  // No shadow outside bounds
+    }
+
+    float currentDepth = projCoords.z;
+    float shadow = 0.0f;
+
+    // Depth bias to prevent shadow acne (smaller = shadow closer to object)
+    float bias = 0.0001f;
+
+    // PCF 3x3 sampling
+    float texelSize = 1.0f / 2048.0f;  // Shadow map size
+    [unroll]
+    for (int x = -1; x <= 1; ++x)
+    {
+        [unroll]
+        for (int y = -1; y <= 1; ++y)
+        {
+            float2 offset = float2(x, y) * texelSize;
+            shadow += gShadowMap.SampleCmpLevelZero(gShadowSampler, projCoords.xy + offset, currentDepth - bias);
+        }
+    }
+    shadow /= 9.0f;
+
+    return shadow;
 }
 
 float4 PS(PS_INPUT input) : SV_TARGET
@@ -116,6 +189,9 @@ float4 PS(PS_INPUT input) : SV_TARGET
     // Combine with material diffuse (optional: multiply)
     float4 baseColor = albedoColor * gMaterial.m_cDiffuse;
 
+    // --- Shadow Calculation ---
+    float shadowFactor = CalculateShadow(input.posLightSpace);
+
     // --- Directional Light Calculation ---
     float directionalDiffuseFactor = saturate(dot(normal, -g_LightDirection));
     float3 vHalfDirectional = normalize(vToCamera + (-g_LightDirection)); // Half vector for directional specular
@@ -123,7 +199,7 @@ float4 PS(PS_INPUT input) : SV_TARGET
 
     float4 directionalDiffuse = directionalDiffuseFactor * g_LightColor * baseColor;
     float4 directionalSpecular = directionalSpecularFactor * g_LightColor * gMaterial.m_cSpecular;
-    float4 directionalTotal = directionalDiffuse + directionalSpecular;
+    float4 directionalTotal = (directionalDiffuse + directionalSpecular) * shadowFactor;  // Apply shadow
 
     // --- Point Light Calculation ---
     float3 lightVec = g_PointLightPosition - input.worldPosition;

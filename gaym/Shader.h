@@ -10,16 +10,20 @@ public:
     Shader();
     ~Shader();
 
-    void Render(ID3D12GraphicsCommandList* pCommandList, D3D12_GPU_VIRTUAL_ADDRESS d3dPassCBVAddress);
+    void Render(ID3D12GraphicsCommandList* pCommandList, D3D12_GPU_VIRTUAL_ADDRESS d3dPassCBVAddress, D3D12_GPU_DESCRIPTOR_HANDLE shadowSrvHandle);
+    void RenderShadowPass(ID3D12GraphicsCommandList* pCommandList, D3D12_GPU_VIRTUAL_ADDRESS d3dPassCBVAddress);
 
     void AddRenderComponent(RenderComponent* pRenderComponent);
     void ClearRenderComponents() { m_vRenderComponents.clear(); } // Added method
 
     virtual void Build(ID3D12Device* pDevice);
 
+    ID3D12RootSignature* GetRootSignature() const { return m_pd3dRootSignature.Get(); }
+
 private:
     ComPtr<ID3D12RootSignature> m_pd3dRootSignature;
     ComPtr<ID3D12PipelineState> m_pd3dPipelineState;
+    ComPtr<ID3D12PipelineState> m_pd3dShadowPSO;  // Shadow Pass PSO
 
     std::vector<RenderComponent*> m_vRenderComponents;
 };

@@ -113,7 +113,7 @@ void Scene::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList)
 
         OutputDebugString(L"[Scene] Skill system initialized - Fireball equipped to Q and RightClick\n");
 
-        AddRenderComponentsToHierarchy(pDevice, pCommandList, pPlayer, pShader.get());
+        AddRenderComponentsToHierarchy(pDevice, pCommandList, pPlayer, pShader.get(), true);  // Player casts shadow
     }
     else
     { // Fallback
@@ -283,7 +283,7 @@ CRoom* Scene::CreateRoomFromBounds(const XMFLOAT3& center, const XMFLOAT3& exten
 }
 
 void Scene::AddRenderComponentsToHierarchy(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList,
-	GameObject* pGameObject, Shader* pShader)
+	GameObject* pGameObject, Shader* pShader, bool bCastsShadow)
 {
 	if (!pGameObject)
 	{
@@ -293,17 +293,19 @@ void Scene::AddRenderComponentsToHierarchy(ID3D12Device* pDevice, ID3D12Graphics
 
 	if (pGameObject->GetMesh())
 	{
-		pGameObject->AddComponent<RenderComponent>()->SetMesh(pGameObject->GetMesh());
-		pShader->AddRenderComponent(pGameObject->GetComponent<RenderComponent>());
+		auto* pRenderComp = pGameObject->AddComponent<RenderComponent>();
+		pRenderComp->SetMesh(pGameObject->GetMesh());
+		pRenderComp->SetCastsShadow(bCastsShadow);
+		pShader->AddRenderComponent(pRenderComp);
 	}
 
 	if (pGameObject->m_pChild)
 	{
-		AddRenderComponentsToHierarchy(pDevice, pCommandList, pGameObject->m_pChild, pShader);
+		AddRenderComponentsToHierarchy(pDevice, pCommandList, pGameObject->m_pChild, pShader, bCastsShadow);
 	}
 	if (pGameObject->m_pSibling)
 	{
-		AddRenderComponentsToHierarchy(pDevice, pCommandList, pGameObject->m_pSibling, pShader);
+		AddRenderComponentsToHierarchy(pDevice, pCommandList, pGameObject->m_pSibling, pShader, bCastsShadow);
 	}
 }
 
@@ -330,8 +332,41 @@ void Scene::Update(float deltaTime, InputSystem* pInputSystem)
 
     // Set lighting parameters for a more realistic look
     m_pcbMappedPass->m_xmf4LightColor = XMFLOAT4(0.9f, 0.85f, 0.75f, 1.0f); // Slightly warm white directional light (sun)
-    XMVECTOR lightDir = XMVector3Normalize(XMVectorSet(-0.5f, -1.0f, 0.5f, 0.0f)); // Sun angle
+    XMVECTOR lightDir = XMVector3Normalize(XMVectorSet(-0.15f, -1.0f, 0.15f, 0.0f)); // 거의 수직 (그림자가 발 아래에 붙음)
     XMStoreFloat3(&m_pcbMappedPass->m_xmf3LightDirection, lightDir);
+
+    // Calculate Light View-Projection for Shadow Mapping
+    {
+        // Get player position as shadow focus center
+        XMFLOAT3 shadowCenter = XMFLOAT3(0.0f, 0.0f, 0.0f);
+        if (m_pPlayerGameObject)
+        {
+            shadowCenter = m_pPlayerGameObject->GetTransform()->GetPosition();
+        }
+
+        // Light position: center + opposite of light direction * distance
+        float lightDistance = 50.0f;  // 가까워짐
+        XMVECTOR vShadowCenter = XMLoadFloat3(&shadowCenter);
+        XMVECTOR vLightPos = vShadowCenter - lightDir * lightDistance;
+
+        // Light View Matrix (look at shadow center from light position)
+        XMVECTOR vUp = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
+        // If light is nearly vertical, use different up vector
+        if (fabsf(XMVectorGetY(lightDir)) > 0.99f)
+        {
+            vUp = XMVectorSet(0.0f, 0.0f, 1.0f, 0.0f);
+        }
+        XMMATRIX mLightView = XMMatrixLookAtLH(vLightPos, vShadowCenter, vUp);
+
+        // Orthographic Projection for directional light shadow
+        float shadowOrthoSize = 40.0f;  // 더 타이트한 그림자 영역
+        float nearZ = 0.1f;
+        float farZ = 150.0f;
+        XMMATRIX mLightProj = XMMatrixOrthographicLH(shadowOrthoSize, shadowOrthoSize, nearZ, farZ);
+
+        XMMATRIX mLightViewProj = mLightView * mLightProj;
+        XMStoreFloat4x4(&m_pcbMappedPass->m_xmf4x4LightViewProj, XMMatrixTranspose(mLightViewProj));
+    }
     m_pcbMappedPass->m_fPad0 = 0.0f; // Padding for directional light
 
     m_pcbMappedPass->m_xmf4PointLightColor = XMFLOAT4(0.7f, 0.5f, 0.3f, 1.0f); // Subtle warm point light
@@ -427,7 +462,20 @@ void Scene::Update(float deltaTime, InputSystem* pInputSystem)
     ProcessPendingDeletions();
 }
 
-void Scene::Render(ID3D12GraphicsCommandList* pCommandList)
+void Scene::RenderShadowPass(ID3D12GraphicsCommandList* pCommandList)
+{
+    // Set the descriptor heap
+    ID3D12DescriptorHeap* ppHeaps[] = { m_pDescriptorHeap->GetHeap() };
+    pCommandList->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
+
+    // Render shadow casters
+    for (auto& shader : m_vShaders)
+    {
+        shader->RenderShadowPass(pCommandList, GetPassCBVAddress());
+    }
+}
+
+void Scene::Render(ID3D12GraphicsCommandList* pCommandList, D3D12_GPU_DESCRIPTOR_HANDLE shadowSrvHandle)
 {
     // Set the descriptor heap
     ID3D12DescriptorHeap* ppHeaps[] = { m_pDescriptorHeap->GetHeap() };
@@ -443,7 +491,7 @@ void Scene::Render(ID3D12GraphicsCommandList* pCommandList)
     }
 
     // 2. Register Global Objects (Player, etc.)
-    Shader* pMainShader = m_vShaders[0].get(); 
+    Shader* pMainShader = m_vShaders[0].get();
 
     // Helper vector for traversal to avoid recursion
     std::vector<GameObject*> stack;
@@ -497,7 +545,7 @@ void Scene::Render(ID3D12GraphicsCommandList* pCommandList)
     // Iterate through shaders (groups) and render
     for (auto& shader : m_vShaders)
     {
-        shader->Render(pCommandList, GetPassCBVAddress());
+        shader->Render(pCommandList, GetPassCBVAddress(), shadowSrvHandle);
     }
 
     // Render projectiles (after main rendering, pipeline state is already set)
