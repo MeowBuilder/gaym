@@ -52,6 +52,10 @@ public:
 	{
 		m_pd3dcbGameObject = pCB;
 		m_pcbMappedGameObject = pMapped;
+		// 이전 오너(예: 스킨드 적)가 남긴 bIsSkinned 플래그를 초기화.
+		// AnimationComponent가 있으면 Update()에서 SetSkinned(true)로 다시 설정한다.
+		if (m_pcbMappedGameObject)
+			m_pcbMappedGameObject->m_bIsSkinned = 0;
 	}
 	ComPtr<ID3D12Resource> GetConstantBufferResource() const { return m_pd3dcbGameObject; }
 

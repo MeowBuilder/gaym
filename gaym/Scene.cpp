@@ -942,6 +942,12 @@ void Scene::TransitionToNextRoom()
     // ── 1. 셰이더 RC 목록 전체 클리어 (룸 오브젝트 RC가 댕글링 포인터가 되기 전에)
     m_vShaders[0]->ClearRenderComponents();
 
+    // ── 1b. 이번 프레임에 처리 대기 중인 삭제 요청을 미리 처리
+    //        (적 사망 등이 방 파기와 같은 프레임에 발생하면, m_vRooms.clear() 이후
+    //         ProcessPendingDeletions 에서 해제된 메모리에 접근 → 새 타일 오브젝트를
+    //         잘못 삭제하는 버그 방지)
+    ProcessPendingDeletions();
+
     // ── 2. 기존 룸 전체 파기 (룸 오브젝트, 적, 맵 메시 등)
     m_vRooms.clear();
     m_pCurrentRoom = nullptr;
