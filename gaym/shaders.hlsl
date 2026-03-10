@@ -92,6 +92,7 @@ PS_INPUT VS(VS_INPUT input)
     output.position = mul(worldPos, ViewProj);
 
     // Transform the normal from object space to world space
+    // mul(n, World3x3) == inverse-transpose for diagonal scale matrices (correct for mirrored objects too)
     output.worldNormal = mul(normalL, (float3x3)World);
 
     // Pass world position for point light calculation
@@ -151,8 +152,8 @@ float CalculateShadow(float4 posLightSpace)
     float currentDepth = projCoords.z;
     float shadow = 0.0f;
 
-    // Depth bias to prevent shadow acne (smaller = shadow closer to object)
-    float bias = 0.0001f;
+    // Depth bias: 경사 기반으로 acne 방지 (음수 스케일/큰 맵에서 더 큰 값 필요)
+    float bias = 0.002f;
 
     // PCF 3x3 sampling
     float texelSize = 1.0f / 2048.0f;  // Shadow map size

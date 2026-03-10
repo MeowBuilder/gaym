@@ -242,10 +242,12 @@ ObjResult LoadObjMesh(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommand
         if (strcmp(type, "v") == 0) {
             XMFLOAT3 v;
             sscanf_s(rest, "%f %f %f", &v.x, &v.y, &v.z);
+            v.z = -v.z;  // exporter negates Z (Unity LH->OBJ RH); restore for DX12 (also LH)
             raw.positions.push_back(v);
         } else if (strcmp(type, "vn") == 0) {
             XMFLOAT3 n;
             sscanf_s(rest, "%f %f %f", &n.x, &n.y, &n.z);
+            n.z = -n.z;  // same for normals
             raw.normals.push_back(n);
         } else if (strcmp(type, "vt") == 0) {
             XMFLOAT2 uv;
@@ -339,7 +341,7 @@ ObjResult LoadObjMesh(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommand
 // ─── Global map scale ────────────────────────────────────────────────────────
 // Increase to make the entire map larger relative to the character.
 // All positions, object scales, room bounds, and obstacle sizes are multiplied.
-static constexpr float MAP_SCALE = 3.0f;
+static constexpr float MAP_SCALE = 5.0f;
 // ─────────────────────────────────────────────────────────────────────────────
 
 bool MapLoader::LoadIntoScene(
@@ -369,8 +371,8 @@ bool MapLoader::LoadIntoScene(
         const JsonVal& r = rooms[i];
         const JsonVal& bMin = r["boundsMin"];
         const JsonVal& bMax = r["boundsMax"];
-        XMFLOAT3 mn(bMin[0].f()*MAP_SCALE, bMin[1].f()*MAP_SCALE, bMin[2].f()*MAP_SCALE);
-        XMFLOAT3 mx(bMax[0].f()*MAP_SCALE, bMax[1].f()*MAP_SCALE, bMax[2].f()*MAP_SCALE);
+        XMFLOAT3 mn(bMin[0].f()*MAP_SCALE, bMin[1].f()*MAP_SCALE, -bMin[2].f()*MAP_SCALE);
+        XMFLOAT3 mx(bMax[0].f()*MAP_SCALE, bMax[1].f()*MAP_SCALE, -bMax[2].f()*MAP_SCALE);
         XMFLOAT3 center((mn.x+mx.x)*0.5f, (mn.y+mx.y)*0.5f, (mn.z+mx.z)*0.5f);
         XMFLOAT3 extents(fabsf(mx.x-mn.x)*0.5f, fabsf(mx.y-mn.y)*0.5f, fabsf(mx.z-mn.z)*0.5f);
 
@@ -387,7 +389,7 @@ bool MapLoader::LoadIntoScene(
         const JsonVal& pos = ps["position"];
         if (pScene->GetPlayer()) {
             pScene->GetPlayer()->GetTransform()->SetPosition(
-                pos[0].f()*MAP_SCALE, pos[1].f()*MAP_SCALE, pos[2].f()*MAP_SCALE);
+                pos[0].f()*MAP_SCALE, pos[1].f()*MAP_SCALE, -pos[2].f()*MAP_SCALE);
         }
     }
 
@@ -417,14 +419,15 @@ bool MapLoader::LoadIntoScene(
         const JsonVal& scl = mo["scale"];
         float sx = scl[0].f()*MAP_SCALE, sy = scl[1].f()*MAP_SCALE, sz = scl[2].f()*MAP_SCALE;
         pGO->GetTransform()->SetPosition(
-            pos[0].f()*MAP_SCALE, pos[1].f()*MAP_SCALE, pos[2].f()*MAP_SCALE);
-        pGO->GetTransform()->SetRotation(XMFLOAT4(rot[0].f(), rot[1].f(), rot[2].f(), rot[3].f()));
+            pos[0].f()*MAP_SCALE, pos[1].f()*MAP_SCALE, -pos[2].f()*MAP_SCALE);
+        pGO->GetTransform()->SetRotation(XMFLOAT4(rot[0].f(), rot[1].f(), -rot[2].f(), rot[3].f()));
         pGO->GetTransform()->SetScale(sx, sy, sz);
 
         // Render
         pGO->SetMesh(objRes.pMesh);
         auto* pRC = pGO->AddComponent<RenderComponent>();
         pRC->SetMesh(objRes.pMesh);
+        pRC->SetCastsShadow(true);
         pShader->AddRenderComponent(pRC);
 
         // Apply material from JSON (color + smoothness/metallic exported from Unity)
@@ -512,7 +515,7 @@ bool MapLoader::LoadIntoScene(
 
         GameObject* pGO = pScene->CreateGameObject(pDevice, pCommandList);
         pGO->GetTransform()->SetPosition(
-            center[0].f()*MAP_SCALE, center[1].f()*MAP_SCALE, center[2].f()*MAP_SCALE);
+            center[0].f()*MAP_SCALE, center[1].f()*MAP_SCALE, -center[2].f()*MAP_SCALE);
 
         auto* pCol = pGO->AddComponent<ColliderComponent>();
         pCol->SetExtents(size[0].f()*MAP_SCALE*0.5f, size[1].f()*MAP_SCALE*0.5f, size[2].f()*MAP_SCALE*0.5f);
@@ -530,7 +533,7 @@ bool MapLoader::LoadIntoScene(
         std::string presetName = es["presetName"].str;
         int count = es.has("count") ? es["count"].i() : 1;
         const JsonVal& pos = es["position"];
-        XMFLOAT3 spawnPos(pos[0].f()*MAP_SCALE, pos[1].f()*MAP_SCALE, pos[2].f()*MAP_SCALE);
+        XMFLOAT3 spawnPos(pos[0].f()*MAP_SCALE, pos[1].f()*MAP_SCALE, -pos[2].f()*MAP_SCALE);
 
         // Register preset if not already registered
         if (!pScene->GetEnemySpawner()->HasPreset(presetName)) {

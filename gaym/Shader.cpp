@@ -203,7 +203,7 @@ void Shader::Build(ID3D12Device* pDevice)
     shadowPsoDesc.NumRenderTargets = 0;
     shadowPsoDesc.RTVFormats[0] = DXGI_FORMAT_UNKNOWN;
     shadowPsoDesc.DSVFormat = DXGI_FORMAT_D32_FLOAT;  // Shadow map uses 32-bit depth
-    shadowPsoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_BACK;  // Cull back faces to reduce shadow acne
+    shadowPsoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;  // No culling: handles negative-scale (mirrored) objects correctly
     shadowPsoDesc.RasterizerState.DepthBias = 10000;
     shadowPsoDesc.RasterizerState.DepthBiasClamp = 0.0f;
     shadowPsoDesc.RasterizerState.SlopeScaledDepthBias = 1.0f;
