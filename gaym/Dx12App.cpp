@@ -51,6 +51,10 @@ void Dx12App::OnCreate(HINSTANCE hInstance, HWND hMainWnd)
     // Create Shadow Map SRV in Scene's descriptor heap
     CreateShadowMapSRV();
 
+    // Update persistent descriptor watermark to include Shadow Map SRV
+    // This prevents it from being overwritten during map transitions
+    m_pScene->UpdatePersistentDescriptorEnd();
+
     // CommandList를 닫고 실행하여 리소스 업로드를 완료합니다.
     CHECK_HR(m_pd3dCommandList->Close());
     ID3D12CommandList* ppd3dCommandLists[] = { m_pd3dCommandList.Get() };

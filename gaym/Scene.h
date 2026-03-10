@@ -110,6 +110,12 @@ public:
         m_nNextDescriptorIndex++;
     }
 
+    // Update persistent descriptor watermark (call after allocating permanent descriptors like Shadow Map SRV)
+    void UpdatePersistentDescriptorEnd()
+    {
+        m_nPersistentDescriptorEnd = m_nNextDescriptorIndex;
+    }
+
 private:
 
     std::vector<std::unique_ptr<GameObject>> m_vGameObjects; // Global Objects (Player, etc.)
@@ -173,6 +179,7 @@ private:
     void PrintHierarchy(GameObject* pGameObject, int nDepth);
     void CollectColliders(GameObject* pGameObject, std::vector<ColliderComponent*>& outColliders);
     void ProcessPendingDeletions();
+    void UpdateRenderList();  // Update RenderComponent list for current frame
 public:
     D3D12_GPU_VIRTUAL_ADDRESS GetPassCBVAddress() const { if(m_pd3dcbPass) return m_pd3dcbPass->GetGPUVirtualAddress(); return 0; }
 };

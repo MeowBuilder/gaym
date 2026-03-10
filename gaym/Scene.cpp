@@ -462,28 +462,8 @@ void Scene::Update(float deltaTime, InputSystem* pInputSystem)
     ProcessPendingDeletions();
 }
 
-void Scene::RenderShadowPass(ID3D12GraphicsCommandList* pCommandList)
+void Scene::UpdateRenderList()
 {
-    // Set the descriptor heap
-    ID3D12DescriptorHeap* ppHeaps[] = { m_pDescriptorHeap->GetHeap() };
-    pCommandList->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
-
-    // Render shadow casters
-    for (auto& shader : m_vShaders)
-    {
-        shader->RenderShadowPass(pCommandList, GetPassCBVAddress());
-    }
-}
-
-void Scene::Render(ID3D12GraphicsCommandList* pCommandList, D3D12_GPU_DESCRIPTOR_HANDLE shadowSrvHandle)
-{
-    // Set the descriptor heap
-    ID3D12DescriptorHeap* ppHeaps[] = { m_pDescriptorHeap->GetHeap() };
-    pCommandList->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
-
-    // --------------------------------------------------------------------------
-    // Dynamic Rendering List Update
-    // --------------------------------------------------------------------------
     // 1. Clear previous frame's render list from all shaders
     for (auto& shader : m_vShaders)
     {
@@ -538,10 +518,32 @@ void Scene::Render(ID3D12GraphicsCommandList* pCommandList, D3D12_GPU_DESCRIPTOR
             }
         }
     }
+}
 
-    // --------------------------------------------------------------------------
-    // Render
-    // --------------------------------------------------------------------------
+void Scene::RenderShadowPass(ID3D12GraphicsCommandList* pCommandList)
+{
+    // Update render list before shadow pass (ensures correct objects are rendered)
+    UpdateRenderList();
+
+    // Set the descriptor heap
+    ID3D12DescriptorHeap* ppHeaps[] = { m_pDescriptorHeap->GetHeap() };
+    pCommandList->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
+
+    // Render shadow casters
+    for (auto& shader : m_vShaders)
+    {
+        shader->RenderShadowPass(pCommandList, GetPassCBVAddress());
+    }
+}
+
+void Scene::Render(ID3D12GraphicsCommandList* pCommandList, D3D12_GPU_DESCRIPTOR_HANDLE shadowSrvHandle)
+{
+    // Set the descriptor heap
+    ID3D12DescriptorHeap* ppHeaps[] = { m_pDescriptorHeap->GetHeap() };
+    pCommandList->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
+
+    // Note: UpdateRenderList() is already called in RenderShadowPass() before this
+
     // Iterate through shaders (groups) and render
     for (auto& shader : m_vShaders)
     {
