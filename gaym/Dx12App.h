@@ -65,7 +65,7 @@ private:
     ComPtr<ID3D12DescriptorHeap> m_pd3dDsvDescriptorHeap;
 
     // Shadow Map resources
-    static const UINT kShadowMapSize = 2048;
+    static const UINT kShadowMapSize = 4096;
     ComPtr<ID3D12Resource> m_pd3dShadowMap;
     ComPtr<ID3D12DescriptorHeap> m_pd3dShadowDsvHeap;
     D3D12_CPU_DESCRIPTOR_HANDLE m_shadowDsvHandle;

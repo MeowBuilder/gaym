@@ -20,6 +20,26 @@ EnemyComponent::~EnemyComponent()
 
 void EnemyComponent::Update(float deltaTime)
 {
+    // Apply gravity
+    if (!m_bOnGround)
+    {
+        auto* pTransform = m_pOwner ? m_pOwner->GetTransform() : nullptr;
+        if (pTransform)
+        {
+            XMFLOAT3 pos = pTransform->GetPosition();
+            m_fVelocityY -= GRAVITY * deltaTime;
+            pos.y += m_fVelocityY * deltaTime;
+
+            if (pos.y <= GROUND_Y)
+            {
+                pos.y = GROUND_Y;
+                m_fVelocityY = 0.0f;
+                m_bOnGround = true;
+            }
+            pTransform->SetPosition(pos);
+        }
+    }
+
     // Update cooldown timer
     if (m_fAttackCooldownTimer > 0.0f)
     {
@@ -193,15 +213,11 @@ void EnemyComponent::MoveTowardsTarget(float dt)
     XMFLOAT2 dir = MathUtils::Direction2D(myPos, targetPos);
     if (dir.x == 0.0f && dir.y == 0.0f) return;
 
-    // Capture ground height on first move
-    if (m_fGroundY <= -FLT_MAX + 1.0f)
-        m_fGroundY = myPos.y;
-
-    // Move towards target, locking Y to ground height
+    // Move towards target (keep current Y from gravity system)
     float moveAmount = m_Stats.m_fMoveSpeed * dt;
     myPos.x += dir.x * moveAmount;
     myPos.z += dir.y * moveAmount;
-    myPos.y = m_fGroundY;
+    // Y is controlled by gravity in Update()
 
     pMyTransform->SetPosition(myPos);
 }

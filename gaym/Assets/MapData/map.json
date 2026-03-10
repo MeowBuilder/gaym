@@ -14,16 +14,16 @@
   ],
   "enemySpawns": [
     {
-      "presetName": "AirElemental",
+      "presetName": "RangedEnemy",
       "count": 2,
       "activationDelay": 0.00,
       "position": [-0.4200, 1.2900, -10.2700],
       "rotationY": 0.00,
       "stats": {
-        "maxHP": 100.0,
-        "moveSpeed": 5.00,
-        "attackRange": 2.00,
-        "attackCooldown": 1.00,
+        "maxHP": 60.0,
+        "moveSpeed": 3.00,
+        "attackRange": 30.00,
+        "attackCooldown": 2.00,
         "detectionRange": 50.00
       },
       "attackType": "Ranged",
@@ -82,7 +82,7 @@
       }
     },
     {
-      "presetName": "AirElemental",
+      "presetName": "RushAoEEnemy",
       "count": 2,
       "activationDelay": 0.00,
       "position": [-3.0000, 1.2900, -10.2700],
@@ -90,8 +90,8 @@
       "stats": {
         "maxHP": 100.0,
         "moveSpeed": 5.00,
-        "attackRange": 2.00,
-        "attackCooldown": 1.00,
+        "attackRange": 20.00,
+        "attackCooldown": 3.00,
         "detectionRange": 50.00
       },
       "attackType": "RushAoE",

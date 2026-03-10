@@ -17,22 +17,34 @@ DropItemComponent::~DropItemComponent()
 void DropItemComponent::Update(float deltaTime)
 {
     if (!m_bIsActive) return;
+    if (!m_pOwner) return;
 
-    // Floating bob animation
-    m_fBobTime += deltaTime * m_fBobSpeed;
-    m_fBobOffset = sinf(m_fBobTime) * m_fBobAmplitude;
+    TransformComponent* pTransform = m_pOwner->GetTransform();
+    if (!pTransform) return;
 
-    // Apply bob to transform
-    if (m_pOwner)
+    XMFLOAT3 pos = pTransform->GetPosition();
+
+    // Apply gravity until landing
+    if (!m_bOnGround)
     {
-        TransformComponent* pTransform = m_pOwner->GetTransform();
-        if (pTransform)
+        m_fVelocityY -= GRAVITY * deltaTime;
+        pos.y += m_fVelocityY * deltaTime;
+
+        if (pos.y <= GROUND_Y)
         {
-            XMFLOAT3 pos = pTransform->GetPosition();
-            // Store base Y on first update
-            static float baseY = pos.y;
-            pTransform->SetPosition(pos.x, baseY + m_fBobOffset, pos.z);
+            pos.y = GROUND_Y;
+            m_fVelocityY = 0.0f;
+            m_bOnGround = true;
+            m_fBaseY = pos.y;
         }
+        pTransform->SetPosition(pos);
+    }
+    else
+    {
+        // Floating bob animation after landing
+        m_fBobTime += deltaTime * m_fBobSpeed;
+        m_fBobOffset = sinf(m_fBobTime) * m_fBobAmplitude;
+        pTransform->SetPosition(pos.x, m_fBaseY + m_fBobOffset, pos.z);
     }
 }
 

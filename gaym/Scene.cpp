@@ -332,7 +332,7 @@ void Scene::Update(float deltaTime, InputSystem* pInputSystem)
 
     // Set lighting parameters for a more realistic look
     m_pcbMappedPass->m_xmf4LightColor = XMFLOAT4(0.9f, 0.85f, 0.75f, 1.0f); // Slightly warm white directional light (sun)
-    XMVECTOR lightDir = XMVector3Normalize(XMVectorSet(-0.15f, -1.0f, 0.15f, 0.0f)); // 거의 수직 (그림자가 발 아래에 붙음)
+    XMVECTOR lightDir = XMVector3Normalize(XMVectorSet(-0.6f, -0.7f, 0.3f, 0.0f)); // 비스듬한 조명 (옆으로 긴 그림자)
     XMStoreFloat3(&m_pcbMappedPass->m_xmf3LightDirection, lightDir);
 
     // Calculate Light View-Projection for Shadow Mapping
@@ -359,7 +359,7 @@ void Scene::Update(float deltaTime, InputSystem* pInputSystem)
         XMMATRIX mLightView = XMMatrixLookAtLH(vLightPos, vShadowCenter, vUp);
 
         // Orthographic Projection for directional light shadow
-        float shadowOrthoSize = 40.0f;  // 더 타이트한 그림자 영역
+        float shadowOrthoSize = 160.0f;  // 넓은 그림자 영역
         float nearZ = 0.1f;
         float farZ = 150.0f;
         XMMATRIX mLightProj = XMMatrixOrthographicLH(shadowOrthoSize, shadowOrthoSize, nearZ, farZ);

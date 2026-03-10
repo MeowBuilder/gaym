@@ -113,6 +113,7 @@ void RushFrontAttackBehavior::Reset()
     m_ePhase = Phase::Rush;
     m_fTimer = 0.0f;
     m_bHitDealt = false;
+    m_bRushHitDealt = false;
     m_bFinished = false;
     m_xmf3RushDirection = XMFLOAT3(0.0f, 0.0f, 0.0f);
 }
@@ -132,6 +133,26 @@ void RushFrontAttackBehavior::UpdateRush(float dt, EnemyComponent* pEnemy)
     pos.x += m_xmf3RushDirection.x * moveAmount;
     pos.z += m_xmf3RushDirection.z * moveAmount;
     pTransform->SetPosition(pos);
+
+    // Check collision with player during rush
+    if (!m_bRushHitDealt)
+    {
+        float distance = pEnemy->GetDistanceToTarget();
+        if (distance <= RUSH_HIT_RADIUS)
+        {
+            GameObject* pTarget = pEnemy->GetTarget();
+            if (pTarget)
+            {
+                PlayerComponent* pPlayer = pTarget->GetComponent<PlayerComponent>();
+                if (pPlayer)
+                {
+                    pPlayer->TakeDamage(m_fDamage);
+                    m_bRushHitDealt = true;
+                    OutputDebugString(L"[RushFront] Rush collision HIT!\n");
+                }
+            }
+        }
+    }
 }
 
 void RushFrontAttackBehavior::DealConeDamage(EnemyComponent* pEnemy)

@@ -39,6 +39,9 @@ private:
     Phase m_ePhase = Phase::Rush;
     float m_fTimer = 0.0f;
     bool m_bHitDealt = false;
+    bool m_bRushHitDealt = false;  // Separate flag for rush collision damage
     bool m_bFinished = false;
     XMFLOAT3 m_xmf3RushDirection = { 0.0f, 0.0f, 0.0f };
+
+    static constexpr float RUSH_HIT_RADIUS = 2.5f;  // Collision radius during rush
 };

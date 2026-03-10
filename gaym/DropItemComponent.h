@@ -30,6 +30,13 @@ private:
     std::array<ActivationType, 3> m_RuneOptions;
     bool m_bIsActive = true;
 
+    // Gravity system
+    float m_fVelocityY = 0.0f;
+    bool m_bOnGround = false;
+    float m_fBaseY = 0.0f;  // Base Y after landing (for bob animation)
+    static constexpr float GRAVITY = 50.0f;
+    static constexpr float GROUND_Y = 0.0f;
+
     // Floating animation
     float m_fBobTime = 0.0f;
     float m_fBobSpeed = 2.0f;

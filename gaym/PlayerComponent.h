@@ -21,13 +21,18 @@ public:
     float GetMaxHP() const { return m_fMaxHP; }
     bool IsDead() const { return m_fCurrentHP <= 0.0f; }
 
-    // Call when player is teleported to a new map so the new floor Y is re-captured
-    void ResetGroundY() { m_fGroundY = -FLT_MAX; }
+    // Reset velocity when teleported
+    void ResetGroundY() { m_fVelocityY = 0.0f; m_bOnGround = false; }
 
 private:
     float m_fMaxHP = 100.0f;
     float m_fCurrentHP = 100.0f;
-    float m_fGroundY = -FLT_MAX;  // Captured on first update, used to lock Y
+
+    // Gravity system
+    float m_fVelocityY = 0.0f;
+    bool m_bOnGround = false;
+    static constexpr float GRAVITY = 50.0f;
+    static constexpr float GROUND_Y = 0.0f;  // Tile surface height
 
     // Animation state machine
     PlayerAnimState m_eAnimState = PlayerAnimState::Idle;

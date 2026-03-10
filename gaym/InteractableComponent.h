@@ -41,4 +41,16 @@ private:
     float m_fInteractionDistance = 5.0f;
     std::wstring m_sPromptText = L"[F] Interact";
     std::function<void(InteractableComponent*)> m_OnInteract;
+
+    // Gravity system
+    float m_fVelocityY = 0.0f;
+    bool m_bOnGround = false;
+    float m_fBaseY = 0.0f;
+    static constexpr float GRAVITY = 50.0f;
+    static constexpr float GROUND_Y = 0.0f;
+
+    // Floating animation
+    float m_fBobTime = 0.0f;
+    float m_fBobSpeed = 1.5f;
+    float m_fBobAmplitude = 0.25f;
 };

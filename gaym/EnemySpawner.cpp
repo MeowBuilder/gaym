@@ -54,7 +54,7 @@ void EnemySpawner::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pComma
     EnemySpawnData airElemental;
     airElemental.m_strMeshPath = "Assets/Enemies/AirElemental/Models/AirElemental_Bl.bin";
     airElemental.m_strAnimationPath = "Assets/Enemies/AirElemental/Animations/AirElemental_Bl_Anim.bin";
-    airElemental.m_xmf3Scale = XMFLOAT3(3.0f, 3.0f, 3.0f);
+    airElemental.m_xmf3Scale = XMFLOAT3(2.0f, 2.0f, 2.0f);
     airElemental.m_xmf4Color = XMFLOAT4(0.5f, 0.7f, 1.0f, 1.0f);  // Light blue
 
     airElemental.m_Stats.m_fMaxHP = 80.0f;
@@ -81,7 +81,7 @@ void EnemySpawner::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pComma
     EnemySpawnData rushAoE;
     rushAoE.m_strMeshPath = "Assets/Enemies/AirElemental/Models/AirElemental_Bl.bin";
     rushAoE.m_strAnimationPath = "Assets/Enemies/AirElemental/Animations/AirElemental_Bl_Anim.bin";
-    rushAoE.m_xmf3Scale = XMFLOAT3(3.0f, 3.0f, 3.0f);
+    rushAoE.m_xmf3Scale = XMFLOAT3(2.0f, 2.0f, 2.0f);
     rushAoE.m_xmf4Color = XMFLOAT4(1.0f, 0.2f, 0.2f, 1.0f);  // Red
 
     rushAoE.m_Stats.m_fMaxHP = 100.0f;
@@ -106,7 +106,7 @@ void EnemySpawner::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pComma
     EnemySpawnData rushFront;
     rushFront.m_strMeshPath = "Assets/Enemies/AirElemental/Models/AirElemental_Bl.bin";
     rushFront.m_strAnimationPath = "Assets/Enemies/AirElemental/Animations/AirElemental_Bl_Anim.bin";
-    rushFront.m_xmf3Scale = XMFLOAT3(3.0f, 3.0f, 3.0f);
+    rushFront.m_xmf3Scale = XMFLOAT3(2.0f, 2.0f, 2.0f);
     rushFront.m_xmf4Color = XMFLOAT4(0.2f, 1.0f, 0.2f, 1.0f);  // Green
 
     rushFront.m_Stats.m_fMaxHP = 80.0f;
@@ -132,7 +132,7 @@ void EnemySpawner::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pComma
     EnemySpawnData ranged;
     ranged.m_strMeshPath = "Assets/Enemies/AirElemental/Models/AirElemental_Bl.bin";
     ranged.m_strAnimationPath = "Assets/Enemies/AirElemental/Animations/AirElemental_Bl_Anim.bin";
-    ranged.m_xmf3Scale = XMFLOAT3(3.0f, 3.0f, 3.0f);
+    ranged.m_xmf3Scale = XMFLOAT3(2.0f, 2.0f, 2.0f);
     ranged.m_xmf4Color = XMFLOAT4(0.2f, 0.4f, 1.0f, 1.0f);  // Blue
 
     ranged.m_Stats.m_fMaxHP = 60.0f;
@@ -270,9 +270,9 @@ GameObject* EnemySpawner::CreateCubeEnemy(CRoom* pRoom, const XMFLOAT3& position
         m_pShader->AddRenderComponent(pRenderComp);
     }
 
-    // Add ColliderComponent
+    // Add ColliderComponent (reduced size to avoid getting stuck on terrain)
     auto* pCollider = pEnemy->AddComponent<ColliderComponent>();
-    pCollider->SetExtents(scale.x, scale.y, scale.z);  // Half extents
+    pCollider->SetExtents(scale.x * 0.5f, scale.y, scale.z * 0.5f);  // Half extents, narrower XZ
     pCollider->SetCenter(0.0f, scale.y, 0.0f);  // Center at mid-height
     pCollider->SetLayer(CollisionLayer::Enemy);
     pCollider->SetCollisionMask(CollisionMask::Enemy);
@@ -382,12 +382,12 @@ GameObject* EnemySpawner::CreateMeshEnemy(CRoom* pRoom, const XMFLOAT3& position
     // Apply color tint to all meshes in hierarchy
     ApplyColorToHierarchy(pEnemy, data.m_xmf4Color);
 
-    // Add ColliderComponent
+    // Add ColliderComponent (reduced size to avoid getting stuck on terrain)
     auto* pCollider = pEnemy->AddComponent<ColliderComponent>();
     float colliderScale = data.m_xmf3Scale.x;
     if (data.m_xmf3Scale.y > colliderScale) colliderScale = data.m_xmf3Scale.y;
     if (data.m_xmf3Scale.z > colliderScale) colliderScale = data.m_xmf3Scale.z;
-    pCollider->SetExtents(colliderScale * 0.5f, colliderScale * 1.0f, colliderScale * 0.5f);
+    pCollider->SetExtents(colliderScale * 0.3f, colliderScale * 1.0f, colliderScale * 0.3f);  // Narrower XZ
     pCollider->SetCenter(0.0f, colliderScale * 1.0f, 0.0f);
     pCollider->SetLayer(CollisionLayer::Enemy);
     pCollider->SetCollisionMask(CollisionMask::Enemy);

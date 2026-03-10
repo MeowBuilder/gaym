@@ -10,8 +10,35 @@ InteractableComponent::InteractableComponent(GameObject* pOwner)
 
 void InteractableComponent::Update(float deltaTime)
 {
-    // Base implementation does nothing
-    // Derived classes can override for animations, etc.
+    if (!m_bIsActive || !m_pOwner) return;
+
+    TransformComponent* pTransform = m_pOwner->GetTransform();
+    if (!pTransform) return;
+
+    XMFLOAT3 pos = pTransform->GetPosition();
+
+    // Apply gravity until landing
+    if (!m_bOnGround)
+    {
+        m_fVelocityY -= GRAVITY * deltaTime;
+        pos.y += m_fVelocityY * deltaTime;
+
+        if (pos.y <= GROUND_Y)
+        {
+            pos.y = GROUND_Y;
+            m_fVelocityY = 0.0f;
+            m_bOnGround = true;
+            m_fBaseY = pos.y;
+        }
+        pTransform->SetPosition(pos);
+    }
+    else
+    {
+        // Floating bob animation after landing
+        m_fBobTime += deltaTime * m_fBobSpeed;
+        float bobOffset = sinf(m_fBobTime) * m_fBobAmplitude;
+        pTransform->SetPosition(pos.x, m_fBaseY + bobOffset, pos.z);
+    }
 }
 
 bool InteractableComponent::IsPlayerInRange(GameObject* pPlayer) const

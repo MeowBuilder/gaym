@@ -151,5 +151,9 @@ private:
     // Callbacks
     DeathCallback m_OnDeathCallback;
 
-    float m_fGroundY = -FLT_MAX;  // Captured on first move, used to lock Y
+    // Gravity system
+    float m_fVelocityY = 0.0f;
+    bool m_bOnGround = false;
+    static constexpr float GRAVITY = 50.0f;
+    static constexpr float GROUND_Y = 0.0f;  // Tile surface height
 };

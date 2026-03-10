@@ -19,9 +19,22 @@ void PlayerComponent::PlayerUpdate(float deltaTime, InputSystem* pInputSystem, C
     TransformComponent* pTransform = m_pOwner->GetTransform();
     if (!pTransform) return;
 
-    // Capture ground height on first update
-    if (m_fGroundY <= -FLT_MAX + 1.0f)
-        m_fGroundY = pTransform->GetPosition().y;
+    // Apply gravity
+    XMFLOAT3 pos = pTransform->GetPosition();
+    if (!m_bOnGround)
+    {
+        m_fVelocityY -= GRAVITY * deltaTime;
+        pos.y += m_fVelocityY * deltaTime;
+
+        // Check if landed on ground
+        if (pos.y <= GROUND_Y)
+        {
+            pos.y = GROUND_Y;
+            m_fVelocityY = 0.0f;
+            m_bOnGround = true;
+        }
+        pTransform->SetPosition(pos);
+    }
 
     // --- Aim-at-cursor Rotation Logic ---
 
@@ -42,8 +55,8 @@ void PlayerComponent::PlayerUpdate(float deltaTime, InputSystem* pInputSystem, C
     XMVECTOR rayEnd = XMVector3TransformCoord(XMVectorSet(ndcX, ndcY, 1.0f, 1.0f), invViewProjMatrix);    // Far plane
     XMVECTOR rayDir = XMVector3Normalize(rayEnd - rayOrigin);
 
-    // 4. Define the ground plane at player's actual floor height
-    XMVECTOR groundPlane = XMPlaneFromPointNormal(XMVectorSet(0.0f, m_fGroundY, 0.0f, 0.0f), XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f));
+    // 4. Define the ground plane at player's floor height
+    XMVECTOR groundPlane = XMPlaneFromPointNormal(XMVectorSet(0.0f, GROUND_Y, 0.0f, 0.0f), XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f));
 
     // 5. Find intersection of the ray and the ground plane
 	// XMPlaneIntersectLine requires two points on the line, not a point and a direction.
@@ -105,9 +118,10 @@ void PlayerComponent::PlayerUpdate(float deltaTime, InputSystem* pInputSystem, C
         displacement = moveDir * moveSpeed * deltaTime;
     }
 
-    // Apply displacement, locking Y to ground height
+    // Apply displacement (keep current Y from gravity system)
     currentPosition += displacement;
-    pTransform->SetPosition(XMFLOAT3(XMVectorGetX(currentPosition), m_fGroundY, XMVectorGetZ(currentPosition)));
+    float currentY = pTransform->GetPosition().y;
+    pTransform->SetPosition(XMFLOAT3(XMVectorGetX(currentPosition), currentY, XMVectorGetZ(currentPosition)));
 
     // --- Skill Input Processing ---
     bool bAttackTriggered = pInputSystem->IsKeyPressed('Q')
