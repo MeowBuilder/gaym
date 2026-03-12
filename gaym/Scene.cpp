@@ -25,6 +25,7 @@ Scene::Scene()
     m_pEnemySpawner = std::make_unique<EnemySpawner>();
     m_pProjectileManager = std::make_unique<ProjectileManager>();
     m_pParticleSystem = std::make_unique<ParticleSystem>();
+    m_pFluidParticleSystem = std::make_unique<FluidParticleSystem>();
     m_pDebugRenderer = std::make_unique<DebugRenderer>();
 }
 
@@ -144,6 +145,32 @@ void Scene::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList)
     m_nNextDescriptorIndex += 512;
     m_pParticleSystem->Init(pDevice, pCommandList, m_pDescriptorHeap.get(), nParticleDescriptorStart);
     OutputDebugString(L"[Scene] Particle system initialized\n");
+
+    // Fluid Particle System (SRV 디스크립터 슬롯 1개)
+    UINT nFluidParticleDescriptorStart = m_nNextDescriptorIndex;
+    m_nNextDescriptorIndex += 1;
+    m_pFluidParticleSystem->Init(pDevice, pCommandList, m_pDescriptorHeap.get(), nFluidParticleDescriptorStart);
+    OutputDebugString(L"[Scene] Fluid particle system initialized\n");
+
+    // 데모: 원점 부근에 물 구 스폰
+    {
+        FluidParticleConfig cfg;
+        cfg.element       = ElementType::Water;
+        cfg.particleCount = 200;
+        cfg.spawnRadius   = 2.5f;
+        cfg.smoothingRadius = 1.5f;
+        cfg.restDensity   = 300.f;
+        cfg.stiffness     = 200.f;
+        cfg.viscosity     = 0.25f;
+
+        FluidControlPoint cp;
+        cp.position           = { 5.0f, 2.0f, 5.0f };
+        cp.attractionStrength = 15.0f;
+        cp.sphereRadius       = 3.0f;
+
+        m_pFluidParticleSystem->SetControlPoints({ cp });
+        m_pFluidParticleSystem->Spawn({ 5.0f, 2.0f, 5.0f }, cfg);
+    }
 
     // Projectile Manager (64 reserved slots)
     UINT nProjectileDescriptorStart = m_nNextDescriptorIndex;
@@ -433,6 +460,12 @@ void Scene::Update(float deltaTime, InputSystem* pInputSystem)
         m_pParticleSystem->Update(deltaTime);
     }
 
+    // Update Fluid Particle System
+    if (m_pFluidParticleSystem)
+    {
+        m_pFluidParticleSystem->Update(deltaTime);
+    }
+
     // 2. Check for collisions
     if (m_pCollisionManager)
     {
@@ -560,6 +593,22 @@ void Scene::Render(ID3D12GraphicsCommandList* pCommandList, D3D12_GPU_DESCRIPTOR
     if (m_pParticleSystem)
     {
         m_pParticleSystem->Render(pCommandList);
+    }
+
+    // Render fluid particles
+    if (m_pFluidParticleSystem && m_pFluidParticleSystem->IsActive())
+    {
+        // 뷰 행렬에서 카메라 Right/Up 추출 (행 0, 1)
+        XMMATRIX mView = XMLoadFloat4x4(&m_pCamera->GetViewMatrix());
+        XMFLOAT3 camRight = { XMVectorGetX(mView.r[0]), XMVectorGetY(mView.r[0]), XMVectorGetZ(mView.r[0]) };
+        XMFLOAT3 camUp    = { XMVectorGetX(mView.r[1]), XMVectorGetY(mView.r[1]), XMVectorGetZ(mView.r[1]) };
+
+        XMMATRIX mViewProj = XMLoadFloat4x4(&m_pCamera->GetViewMatrix())
+                            * XMLoadFloat4x4(&m_pCamera->GetProjectionMatrix());
+        XMFLOAT4X4 viewProj;
+        XMStoreFloat4x4(&viewProj, XMMatrixTranspose(mViewProj));
+
+        m_pFluidParticleSystem->Render(pCommandList, viewProj, camRight, camUp);
     }
 
     // Render debug colliders (F1 to toggle)

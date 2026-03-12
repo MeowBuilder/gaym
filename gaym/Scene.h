@@ -15,6 +15,7 @@
 #include "EnemySpawner.h" // Added EnemySpawner include
 #include "ProjectileManager.h" // Added ProjectileManager include
 #include "ParticleSystem.h" // Added ParticleSystem include
+#include "FluidParticleSystem.h" // Added FluidParticleSystem include
 #include "DebugRenderer.h" // Added DebugRenderer include
 
 struct ID3D12Device;
@@ -68,6 +69,7 @@ public:
     void SetCurrentRoom(CRoom* pRoom) { m_pCurrentRoom = pRoom; }
     ProjectileManager* GetProjectileManager() { return m_pProjectileManager.get(); }
     ParticleSystem* GetParticleSystem() { return m_pParticleSystem.get(); }
+    FluidParticleSystem* GetFluidParticleSystem() { return m_pFluidParticleSystem.get(); }
     GameObject* GetPlayer() const { return m_pPlayerGameObject; }
 
     // Interaction system
@@ -171,6 +173,9 @@ private:
 
     // Particle System
     std::unique_ptr<ParticleSystem> m_pParticleSystem;
+
+    // Fluid Particle System (SPH)
+    std::unique_ptr<FluidParticleSystem> m_pFluidParticleSystem;
 
     // Debug Renderer (F1 to toggle)
     std::unique_ptr<DebugRenderer> m_pDebugRenderer;
