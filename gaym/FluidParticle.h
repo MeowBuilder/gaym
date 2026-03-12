@@ -44,11 +44,13 @@ struct FluidElementColor
 struct FluidParticleConfig
 {
     // SPH physics
+    // restDensity must match the actual kernel-computed density at equilibrium spacing.
+    // For h=1.5, mass=1.0, ~200 particles in radius 2.5: expected density ~5-8.
     float smoothingRadius    = 1.5f;
-    float restDensity        = 300.0f;
-    float stiffness          = 200.0f;
-    float viscosity          = 0.25f;
-    float boundaryStiffness  = 600.0f;
+    float restDensity        = 7.0f;
+    float stiffness          = 60.0f;
+    float viscosity          = 0.30f;
+    float boundaryStiffness  = 200.0f;
 
     // Particle visual
     float particleSize       = 0.35f;

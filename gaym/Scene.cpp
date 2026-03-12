@@ -155,21 +155,19 @@ void Scene::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList)
     // 데모: 원점 부근에 물 구 스폰
     {
         FluidParticleConfig cfg;
-        cfg.element       = ElementType::Water;
-        cfg.particleCount = 200;
-        cfg.spawnRadius   = 2.5f;
+        cfg.element         = ElementType::Water;
+        cfg.particleCount   = 200;
+        cfg.spawnRadius     = 2.5f;
         cfg.smoothingRadius = 1.5f;
-        cfg.restDensity   = 300.f;
-        cfg.stiffness     = 200.f;
-        cfg.viscosity     = 0.25f;
+        // restDensity/stiffness use header defaults (7.0 / 60.0) — matches SPH kernel values
 
         FluidControlPoint cp;
-        cp.position           = { 5.0f, 2.0f, 5.0f };
-        cp.attractionStrength = 15.0f;
+        cp.position           = { 5.0f, 3.0f, 5.0f };  // 스폰 높이와 동일
+        cp.attractionStrength = 12.0f;
         cp.sphereRadius       = 3.0f;
 
         m_pFluidParticleSystem->SetControlPoints({ cp });
-        m_pFluidParticleSystem->Spawn({ 5.0f, 2.0f, 5.0f }, cfg);
+        m_pFluidParticleSystem->Spawn({ 5.0f, 3.0f, 5.0f }, cfg);
     }
 
     // Projectile Manager (64 reserved slots)

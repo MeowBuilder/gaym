@@ -326,7 +326,8 @@ void FluidParticleSystem::Spawn(const XMFLOAT3& center, const FluidParticleConfi
     {
         XMFLOAT3 offset = RandInSphere(config.spawnRadius);
         p.position = { center.x + offset.x, center.y + offset.y, center.z + offset.z };
-        p.velocity = { 0, 0, 0 };
+        // Small random kick so particles start visibly moving from frame 1
+        p.velocity = { RandRange(-1.5f, 1.5f), RandRange(-0.5f, 0.5f), RandRange(-1.5f, 1.5f) };
         p.force    = { 0, 0, 0 };
         p.density  = config.restDensity;
         p.pressure = 0.0f;
@@ -570,6 +571,13 @@ void FluidParticleSystem::ComputeForces()
             fy += ndy * attraction;
             fz += ndz * attraction;
 
+            // Gentle swirl: tangential force = cross(Y_up, toward_cp)
+            // Creates horizontal rotation around the control point
+            float swirlStrength = cp.attractionStrength * 0.35f;
+            // tangent = cross((0,1,0), (ndx,ndy,ndz)) = (ndz, 0, -ndx)
+            fx += ndz * swirlStrength;
+            fz += -ndx * swirlStrength;
+
             // Boundary: strong inward force if outside sphere radius
             if (dist > cp.sphereRadius)
             {
@@ -590,8 +598,8 @@ void FluidParticleSystem::ComputeForces()
 // ============================================================================
 void FluidParticleSystem::Integrate(float dt)
 {
-    const float DAMPING = 0.992f;
-    const float MAX_SPEED = 20.0f;
+    const float DAMPING = 0.995f;
+    const float MAX_SPEED = 12.0f;
     int n = (int)m_Particles.size();
 
     for (int i = 0; i < n; ++i)
