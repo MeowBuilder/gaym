@@ -18,6 +18,7 @@
 #include "Dx12App.h"
 
 #include <fstream>
+#include <algorithm>
 #include <sstream>
 #include <map>
 #include <tuple>
@@ -412,6 +413,13 @@ bool MapLoader::LoadIntoScene(
         if (!objRes.valid || !objRes.pMesh) continue;
 
         GameObject* pGO = pScene->CreateGameObject(pDevice, pCommandList);
+
+        // Check if this is a lava object (by mesh name)
+        std::string meshNameLower = meshRelPath;
+        std::transform(meshNameLower.begin(), meshNameLower.end(), meshNameLower.begin(), ::tolower);
+        if (meshNameLower.find("lava") != std::string::npos) {
+            pGO->SetLava(true);
+        }
 
         // Transform
         const JsonVal& pos = mo["position"];

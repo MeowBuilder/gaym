@@ -331,7 +331,7 @@ void Scene::Update(float deltaTime, InputSystem* pInputSystem)
     XMStoreFloat4x4(&m_pcbMappedPass->m_xmf4x4ViewProj, XMMatrixTranspose(mViewProj));
 
     // Set lighting parameters for a more realistic look
-    m_pcbMappedPass->m_xmf4LightColor = XMFLOAT4(0.9f, 0.85f, 0.75f, 1.0f); // Slightly warm white directional light (sun)
+    m_pcbMappedPass->m_xmf4LightColor = XMFLOAT4(1.0f, 0.6f, 0.35f, 1.0f); // Warm orange light (volcanic)
     XMVECTOR lightDir = XMVector3Normalize(XMVectorSet(-0.6f, -0.7f, 0.3f, 0.0f)); // 비스듬한 조명 (옆으로 긴 그림자)
     XMStoreFloat3(&m_pcbMappedPass->m_xmf3LightDirection, lightDir);
 
@@ -378,12 +378,16 @@ void Scene::Update(float deltaTime, InputSystem* pInputSystem)
     m_pcbMappedPass->m_fPad3 = 0.0f; // Padding
     m_pcbMappedPass->m_fPad4 = 0.0f; // Padding
 
-    m_pcbMappedPass->m_xmf4AmbientLight = XMFLOAT4(0.05f, 0.07f, 0.1f, 1.0f); // Darker, slightly bluish ambient (indirect sky light)
+    m_pcbMappedPass->m_xmf4AmbientLight = XMFLOAT4(0.12f, 0.04f, 0.02f, 1.0f); // Dark reddish ambient (volcanic glow)
 
     // Set Camera Position for Specular Calculation
     XMFLOAT3 cameraPosition = m_pCamera->GetPosition();
     m_pcbMappedPass->m_xmf3CameraPosition = cameraPosition;
     m_pcbMappedPass->m_fPadCam = 0.0f; // Padding
+
+    // Update time for lava animation
+    m_fTotalTime += deltaTime;
+    m_pcbMappedPass->m_fTime = m_fTotalTime;
 
     // Update SpotLight parameters based on player position
     if (m_pPlayerGameObject)

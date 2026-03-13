@@ -1988,7 +1988,18 @@
       "smoothness": 0.500,
       "metallic": 0.000,
       "texture": "meshes/textures/lm_cliff_01_dif.png"
-    }
+    },
+    {
+      "name": "lava_plane_base",
+      "meshFile": "meshes/lava_simple_plane.obj",
+      "position": [-2.0, -0.7, -2.0],
+      "rotation": [0.000000, 0.000000, 0.000000, 1.000000],
+      "scale": [60.0, 1.0, 70.0],
+      "color": [255, 255, 255, 255],
+      "smoothness": 0.850,
+      "metallic": 0.000,
+      "texture": "meshes/textures/lava-texture.png"
+    },
   ],
   "navMesh": {
     "vertices": [

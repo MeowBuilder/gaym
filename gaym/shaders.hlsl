@@ -14,7 +14,7 @@ cbuffer cbGameObject : register(b0)
     uint MaterialIndex;
     uint bIsSkinned;
     uint bHasTexture;
-    float pad;
+    uint bIsLava; // Lava UV animation flag
     MATERIAL gMaterial; // Replaced BaseColor with full Material
     matrix gBoneTransforms[96];
 };
@@ -37,6 +37,9 @@ cbuffer cbPass : register(b1)
     float3 g_SpotLightPosition; float g_SpotLightRange;
     float3 g_SpotLightDirection; float g_SpotLightInnerCone;
     float g_SpotLightOuterCone; float pad5; float pad6; float pad7;
+
+    // Time for animations
+    float g_Time; float g_TimePad1; float g_TimePad2; float g_TimePad3;
 };
 
 Texture2D gAlbedoMap : register(t0);
@@ -178,10 +181,19 @@ float4 PS(PS_INPUT input) : SV_TARGET
     float3 normal = normalize(input.worldNormal);
     float3 vToCamera = normalize(g_CameraPosition - input.worldPosition); // Vector from fragment to camera
 
+    // UV animation for lava (temporarily disabled)
+    float2 uv = input.uv;
+    /*if (bIsLava)
+    {
+        // Simple one-direction scroll
+        uv = input.uv + float2(g_Time * 0.01f, 0.0f);
+    }*/
+
     float4 albedoColor;
     if (bHasTexture)
     {
-        albedoColor = gAlbedoMap.Sample(gSampler, input.uv);
+        albedoColor = gAlbedoMap.Sample(gSampler, uv);
+
     }
     else
     {

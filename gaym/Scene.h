@@ -49,6 +49,7 @@ struct PassConstants
     XMFLOAT4 m_xmf4AmbientLight;
     XMFLOAT3 m_xmf3CameraPosition; float m_fPadCam; // Camera World Position
     SpotLight m_SpotLight;
+    float m_fTime; float m_fTimePad1; float m_fTimePad2; float m_fTimePad3; // 게임 시간 (용암 애니메이션용)
 };
 
 class Scene
@@ -117,6 +118,7 @@ public:
     }
 
 private:
+    float m_fTotalTime = 0.0f; // 누적 시간 (용암 애니메이션용)
 
     std::vector<std::unique_ptr<GameObject>> m_vGameObjects; // Global Objects (Player, etc.)
     std::vector<GameObject*> m_vPendingDeletions; // Objects marked for deletion (processed at end of frame)

@@ -25,7 +25,7 @@ struct ObjectConstants
 	UINT m_nMaterialIndex = 0;
     UINT m_bIsSkinned = 0; // 0: Static, 1: Skinned
     UINT m_bHasTexture = 0; // 0: No texture, 1: Has texture
-    float pad3; // 4 bytes
+    UINT m_bIsLava = 0; // 0: Normal, 1: Lava (UV animation)
 	MATERIAL mMaterial;
     XMFLOAT4X4 m_xmf4x4BoneTransforms[96];
 };
@@ -90,6 +90,13 @@ public:
         if (m_pcbMappedGameObject)
         {
             m_pcbMappedGameObject->m_bIsSkinned = bSkinned ? 1 : 0;
+        }
+    }
+    void SetLava(bool bIsLava)
+    {
+        if (m_pcbMappedGameObject)
+        {
+            m_pcbMappedGameObject->m_bIsLava = bIsLava ? 1 : 0;
         }
     }
 
