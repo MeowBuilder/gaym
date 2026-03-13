@@ -11,6 +11,7 @@ struct EnemySpawnData
     // Visual
     std::string m_strMeshPath;          // Empty = use CubeMesh
     std::string m_strAnimationPath;     // Empty = no animation
+    std::string m_strTexturePath;       // Empty = no texture override
     XMFLOAT3 m_xmf3Scale = { 1.0f, 1.0f, 1.0f };
     XMFLOAT4 m_xmf4Color = { 1.0f, 0.0f, 0.0f, 1.0f }; // Red by default
 
@@ -25,6 +26,10 @@ struct EnemySpawnData
 
     // Attack indicator config
     AttackIndicatorConfig m_IndicatorConfig;
+
+    // Flying mode
+    bool m_bIsFlying = false;
+    float m_fFlyHeight = 15.0f;
 
     // Constructor with defaults for test enemy
     EnemySpawnData()

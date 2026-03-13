@@ -110,10 +110,16 @@ void MeshLoader::LoadMaterialsInfoFromFile(ID3D12Device* pd3dDevice, ID3D12Graph
 			XMFLOAT4 emissive;
 			fread(&emissive, sizeof(float), 4, pInFile);
 		}
+		else if (!strcmp(pstrToken, "<SpecularColor>:"))
+		{
+			XMFLOAT4 specular;
+			fread(&specular, sizeof(float), 4, pInFile);
+		}
 		else if (!strcmp(pstrToken, "<Glossiness>:") ||
 				 !strcmp(pstrToken, "<Metallic>:") ||
 				 !strcmp(pstrToken, "<SpecularHighlight>:") ||
-				 !strcmp(pstrToken, "<GlossyReflection>:"))
+				 !strcmp(pstrToken, "<GlossyReflection>:") ||
+				 !strcmp(pstrToken, "<Smoothness>:"))
 		{
 			float fValue;
 			fread(&fValue, sizeof(float), 1, pInFile);
@@ -225,7 +231,10 @@ GameObject* MeshLoader::LoadFrameHierarchyFromFile(Scene* pScene, ID3D12Device* 
                 for (int i = 0; i < nChilds; i++)
                 {
                     GameObject *pChild = MeshLoader::LoadFrameHierarchyFromFile(pScene, pd3dDevice, pd3dCommandList, pd3dGraphicsRootSignature, pInFile);
-                    if (pGameObject && pChild) pGameObject->SetChild(pChild);
+                    if (pGameObject && pChild)
+                    {
+                        pGameObject->SetChild(pChild);
+                    }
                 }
             }
         }

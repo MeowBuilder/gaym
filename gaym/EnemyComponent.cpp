@@ -20,9 +20,22 @@ EnemyComponent::~EnemyComponent()
 
 void EnemyComponent::Update(float deltaTime)
 {
-    // Apply gravity
-    if (!m_bOnGround)
+    // Flying enemies maintain altitude, ground enemies use gravity
+    if (m_bIsFlying)
     {
+        auto* pTransform = m_pOwner ? m_pOwner->GetTransform() : nullptr;
+        if (pTransform)
+        {
+            XMFLOAT3 pos = pTransform->GetPosition();
+            // Smoothly maintain fly height
+            float targetY = m_fFlyHeight;
+            pos.y = pos.y + (targetY - pos.y) * 3.0f * deltaTime;
+            pTransform->SetPosition(pos);
+        }
+    }
+    else if (!m_bOnGround)
+    {
+        // Apply gravity for ground enemies
         auto* pTransform = m_pOwner ? m_pOwner->GetTransform() : nullptr;
         if (pTransform)
         {

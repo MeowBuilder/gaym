@@ -234,14 +234,33 @@ void Scene::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList)
 
     if (!bMapLoaded) {
         OutputDebugString(L"[Scene] Map load failed – using default test room\n");
-        RoomSpawnConfig spawnConfig;
-        spawnConfig.AddSpawn("RushAoEEnemy",  10.0f, 0.0f,  5.0f);
-        spawnConfig.AddSpawn("RushFrontEnemy",-10.0f, 0.0f,  5.0f);
-        spawnConfig.AddSpawn("RangedEnemy",    0.0f, 0.0f, 20.0f);
-        m_pCurrentRoom->SetSpawnConfig(spawnConfig);
+        // Boss room - no regular enemy spawns, only dragon
         m_pCurrentRoom->SetEnemySpawner(m_pEnemySpawner.get());
         m_pCurrentRoom->SetPlayerTarget(m_pPlayerGameObject);
         m_pCurrentRoom->SetScene(this);
+    }
+
+    // Boss room setup - clear any enemy spawns from MapLoader, spawn only Dragon
+    if (m_pCurrentRoom && m_pEnemySpawner)
+    {
+        // Clear existing spawn config (removes enemies defined in map JSON)
+        RoomSpawnConfig emptyConfig;
+        m_pCurrentRoom->SetSpawnConfig(emptyConfig);
+
+        OutputDebugString(L"[Scene] Spawning Dragon boss\n");
+        XMFLOAT3 dragonPos = XMFLOAT3(0.0f, 0.0f, 20.0f);
+        if (m_pPlayerGameObject)
+        {
+            XMFLOAT3 playerPos = m_pPlayerGameObject->GetTransform()->GetPosition();
+            dragonPos = XMFLOAT3(playerPos.x, playerPos.y, playerPos.z + 20.0f);
+        }
+        m_pEnemySpawner->SpawnEnemy(m_pCurrentRoom, "Dragon", dragonPos, m_pPlayerGameObject);
+
+        // Set room to Active so dragon animates immediately
+        m_pCurrentRoom->SetState(RoomState::Active);
+
+        // Spawn portal at start for skipping to regular enemy room
+        m_pCurrentRoom->SpawnPortalCube();
     }
 
     // 맵 정적 오브젝트의 상수 버퍼를 한 번 초기화
