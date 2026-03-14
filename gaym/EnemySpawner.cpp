@@ -156,7 +156,7 @@ void EnemySpawner::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pComma
     dragon.m_strMeshPath = "Assets/Enemies/Dragon/Red.bin";
     dragon.m_strAnimationPath = "Assets/Enemies/Dragon/Red_Anim.bin";
     dragon.m_strTexturePath = "Assets/Enemies/Dragon/Textures/RedHP.png";
-    dragon.m_xmf3Scale = XMFLOAT3(5.0f, 5.0f, 5.0f);
+    dragon.m_xmf3Scale = XMFLOAT3(2.5f, 2.5f, 2.5f);
     dragon.m_xmf4Color = XMFLOAT4(1.0f, 0.3f, 0.1f, 1.0f);
     dragon.m_Stats.m_fMaxHP = 150.0f;
     dragon.m_Stats.m_fCurrentHP = 150.0f;
@@ -164,11 +164,11 @@ void EnemySpawner::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pComma
     dragon.m_Stats.m_fAttackRange = 15.0f;
     dragon.m_Stats.m_fAttackCooldown = 2.5f;
 
-    // Flying mode
-    dragon.m_bIsFlying = true;
-    dragon.m_fFlyHeight = 8.0f;
+    // Flying mode disabled - boss intro handles the entrance
+    dragon.m_bIsFlying = false;
+    dragon.m_fFlyHeight = 0.0f;
 
-    // Use ground animations (flying anims cause mesh distortion)
+    // Ground combat animations (intro handles flying entrance)
     dragon.m_AnimConfig.m_strIdleClip = "Idle01";
     dragon.m_AnimConfig.m_strChaseClip = "Walk";
     dragon.m_AnimConfig.m_strAttackClip = "Flame Attack";

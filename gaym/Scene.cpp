@@ -15,6 +15,7 @@
 #include "ProjectileManager.h"
 #include "DropItemComponent.h"
 #include "InteractableComponent.h"
+#include "EnemyComponent.h"
 #include "MathUtils.h"
 #include <functional> // Added for std::function
 
@@ -252,15 +253,24 @@ void Scene::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList)
         if (m_pPlayerGameObject)
         {
             XMFLOAT3 playerPos = m_pPlayerGameObject->GetTransform()->GetPosition();
-            dragonPos = XMFLOAT3(playerPos.x, playerPos.y, playerPos.z + 20.0f);
+            dragonPos = XMFLOAT3(playerPos.x, playerPos.y, playerPos.z + 15.0f);
         }
-        m_pEnemySpawner->SpawnEnemy(m_pCurrentRoom, "Dragon", dragonPos, m_pPlayerGameObject);
+        GameObject* pDragon = m_pEnemySpawner->SpawnEnemy(m_pCurrentRoom, "Dragon", dragonPos, m_pPlayerGameObject);
+
+        // Start boss intro cutscene
+        if (pDragon)
+        {
+            EnemyComponent* pEnemy = pDragon->GetComponent<EnemyComponent>();
+            if (pEnemy)
+            {
+                pEnemy->StartBossIntro(25.0f);  // Start 25 units high in the sky
+            }
+        }
 
         // Set room to Active so dragon animates immediately
         m_pCurrentRoom->SetState(RoomState::Active);
 
-        // Spawn portal at start for skipping to regular enemy room
-        m_pCurrentRoom->SpawnPortalCube();
+        // Portal will spawn after dragon is defeated (via Room clear condition)
     }
 
     // 맵 정적 오브젝트의 상수 버퍼를 한 번 초기화

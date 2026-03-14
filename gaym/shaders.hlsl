@@ -16,7 +16,7 @@ cbuffer cbGameObject : register(b0)
     uint bHasTexture;
     uint bIsLava; // Lava UV animation flag
     MATERIAL gMaterial; // Replaced BaseColor with full Material
-    matrix gBoneTransforms[96];
+    matrix gBoneTransforms[128];
 };
 
 // Per-Pass Constant Buffer

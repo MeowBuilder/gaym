@@ -27,7 +27,7 @@ struct ObjectConstants
     UINT m_bHasTexture = 0; // 0: No texture, 1: Has texture
     UINT m_bIsLava = 0; // 0: Normal, 1: Lava (UV animation)
 	MATERIAL mMaterial;
-    XMFLOAT4X4 m_xmf4x4BoneTransforms[96];
+    XMFLOAT4X4 m_xmf4x4BoneTransforms[128];
 };
 
 
@@ -80,7 +80,7 @@ public:
 
     void SetBoneTransform(int index, const XMFLOAT4X4& matrix)
     {
-        if (m_pcbMappedGameObject && index < 96)
+        if (m_pcbMappedGameObject && index < 128)
         {
             m_pcbMappedGameObject->m_xmf4x4BoneTransforms[index] = matrix;
         }

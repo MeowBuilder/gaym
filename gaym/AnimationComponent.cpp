@@ -48,16 +48,6 @@ void AnimationComponent::Play(std::string strClipName, bool bLoop)
         m_bLoop = bLoop;
         m_fCurrentTime = 0.0f;
         m_bIsPlaying = true;
-
-        char buffer[256];
-        sprintf_s(buffer, "Animation Playing: %s (Duration: %f)\n", strClipName.c_str(), pClip->m_fDuration);
-        OutputDebugStringA(buffer);
-    }
-    else
-    {
-        char buffer[256];
-        sprintf_s(buffer, "Animation Clip Not Found: %s\n", strClipName.c_str());
-        OutputDebugStringA(buffer);
     }
 }
 
