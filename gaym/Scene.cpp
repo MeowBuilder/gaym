@@ -146,6 +146,13 @@ void Scene::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList)
     m_pParticleSystem->Init(pDevice, pCommandList, m_pDescriptorHeap.get(), nParticleDescriptorStart);
     OutputDebugString(L"[Scene] Particle system initialized\n");
 
+    // Floating embers for volcanic atmosphere
+    m_nEmberEmitterId = m_pParticleSystem->CreateEmitter(
+        FireParticlePresets::FloatingEmbers(),
+        XMFLOAT3(0.0f, 0.0f, 0.0f)
+    );
+    OutputDebugString(L"[Scene] Floating embers emitter created\n");
+
     // Projectile Manager (64 reserved slots)
     UINT nProjectileDescriptorStart = m_nNextDescriptorIndex;
     m_nNextDescriptorIndex += 64;
@@ -407,7 +414,7 @@ void Scene::Update(float deltaTime, InputSystem* pInputSystem)
     m_pcbMappedPass->m_fPad3 = 0.0f; // Padding
     m_pcbMappedPass->m_fPad4 = 0.0f; // Padding
 
-    m_pcbMappedPass->m_xmf4AmbientLight = XMFLOAT4(0.12f, 0.04f, 0.02f, 1.0f); // Dark reddish ambient (volcanic glow)
+    m_pcbMappedPass->m_xmf4AmbientLight = XMFLOAT4(0.25f, 0.08f, 0.03f, 1.0f); // Brighter volcanic ambient glow
 
     // Set Camera Position for Specular Calculation
     XMFLOAT3 cameraPosition = m_pCamera->GetPosition();
@@ -463,6 +470,16 @@ void Scene::Update(float deltaTime, InputSystem* pInputSystem)
     // Update Particle System
     if (m_pParticleSystem)
     {
+        // Update floating embers to follow player
+        if (m_nEmberEmitterId >= 0 && m_pPlayerGameObject)
+        {
+            auto* pEmitter = m_pParticleSystem->GetEmitter(m_nEmberEmitterId);
+            if (pEmitter)
+            {
+                XMFLOAT3 playerPos = m_pPlayerGameObject->GetTransform()->GetPosition();
+                pEmitter->SetPosition(playerPos);
+            }
+        }
         m_pParticleSystem->Update(deltaTime);
     }
 

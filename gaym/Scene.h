@@ -173,6 +173,7 @@ private:
 
     // Particle System
     std::unique_ptr<ParticleSystem> m_pParticleSystem;
+    int m_nEmberEmitterId = -1; // Floating embers emitter ID
 
     // Debug Renderer (F1 to toggle)
     std::unique_ptr<DebugRenderer> m_pDebugRenderer;
