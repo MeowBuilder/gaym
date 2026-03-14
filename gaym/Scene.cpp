@@ -26,6 +26,7 @@ Scene::Scene()
     m_pProjectileManager = std::make_unique<ProjectileManager>();
     m_pParticleSystem = std::make_unique<ParticleSystem>();
     m_pFluidParticleSystem = std::make_unique<FluidParticleSystem>();
+    m_pFluidSkillEffect    = std::make_unique<FluidSkillEffect>();
     m_pDebugRenderer = std::make_unique<DebugRenderer>();
 }
 
@@ -152,22 +153,16 @@ void Scene::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList)
     m_pFluidParticleSystem->Init(pDevice, pCommandList, m_pDescriptorHeap.get(), nFluidParticleDescriptorStart);
     OutputDebugString(L"[Scene] Fluid particle system initialized\n");
 
-    // 데모: 원점 부근에 물 구 스폰
+    // FluidSkillEffect: SkillComponent 연결 (플레이어 설정 후)
+    // 실제 Spawn은 Update 첫 프레임에서 FluidSkillEffect가 수행한다
+    if (m_pPlayerGameObject)
     {
-        FluidParticleConfig cfg;
-        cfg.element         = ElementType::Water;
-        cfg.particleCount   = 200;
-        cfg.spawnRadius     = 2.5f;
-        cfg.smoothingRadius = 1.5f;
-        // restDensity/stiffness use header defaults (7.0 / 60.0) — matches SPH kernel values
-
-        FluidControlPoint cp;
-        cp.position           = { 5.0f, 3.0f, 5.0f };  // 스폰 높이와 동일
-        cp.attractionStrength = 12.0f;
-        cp.sphereRadius       = 3.0f;
-
-        m_pFluidParticleSystem->SetControlPoints({ cp });
-        m_pFluidParticleSystem->Spawn({ 5.0f, 3.0f, 5.0f }, cfg);
+        auto* pSkill = m_pPlayerGameObject->GetComponent<SkillComponent>();
+        if (pSkill)
+        {
+            m_pFluidSkillEffect->Init(m_pFluidParticleSystem.get(), pSkill);
+            OutputDebugString(L"[Scene] FluidSkillEffect initialized\n");
+        }
     }
 
     // Projectile Manager (64 reserved slots)
@@ -462,6 +457,13 @@ void Scene::Update(float deltaTime, InputSystem* pInputSystem)
     if (m_pFluidParticleSystem)
     {
         m_pFluidParticleSystem->Update(deltaTime);
+    }
+
+    // Update Fluid Skill Effect (제어점을 플레이어 위치에 맞게 갱신)
+    if (m_pFluidSkillEffect && m_pPlayerGameObject)
+    {
+        m_pFluidSkillEffect->Update(deltaTime,
+            m_pPlayerGameObject->GetTransform()->GetPosition());
     }
 
     // 2. Check for collisions

@@ -16,6 +16,7 @@
 #include "ProjectileManager.h" // Added ProjectileManager include
 #include "ParticleSystem.h" // Added ParticleSystem include
 #include "FluidParticleSystem.h" // Added FluidParticleSystem include
+#include "FluidSkillEffect.h"   // Added FluidSkillEffect include
 #include "DebugRenderer.h" // Added DebugRenderer include
 
 struct ID3D12Device;
@@ -176,6 +177,9 @@ private:
 
     // Fluid Particle System (SPH)
     std::unique_ptr<FluidParticleSystem> m_pFluidParticleSystem;
+
+    // Fluid Skill Effect (connects SkillComponent to FluidParticleSystem)
+    std::unique_ptr<FluidSkillEffect> m_pFluidSkillEffect;
 
     // Debug Renderer (F1 to toggle)
     std::unique_ptr<DebugRenderer> m_pDebugRenderer;
