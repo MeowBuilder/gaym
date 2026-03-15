@@ -188,7 +188,6 @@ void EnemySpawner::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pComma
     // Create shared meshes for attack indicators
     m_pRingMesh = new RingMesh(pDevice, pCommandList, 1.0f, 0.93f, 48);
     m_pRingMesh->AddRef();
-
     m_pLineMesh = new LineMesh(pDevice, pCommandList, 0.4f);
     m_pLineMesh->AddRef();
 
