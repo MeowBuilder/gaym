@@ -30,7 +30,7 @@ struct Projectile
 
     // Visual
     float scale = 1.0f;
-    int particleEmitterId = -1;  // Associated particle emitter (-1 = none)
+    int fluidVFXId = -1;         // Associated fluid VFX effect (-1 = none)
 
     // Helper to update position
     void Update(float deltaTime)

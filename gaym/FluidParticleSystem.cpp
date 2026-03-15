@@ -4,6 +4,10 @@
 #include <cmath>
 #include <cstring>
 
+// Static member definitions
+ComPtr<ID3D12RootSignature> FluidParticleSystem::s_pRootSignature;
+ComPtr<ID3D12PipelineState> FluidParticleSystem::s_pPSO;
+
 // Internal pass CB layout (matches cbFluidPass in inline shader)
 struct FluidPassCB
 {
@@ -199,10 +203,22 @@ void FluidParticleSystem::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList*
     if (FAILED(hr)) { OutputDebugStringA("[FluidPS] Failed to create pass CB\n"); return; }
     m_pPassCB->Map(0, nullptr, &m_pMappedPassCB);
 
-    // 4. Build Root Signature
-    // Param 0: Root CBV at b0 (fluid pass CB)
-    // Param 1: Descriptor table [1 SRV at t0] (particle buffer)
+    // 4-6. Build shared pipeline (root signature, shaders, PSO) - once for all instances
+    BuildSharedPipeline(pDevice);
 
+    OutputDebugStringA("[FluidParticleSystem] Initialized\n");
+}
+
+// ============================================================================
+// BuildSharedPipeline (static) - 모든 인스턴스가 공유하는 파이프라인
+// ============================================================================
+void FluidParticleSystem::BuildSharedPipeline(ID3D12Device* pDevice)
+{
+    if (s_pRootSignature && s_pPSO) return;  // 이미 빌드됨
+
+    HRESULT hr;
+
+    // 4. Build Root Signature
     D3D12_ROOT_PARAMETER rootParams[2] = {};
 
     rootParams[0].ParameterType             = D3D12_ROOT_PARAMETER_TYPE_CBV;
@@ -236,7 +252,7 @@ void FluidParticleSystem::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList*
         return;
     }
     hr = pDevice->CreateRootSignature(0, sigBlob->GetBufferPointer(), sigBlob->GetBufferSize(),
-                                       IID_PPV_ARGS(&m_pRootSignature));
+                                       IID_PPV_ARGS(&s_pRootSignature));
     if (FAILED(hr)) { OutputDebugStringA("[FluidPS] Failed to create root signature\n"); return; }
 
     // 5. Compile inline shaders
@@ -267,14 +283,12 @@ void FluidParticleSystem::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList*
 
     // 6. Build PSO
     D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
-    psoDesc.pRootSignature = m_pRootSignature.Get();
+    psoDesc.pRootSignature = s_pRootSignature.Get();
     psoDesc.VS = { vsBlob->GetBufferPointer(), vsBlob->GetBufferSize() };
     psoDesc.PS = { psBlob->GetBufferPointer(), psBlob->GetBufferSize() };
 
-    // No vertex input layout (vertices generated in VS via SV_VertexID)
     psoDesc.InputLayout = { nullptr, 0 };
 
-    // Alpha blending
     psoDesc.BlendState.AlphaToCoverageEnable  = FALSE;
     psoDesc.BlendState.IndependentBlendEnable = FALSE;
     auto& rt = psoDesc.BlendState.RenderTarget[0];
@@ -292,7 +306,6 @@ void FluidParticleSystem::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList*
     psoDesc.RasterizerState.FrontCounterClockwise = FALSE;
     psoDesc.RasterizerState.DepthClipEnable       = TRUE;
 
-    // Depth test ON, write OFF (transparent particles)
     psoDesc.DepthStencilState.DepthEnable    = TRUE;
     psoDesc.DepthStencilState.DepthFunc      = D3D12_COMPARISON_FUNC_LESS;
     psoDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
@@ -304,10 +317,10 @@ void FluidParticleSystem::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList*
     psoDesc.DSVFormat              = DXGI_FORMAT_D24_UNORM_S8_UINT;
     psoDesc.SampleDesc.Count       = 1;
 
-    hr = pDevice->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_pPSO));
+    hr = pDevice->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&s_pPSO));
     if (FAILED(hr)) { OutputDebugStringA("[FluidPS] Failed to create PSO\n"); return; }
 
-    OutputDebugStringA("[FluidParticleSystem] Initialized\n");
+    OutputDebugStringA("[FluidParticleSystem] Shared pipeline built\n");
 }
 
 // ============================================================================
@@ -696,7 +709,7 @@ void FluidParticleSystem::UploadRenderData()
 void FluidParticleSystem::Render(ID3D12GraphicsCommandList* pCommandList,
                                  const XMFLOAT4X4& viewProj, const XMFLOAT3& cameraRight, const XMFLOAT3& cameraUp)
 {
-    if (m_Particles.empty() || !m_pPSO || !m_pRootSignature) return;
+    if (m_Particles.empty() || !s_pPSO || !s_pRootSignature) return;
 
     // Update pass CB
     if (m_pMappedPassCB)
@@ -718,8 +731,8 @@ void FluidParticleSystem::Render(ID3D12GraphicsCommandList* pCommandList,
     pCommandList->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
 
     // Set pipeline state
-    pCommandList->SetPipelineState(m_pPSO.Get());
-    pCommandList->SetGraphicsRootSignature(m_pRootSignature.Get());
+    pCommandList->SetPipelineState(s_pPSO.Get());
+    pCommandList->SetGraphicsRootSignature(s_pRootSignature.Get());
 
     // Bind root parameters
     pCommandList->SetGraphicsRootConstantBufferView(0, m_pPassCB->GetGPUVirtualAddress());

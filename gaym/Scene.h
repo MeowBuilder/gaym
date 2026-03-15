@@ -17,6 +17,7 @@
 #include "ParticleSystem.h" // Added ParticleSystem include
 #include "FluidParticleSystem.h" // Added FluidParticleSystem include
 #include "FluidSkillEffect.h"   // Added FluidSkillEffect include
+#include "FluidSkillVFXManager.h" // Added FluidSkillVFXManager include
 #include "DebugRenderer.h" // Added DebugRenderer include
 
 struct ID3D12Device;
@@ -71,6 +72,7 @@ public:
     ProjectileManager* GetProjectileManager() { return m_pProjectileManager.get(); }
     ParticleSystem* GetParticleSystem() { return m_pParticleSystem.get(); }
     FluidParticleSystem* GetFluidParticleSystem() { return m_pFluidParticleSystem.get(); }
+    FluidSkillVFXManager* GetFluidVFXManager() { return m_pFluidVFXManager.get(); }
     GameObject* GetPlayer() const { return m_pPlayerGameObject; }
 
     // Interaction system
@@ -180,6 +182,9 @@ private:
 
     // Fluid Skill Effect (connects SkillComponent to FluidParticleSystem)
     std::unique_ptr<FluidSkillEffect> m_pFluidSkillEffect;
+
+    // Fluid Skill VFX Manager (투사체 유체 이펙트, 최대 8개 동시)
+    std::unique_ptr<FluidSkillVFXManager> m_pFluidVFXManager;
 
     // Debug Renderer (F1 to toggle)
     std::unique_ptr<DebugRenderer> m_pDebugRenderer;

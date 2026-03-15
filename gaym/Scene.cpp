@@ -27,6 +27,7 @@ Scene::Scene()
     m_pParticleSystem = std::make_unique<ParticleSystem>();
     m_pFluidParticleSystem = std::make_unique<FluidParticleSystem>();
     m_pFluidSkillEffect    = std::make_unique<FluidSkillEffect>();
+    m_pFluidVFXManager     = std::make_unique<FluidSkillVFXManager>();
     m_pDebugRenderer = std::make_unique<DebugRenderer>();
 }
 
@@ -152,6 +153,12 @@ void Scene::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList)
     m_nNextDescriptorIndex += 1;
     m_pFluidParticleSystem->Init(pDevice, pCommandList, m_pDescriptorHeap.get(), nFluidParticleDescriptorStart);
     OutputDebugString(L"[Scene] Fluid particle system initialized\n");
+
+    // FluidSkillVFXManager (최대 8개 동시 이펙트)
+    UINT nFluidVFXDescStart = m_nNextDescriptorIndex;
+    m_nNextDescriptorIndex += FluidSkillVFXManager::MAX_EFFECTS;
+    m_pFluidVFXManager->Init(pDevice, pCommandList, m_pDescriptorHeap.get(), nFluidVFXDescStart);
+    OutputDebugString(L"[Scene] FluidSkillVFXManager initialized\n");
 
     // FluidSkillEffect: SkillComponent 연결 (플레이어 설정 후)
     // 실제 Spawn은 Update 첫 프레임에서 FluidSkillEffect가 수행한다
@@ -459,6 +466,12 @@ void Scene::Update(float deltaTime, InputSystem* pInputSystem)
         m_pFluidParticleSystem->Update(deltaTime);
     }
 
+    // Update Fluid Skill VFX Manager
+    if (m_pFluidVFXManager)
+    {
+        m_pFluidVFXManager->Update(deltaTime);
+    }
+
     // Update Fluid Skill Effect (제어점을 플레이어 위치에 맞게 갱신)
     if (m_pFluidSkillEffect && m_pPlayerGameObject)
     {
@@ -609,6 +622,20 @@ void Scene::Render(ID3D12GraphicsCommandList* pCommandList, D3D12_GPU_DESCRIPTOR
         XMStoreFloat4x4(&viewProj, XMMatrixTranspose(mViewProj));
 
         m_pFluidParticleSystem->Render(pCommandList, viewProj, camRight, camUp);
+    }
+
+    // Render fluid skill VFX (투사체 유체 이펙트)
+    if (m_pFluidVFXManager)
+    {
+        XMMATRIX mView2 = XMLoadFloat4x4(&m_pCamera->GetViewMatrix());
+        XMFLOAT3 camRight2 = { XMVectorGetX(mView2.r[0]), XMVectorGetY(mView2.r[0]), XMVectorGetZ(mView2.r[0]) };
+        XMFLOAT3 camUp2    = { XMVectorGetX(mView2.r[1]), XMVectorGetY(mView2.r[1]), XMVectorGetZ(mView2.r[1]) };
+
+        XMMATRIX mViewProj2 = mView2 * XMLoadFloat4x4(&m_pCamera->GetProjectionMatrix());
+        XMFLOAT4X4 viewProj2;
+        XMStoreFloat4x4(&viewProj2, XMMatrixTranspose(mViewProj2));
+
+        m_pFluidVFXManager->Render(pCommandList, viewProj2, camRight2, camUp2);
     }
 
     // Render debug colliders (F1 to toggle)

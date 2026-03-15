@@ -182,6 +182,7 @@ xcopy /Y /I /E "$(ProjectDir)Assets\*.*" "$(OutDir)Assets\"</Command>
     <ClInclude Include="FluidParticle.h" />
     <ClInclude Include="FluidParticleSystem.h" />
     <ClInclude Include="FluidSkillEffect.h" />
+    <ClInclude Include="FluidSkillVFXManager.h" />
     <ClInclude Include="RenderComponent.h" />
     <ClInclude Include="Resource.h" />
     <ClInclude Include="Room.h" />
@@ -226,6 +227,7 @@ xcopy /Y /I /E "$(ProjectDir)Assets\*.*" "$(OutDir)Assets\"</Command>
     <ClCompile Include="ParticleSystem.cpp" />
     <ClCompile Include="FluidParticleSystem.cpp" />
     <ClCompile Include="FluidSkillEffect.cpp" />
+    <ClCompile Include="FluidSkillVFXManager.cpp" />
     <ClCompile Include="RenderComponent.cpp" />
     <ClCompile Include="Room.cpp" />
     <ClCompile Include="RotatorComponent.cpp" />

@@ -87,11 +87,13 @@ private:
     ComPtr<ID3D12Resource>      m_pPassCB;              // Internal pass constant buffer
     void*                       m_pMappedPassCB     = nullptr;
 
-    ComPtr<ID3D12RootSignature> m_pRootSignature;
-    ComPtr<ID3D12PipelineState> m_pPSO;
-
     CDescriptorHeap*            m_pDescriptorHeap       = nullptr;
     UINT                        m_nSrvDescriptorIndex   = 0;
+
+    // D3D12 shared pipeline (static - compiled once for all instances)
+    static ComPtr<ID3D12RootSignature> s_pRootSignature;
+    static ComPtr<ID3D12PipelineState> s_pPSO;
+    static void BuildSharedPipeline(ID3D12Device* pDevice);
 
     // PRNG for spawn
     uint32_t m_Seed = 12345;

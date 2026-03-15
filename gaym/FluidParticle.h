@@ -1,6 +1,7 @@
 #pragma once
 
 #include <DirectXMath.h>
+#include <vector>
 #include "SkillTypes.h"
 
 using namespace DirectX;
@@ -82,3 +83,21 @@ namespace FluidElementColors
         }
     }
 }
+
+// 스킬 기반 유체 VFX의 제어점 동작 설명자
+struct FluidCPDesc {
+    float orbitRadius        = 0.8f;   // 투사체 forward 축 주위 궤도 반지름
+    float orbitSpeed         = 4.0f;   // rad/s
+    float orbitPhase         = 0.0f;   // 초기 각도 오프셋 (라디안)
+    float forwardBias        = 0.0f;   // 진행 방향을 따른 오프셋 (+앞, -뒤)
+    float attractionStrength = 15.0f;
+    float sphereRadius       = 1.8f;
+};
+
+// 스킬 시전 하나의 전체 VFX 정의
+struct FluidSkillVFXDef {
+    std::vector<FluidCPDesc> cpDescs;
+    int         particleCount = 80;
+    float       spawnRadius   = 0.8f;
+    ElementType element       = ElementType::Fire;
+};
