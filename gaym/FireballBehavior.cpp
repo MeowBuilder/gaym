@@ -95,9 +95,15 @@ void FireballBehavior::ExecuteInstant(GameObject* caster, const DirectX::XMFLOAT
         m_SkillData.name.c_str(), finalDamage, damageMultiplier, scale);
     OutputDebugString(buffer);
 
+    // Flatten target to launch height so the projectile flies horizontally.
+    // (CalculateTargetPosition returns a ground-plane point; the height difference
+    //  would otherwise give direction a negative Y, making the fireball arc down.)
+    DirectX::XMFLOAT3 flatTarget = targetPosition;
+    flatTarget.y = m_StartPosition.y;
+
     m_pProjectileManager->SpawnProjectile(
         m_StartPosition,
-        targetPosition,
+        flatTarget,
         finalDamage,
         speed,
         collisionRadius,
