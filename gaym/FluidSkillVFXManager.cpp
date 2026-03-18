@@ -21,11 +21,13 @@ int FluidSkillVFXManager::SpawnEffect(const XMFLOAT3& origin, const XMFLOAT3& di
         if (!m_Slots[i].isActive)
         {
             FluidVFXSlot& slot = m_Slots[i];
-            slot.isActive  = true;
-            slot.elapsed   = 0.0f;
-            slot.origin    = origin;
-            slot.direction = direction;
-            slot.def       = def;
+            slot.isActive    = true;
+            slot.isFadingOut = false;
+            slot.elapsed     = 0.0f;
+            slot.origin      = origin;
+            slot.prevOrigin  = origin;
+            slot.direction   = direction;
+            slot.def         = def;
 
             FluidParticleConfig cfg;
             cfg.element           = def.element;
@@ -98,6 +100,17 @@ void FluidSkillVFXManager::Update(float deltaTime)
             }
             continue;
         }
+
+        // 투사체 이동 델타만큼 파티클 전체를 같이 이동 (공동이동 프레임)
+        // → SPH 시뮬레이션이 투사체 기준계에서 동작하게 되어 파티클이 항상 따라붙음
+        XMFLOAT3 delta = {
+            slot.origin.x - slot.prevOrigin.x,
+            slot.origin.y - slot.prevOrigin.y,
+            slot.origin.z - slot.prevOrigin.z
+        };
+        slot.prevOrigin = slot.origin;
+        if (fabsf(delta.x) + fabsf(delta.y) + fabsf(delta.z) > 0.0001f)
+            slot.pSystem->OffsetParticles(delta);
 
         slot.elapsed += deltaTime;
         PushControlPoints(slot);

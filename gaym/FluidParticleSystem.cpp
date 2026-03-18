@@ -650,6 +650,17 @@ void FluidParticleSystem::Integrate(float dt)
     }
 }
 
+void FluidParticleSystem::OffsetParticles(const XMFLOAT3& delta)
+{
+    for (auto& p : m_Particles)
+    {
+        if (!p.active) continue;
+        p.position.x += delta.x;
+        p.position.y += delta.y;
+        p.position.z += delta.z;
+    }
+}
+
 // ============================================================================
 // Update
 // ============================================================================

@@ -38,6 +38,9 @@ public:
     bool IsActive() const { return !m_Particles.empty(); }
     int  GetParticleCount() const { return static_cast<int>(m_Particles.size()); }
 
+    // Shift all particle positions by delta (used to co-move with a projectile)
+    void OffsetParticles(const XMFLOAT3& delta);
+
 private:
     // SPH phases
     void BuildSpatialHash();

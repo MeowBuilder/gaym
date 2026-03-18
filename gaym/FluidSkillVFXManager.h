@@ -15,6 +15,7 @@ struct FluidVFXSlot {
     float            fadeTimer   = 0.0f;    // 수렴 후 소멸까지 남은 시간
     float            elapsed     = 0.0f;
     XMFLOAT3         origin      = {0, 0, 0};
+    XMFLOAT3         prevOrigin  = {0, 0, 0};  // 이전 프레임 origin (파티클 공동이동용)
     XMFLOAT3         direction   = {0, 0, 1};
     FluidSkillVFXDef def;
 };
