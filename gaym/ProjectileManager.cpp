@@ -83,7 +83,7 @@ void ProjectileManager::SpawnProjectile(const Projectile& projectile)
         auto& proj = m_Projectiles.back();
         proj.fluidVFXId = m_pFluidVFXManager->SpawnEffect(
             proj.position, proj.direction,
-            FluidSkillVFXManager::GetVFXDef(proj.element));
+            FluidSkillVFXManager::GetVFXDef(proj.element, proj.runeCombo));
     }
 
     wchar_t buffer[256];
@@ -103,7 +103,8 @@ void ProjectileManager::SpawnProjectile(
     ElementType element,
     GameObject* owner,
     bool isPlayerProjectile,
-    float scale)
+    float scale,
+    const RuneCombo& runeCombo)
 {
     Projectile proj;
     proj.position = startPos;
@@ -118,6 +119,7 @@ void ProjectileManager::SpawnProjectile(
     proj.distanceTraveled = 0.0f;
     proj.isActive = true;
     proj.scale = scale;
+    proj.runeCombo = runeCombo;
 
     // Calculate direction
     XMVECTOR start = XMLoadFloat3(&startPos);
@@ -153,11 +155,18 @@ void ProjectileManager::Update(float deltaTime)
             CheckProjectileCollisions(projectile);
         }
 
-        // If projectile became inactive (hit something or expired), stop fluid VFX and spawn explosion
+        // If projectile became inactive (hit something or expired), handle fluid VFX and spawn explosion
         if (!projectile.isActive)
         {
             if (m_pFluidVFXManager && projectile.fluidVFXId >= 0)
-                m_pFluidVFXManager->StopEffect(projectile.fluidVFXId);
+            {
+                if (projectile.wasHit)
+                    // 충돌: 파티클이 충돌 위치로 수렴 후 소멸
+                    m_pFluidVFXManager->ImpactEffect(projectile.fluidVFXId, projectile.position);
+                else
+                    // 사거리 초과: 즉시 소멸
+                    m_pFluidVFXManager->StopEffect(projectile.fluidVFXId);
+            }
             // Spawn explosion particles
             SpawnExplosionParticles(projectile.position, projectile.element);
             inactiveCount++;
@@ -225,6 +234,7 @@ void ProjectileManager::CheckProjectileCollisions(Projectile& projectile)
                     ApplyDamage(projectile, pEnemy);
                 }
 
+                projectile.wasHit = true;
                 projectile.isActive = false;
 
                 wchar_t buffer[128];
@@ -250,6 +260,7 @@ void ProjectileManager::CheckProjectileCollisions(Projectile& projectile)
 
         if (projSphere.Intersects(playerSphere))
         {
+            projectile.wasHit = true;
             projectile.isActive = false;
 
             // Deal damage to player
@@ -348,6 +359,7 @@ void ProjectileManager::Render(ID3D12GraphicsCommandList* pCommandList)
     for (const auto& projectile : m_Projectiles)
     {
         if (!projectile.isActive) continue;
+        if (projectile.isPlayerProjectile) continue;  // Uses fluid VFX only
         if (renderIndex >= MAX_RENDERED_PROJECTILES) break;
 
         // Update constant buffer for this projectile

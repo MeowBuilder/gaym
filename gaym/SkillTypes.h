@@ -31,6 +31,7 @@ enum class ActivationType : uint8_t
     Channel,        // 3: Channeled over time (continuous effect)
     Place,          // 4: Place trap/turret at location
     Enhance,        // 5: Self-buff, enhance next attack
+    Split,          // 6: Split projectile into multiple
     Count
 };
 
@@ -43,11 +44,23 @@ enum class RuneType : uint8_t
     ActivationChannel,
     ActivationPlace,
     ActivationEnhance,
+    ActivationSplit,
 
     // Element Runes (changes element) - future
     // Effect Runes (adds effects) - future
 
     None = 255
+};
+
+// Combo flags from multiple runes equipped on a single skill
+struct RuneCombo {
+    bool hasInstant = false;
+    bool hasCharge = false;
+    bool hasChannel = false;
+    bool hasPlace = false;
+    bool hasEnhance = false;
+    bool hasSplit = false;
+    int count = 0;  // Total equipped rune count
 };
 
 // Current state of a skill

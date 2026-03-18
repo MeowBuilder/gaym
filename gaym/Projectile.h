@@ -31,6 +31,8 @@ struct Projectile
     // Visual
     float scale = 1.0f;
     int fluidVFXId = -1;         // Associated fluid VFX effect (-1 = none)
+    RuneCombo runeCombo;         // Rune combo for VFX customization
+    bool wasHit = false;         // True if deactivated by collision (not range)
 
     // Helper to update position
     void Update(float deltaTime)

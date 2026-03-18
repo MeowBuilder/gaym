@@ -1,6 +1,7 @@
 #pragma once
 
 #include <DirectXMath.h>
+#include "SkillTypes.h"
 
 class GameObject;
 struct SkillData;
@@ -30,4 +31,11 @@ public:
 
     // Get the skill data
     virtual const SkillData& GetSkillData() const = 0;
+
+    // Slot assignment (set by SkillComponent::EquipSkill)
+    void      SetSlot(SkillSlot s) { m_slot = s; }
+    SkillSlot GetSlot() const      { return m_slot; }
+
+protected:
+    SkillSlot m_slot = SkillSlot::Count;
 };

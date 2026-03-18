@@ -65,11 +65,40 @@ void FluidSkillVFXManager::StopEffect(int id)
     m_Slots[id].pSystem->Clear();
 }
 
+void FluidSkillVFXManager::ImpactEffect(int id, const XMFLOAT3& impactPos)
+{
+    if (id < 0 || id >= MAX_EFFECTS || !m_Slots[id].isActive) return;
+    auto& slot = m_Slots[id];
+
+    // 단일 제어점을 충돌 위치에 배치 - 파티클이 충돌점으로 수렴
+    FluidControlPoint cp;
+    cp.position           = impactPos;
+    cp.attractionStrength = 35.0f;   // 강한 인력으로 빠르게 집결
+    cp.sphereRadius       = 0.25f;   // 매우 좁은 구체 -> 밀집
+    slot.pSystem->SetControlPoints({ cp });
+
+    slot.isFadingOut = true;
+    slot.fadeTimer   = 0.7f;  // 0.7초 후 소멸
+}
+
 void FluidSkillVFXManager::Update(float deltaTime)
 {
     for (auto& slot : m_Slots)
     {
         if (!slot.isActive) continue;
+
+        if (slot.isFadingOut) {
+            // fade-out 중: 제어점은 이미 충돌 위치에 고정됨, SPH만 업데이트
+            slot.pSystem->Update(deltaTime);
+            slot.fadeTimer -= deltaTime;
+            if (slot.fadeTimer <= 0.0f) {
+                slot.isActive    = false;
+                slot.isFadingOut = false;
+                slot.pSystem->Clear();
+            }
+            continue;
+        }
+
         slot.elapsed += deltaTime;
         PushControlPoints(slot);
         slot.pSystem->Update(deltaTime);
@@ -118,7 +147,7 @@ void FluidSkillVFXManager::PushControlPoints(FluidVFXSlot& slot) const
     slot.pSystem->SetControlPoints(cps);
 }
 
-FluidSkillVFXDef FluidSkillVFXManager::GetVFXDef(ElementType element)
+FluidSkillVFXDef FluidSkillVFXManager::GetVFXDef(ElementType element, const RuneCombo& combo)
 {
     FluidSkillVFXDef def;
     def.element = element;
@@ -193,5 +222,31 @@ FluidSkillVFXDef FluidSkillVFXManager::GetVFXDef(ElementType element)
         break;
     }
     }
+
+    // Rune-based modifications
+    for (auto& cpd : def.cpDescs) {
+        if (combo.hasCharge) {
+            cpd.orbitRadius *= 0.65f;
+            cpd.orbitSpeed  *= 1.6f;
+            cpd.attractionStrength *= 1.4f;
+            cpd.sphereRadius *= 0.8f;
+        }
+        if (combo.hasChannel) {
+            cpd.orbitRadius *= 1.35f;
+            cpd.orbitSpeed  *= 0.7f;
+            cpd.sphereRadius *= 1.3f;
+        }
+        if (combo.hasEnhance) {
+            cpd.orbitRadius *= 1.4f;
+            cpd.attractionStrength *= 1.2f;
+            cpd.sphereRadius *= 1.35f;
+        }
+    }
+    if (combo.hasCharge)  { def.particleCount = (int)(def.particleCount * 1.3f); def.spawnRadius *= 0.8f; }
+    if (combo.hasChannel) { def.particleCount = (int)(def.particleCount * 1.2f); }
+    if (combo.hasEnhance) { def.particleCount = (int)(def.particleCount * 1.5f); }
+    // particleCount 상한 제한
+    if (def.particleCount > 128) def.particleCount = 128;
+
     return def;
 }

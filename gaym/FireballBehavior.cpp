@@ -3,6 +3,7 @@
 #include "ProjectileManager.h"
 #include "GameObject.h"
 #include "TransformComponent.h"
+#include "SkillComponent.h"
 
 FireballBehavior::FireballBehavior()
     : m_SkillData(FireSkillPresets::Fireball())
@@ -95,6 +96,14 @@ void FireballBehavior::ExecuteInstant(GameObject* caster, const DirectX::XMFLOAT
         m_SkillData.name.c_str(), finalDamage, damageMultiplier, scale);
     OutputDebugString(buffer);
 
+    // Get rune combo for VFX customization
+    RuneCombo combo;
+    if (caster) {
+        auto* pSkillComp = caster->GetComponent<SkillComponent>();
+        if (pSkillComp && m_slot != SkillSlot::Count)
+            combo = pSkillComp->GetRuneCombo(m_slot);
+    }
+
     // Flatten target to launch height so the projectile flies horizontally.
     // (CalculateTargetPosition returns a ground-plane point; the height difference
     //  would otherwise give direction a negative Y, making the fireball arc down.)
@@ -111,7 +120,8 @@ void FireballBehavior::ExecuteInstant(GameObject* caster, const DirectX::XMFLOAT
         m_SkillData.element,
         caster,
         true,
-        scale  // Pass scale for visual size
+        scale,
+        combo  // Rune combo for VFX customization
     );
 }
 
