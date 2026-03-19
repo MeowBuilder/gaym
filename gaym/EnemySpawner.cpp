@@ -51,26 +51,31 @@ void EnemySpawner::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pComma
 
     RegisterEnemyPreset("TestEnemy", testEnemy);
 
-    // Register AirElemental preset
-    EnemySpawnData airElemental;
-    airElemental.m_strMeshPath = "Assets/Enemies/AirElemental/Models/AirElemental_Bl.bin";
-    airElemental.m_strAnimationPath = "Assets/Enemies/AirElemental/Animations/AirElemental_Bl_Anim.bin";
-    airElemental.m_xmf3Scale = XMFLOAT3(2.0f, 2.0f, 2.0f);
-    airElemental.m_xmf4Color = XMFLOAT4(0.5f, 0.7f, 1.0f, 1.0f);  // Light blue
+    // Shared animation config for Elemental enemies
+    EnemyAnimationConfig elementalAnim;
+    elementalAnim.m_strIdleClip    = "idle";
+    elementalAnim.m_strChaseClip   = "Run_Forward";
+    elementalAnim.m_strAttackClip  = "Combat_Unarmed_Attack";
+    elementalAnim.m_strStaggerClip = "Combat_Stun";
+    elementalAnim.m_strDeathClip   = "Death";
 
-    airElemental.m_Stats.m_fMaxHP = 80.0f;
-    airElemental.m_Stats.m_fCurrentHP = 80.0f;
-    airElemental.m_Stats.m_fMoveSpeed = 5.0f;
-    airElemental.m_Stats.m_fAttackRange = 4.0f;
+    // Register AirElemental preset (Melee - light blue air)
+    EnemySpawnData airElemental;
+    airElemental.m_strMeshPath      = "Assets/Enemies/Elementals/AirElemental_Bl/AirElemental_Bl.bin";
+    airElemental.m_strAnimationPath = "Assets/Enemies/Elementals/AirElemental_Bl/AirElemental_Bl_Anim.bin";
+    airElemental.m_strTexturePath   = "Assets/Enemies/Elementals/AirElemental_Bl/Textures/T_AirElemental_Body_Bl_D.png";
+    airElemental.m_xmf3Scale = XMFLOAT3(2.0f, 2.0f, 2.0f);
+    airElemental.m_xmf4Color = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
+
+    airElemental.m_Stats.m_fMaxHP          = 80.0f;
+    airElemental.m_Stats.m_fCurrentHP      = 80.0f;
+    airElemental.m_Stats.m_fMoveSpeed      = 5.0f;
+    airElemental.m_Stats.m_fAttackRange    = 4.0f;
     airElemental.m_Stats.m_fAttackCooldown = 2.0f;
 
-    airElemental.m_AnimConfig.m_strIdleClip = "idle";
-    airElemental.m_AnimConfig.m_strChaseClip = "Run_Forward";
-    airElemental.m_AnimConfig.m_strAttackClip = "Combat_Unarmed_Attack";
-    airElemental.m_AnimConfig.m_strStaggerClip = "Combat_Stun";
-    airElemental.m_AnimConfig.m_strDeathClip = "Death";
+    airElemental.m_AnimConfig = elementalAnim;
 
-    airElemental.m_IndicatorConfig.m_eType = IndicatorType::Circle;
+    airElemental.m_IndicatorConfig.m_eType      = IndicatorType::Circle;
     airElemental.m_IndicatorConfig.m_fHitRadius = 4.0f;
     airElemental.m_fnCreateAttack = []() {
         return std::make_unique<MeleeAttackBehavior>(15.0f, 0.4f, 0.2f, 0.4f);
@@ -78,71 +83,74 @@ void EnemySpawner::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pComma
 
     RegisterEnemyPreset("AirElemental", airElemental);
 
-    // Register RushAoEEnemy preset (Red - 360 AoE after rush)
+    // Register RushAoEEnemy preset (Rush + 360 AoE - FireGolem_Rd)
     EnemySpawnData rushAoE;
-    rushAoE.m_strMeshPath = "Assets/Enemies/AirElemental/Models/AirElemental_Bl.bin";
-    rushAoE.m_strAnimationPath = "Assets/Enemies/AirElemental/Animations/AirElemental_Bl_Anim.bin";
+    rushAoE.m_strMeshPath      = "Assets/Enemies/Elementals/FireGolem_Rd/FireGolem_Rd.bin";
+    rushAoE.m_strAnimationPath = "Assets/Enemies/Elementals/FireGolem_Rd/FireGolem_Rd_Anim.bin";
+    rushAoE.m_strTexturePath   = "Assets/Enemies/Elementals/FireGolem_Rd/Textures/T_FireGolem_Rd_D.png";
     rushAoE.m_xmf3Scale = XMFLOAT3(2.0f, 2.0f, 2.0f);
-    rushAoE.m_xmf4Color = XMFLOAT4(1.0f, 0.2f, 0.2f, 1.0f);  // Red
+    rushAoE.m_xmf4Color = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
 
-    rushAoE.m_Stats.m_fMaxHP = 100.0f;
-    rushAoE.m_Stats.m_fCurrentHP = 100.0f;
-    rushAoE.m_Stats.m_fMoveSpeed = 5.0f;
-    rushAoE.m_Stats.m_fAttackRange = 20.0f;
+    rushAoE.m_Stats.m_fMaxHP          = 100.0f;
+    rushAoE.m_Stats.m_fCurrentHP      = 100.0f;
+    rushAoE.m_Stats.m_fMoveSpeed      = 5.0f;
+    rushAoE.m_Stats.m_fAttackRange    = 20.0f;
     rushAoE.m_Stats.m_fAttackCooldown = 3.0f;
 
-    rushAoE.m_AnimConfig = airElemental.m_AnimConfig;
+    rushAoE.m_AnimConfig = elementalAnim;
 
     // rushSpeed=15, rushDuration=1.2 → rushDistance=18
-    rushAoE.m_IndicatorConfig.m_eType = IndicatorType::RushCircle;
-    rushAoE.m_IndicatorConfig.m_fRushDistance = 18.0f;  // 15 * 1.2
-    rushAoE.m_IndicatorConfig.m_fHitRadius = 5.0f;      // AoE radius
+    rushAoE.m_IndicatorConfig.m_eType         = IndicatorType::RushCircle;
+    rushAoE.m_IndicatorConfig.m_fRushDistance = 18.0f;
+    rushAoE.m_IndicatorConfig.m_fHitRadius    = 5.0f;
     rushAoE.m_fnCreateAttack = []() {
         return std::make_unique<RushAoEAttackBehavior>(15.0f, 15.0f, 1.2f, 0.3f, 0.2f, 0.3f, 5.0f);
     };
 
     RegisterEnemyPreset("RushAoEEnemy", rushAoE);
 
-    // Register RushFrontEnemy preset (Green - frontal cone after rush)
+    // Register RushFrontEnemy preset (Rush + cone - EarthElemental_Gn)
     EnemySpawnData rushFront;
-    rushFront.m_strMeshPath = "Assets/Enemies/AirElemental/Models/AirElemental_Bl.bin";
-    rushFront.m_strAnimationPath = "Assets/Enemies/AirElemental/Animations/AirElemental_Bl_Anim.bin";
+    rushFront.m_strMeshPath      = "Assets/Enemies/Elementals/EarthElemental_Gn/EarthElemental_Gn.bin";
+    rushFront.m_strAnimationPath = "Assets/Enemies/Elementals/EarthElemental_Gn/EarthElemental_Gn_Anim.bin";
+    rushFront.m_strTexturePath   = "Assets/Enemies/Elementals/EarthElemental_Gn/Textures/T_EarthElemental_Gn_D.png";
     rushFront.m_xmf3Scale = XMFLOAT3(2.0f, 2.0f, 2.0f);
-    rushFront.m_xmf4Color = XMFLOAT4(0.2f, 1.0f, 0.2f, 1.0f);  // Green
+    rushFront.m_xmf4Color = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
 
-    rushFront.m_Stats.m_fMaxHP = 80.0f;
-    rushFront.m_Stats.m_fCurrentHP = 80.0f;
-    rushFront.m_Stats.m_fMoveSpeed = 5.0f;
-    rushFront.m_Stats.m_fAttackRange = 18.0f;
+    rushFront.m_Stats.m_fMaxHP          = 80.0f;
+    rushFront.m_Stats.m_fCurrentHP      = 80.0f;
+    rushFront.m_Stats.m_fMoveSpeed      = 5.0f;
+    rushFront.m_Stats.m_fAttackRange    = 18.0f;
     rushFront.m_Stats.m_fAttackCooldown = 2.5f;
 
-    rushFront.m_AnimConfig = airElemental.m_AnimConfig;
+    rushFront.m_AnimConfig = elementalAnim;
 
     // rushSpeed=18, rushDuration=1.0 → rushDistance=18
-    rushFront.m_IndicatorConfig.m_eType = IndicatorType::RushCone;
-    rushFront.m_IndicatorConfig.m_fRushDistance = 18.0f;  // 18 * 1.0
-    rushFront.m_IndicatorConfig.m_fHitRadius = 4.0f;      // cone range
-    rushFront.m_IndicatorConfig.m_fConeAngle = 90.0f;
+    rushFront.m_IndicatorConfig.m_eType         = IndicatorType::RushCone;
+    rushFront.m_IndicatorConfig.m_fRushDistance = 18.0f;
+    rushFront.m_IndicatorConfig.m_fHitRadius    = 4.0f;
+    rushFront.m_IndicatorConfig.m_fConeAngle    = 90.0f;
     rushFront.m_fnCreateAttack = []() {
         return std::make_unique<RushFrontAttackBehavior>(20.0f, 18.0f, 1.0f, 0.2f, 0.2f, 0.3f, 4.0f, 90.0f);
     };
 
     RegisterEnemyPreset("RushFrontEnemy", rushFront);
 
-    // Register RangedEnemy preset (Blue - projectile attack)
+    // Register RangedEnemy preset (Projectile - StormElemental_Bl)
     EnemySpawnData ranged;
-    ranged.m_strMeshPath = "Assets/Enemies/AirElemental/Models/AirElemental_Bl.bin";
-    ranged.m_strAnimationPath = "Assets/Enemies/AirElemental/Animations/AirElemental_Bl_Anim.bin";
+    ranged.m_strMeshPath      = "Assets/Enemies/Elementals/StormElemental_Bl/StormElemental_Bl.bin";
+    ranged.m_strAnimationPath = "Assets/Enemies/Elementals/StormElemental_Bl/StormElemental_Bl_Anim.bin";
+    ranged.m_strTexturePath   = "Assets/Enemies/Elementals/StormElemental_Bl/Textures/T_StormElemental_Bl_D.png";
     ranged.m_xmf3Scale = XMFLOAT3(2.0f, 2.0f, 2.0f);
-    ranged.m_xmf4Color = XMFLOAT4(0.2f, 0.4f, 1.0f, 1.0f);  // Blue
+    ranged.m_xmf4Color = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
 
-    ranged.m_Stats.m_fMaxHP = 60.0f;
-    ranged.m_Stats.m_fCurrentHP = 60.0f;
-    ranged.m_Stats.m_fMoveSpeed = 3.0f;
-    ranged.m_Stats.m_fAttackRange = 30.0f;
+    ranged.m_Stats.m_fMaxHP          = 60.0f;
+    ranged.m_Stats.m_fCurrentHP      = 60.0f;
+    ranged.m_Stats.m_fMoveSpeed      = 3.0f;
+    ranged.m_Stats.m_fAttackRange    = 30.0f;
     ranged.m_Stats.m_fAttackCooldown = 2.0f;
 
-    ranged.m_AnimConfig = airElemental.m_AnimConfig;
+    ranged.m_AnimConfig = elementalAnim;
 
     ProjectileManager* pProjMgr = pScene->GetProjectileManager();
     ranged.m_fnCreateAttack = [pProjMgr]() {

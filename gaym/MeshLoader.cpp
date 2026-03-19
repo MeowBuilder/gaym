@@ -67,7 +67,7 @@ BYTE ReadStringFromFile(FILE* pInFile, char* pstrToken, int nBufferSize)
 	return (BYTE)nStrLength;
 }
 
-void MeshLoader::LoadMaterialsInfoFromFile(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, FILE* pInFile, GameObject* pGameObject, Scene* pScene)
+void MeshLoader::LoadMaterialsInfoFromFile(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, FILE* pInFile, GameObject* pGameObject, Scene* pScene, const std::string& strMeshDir)
 {
 	char pstrToken[64] = { '\0' };
 	int nMaterials = ReadIntegerFromFile(pInFile);
@@ -95,7 +95,9 @@ void MeshLoader::LoadMaterialsInfoFromFile(ID3D12Device* pd3dDevice, ID3D12Graph
 			ReadStringFromFile(pInFile, pstrTextureName, 64);
 			if (pGameObject && pScene)
 			{
-				pGameObject->SetTextureName(pstrTextureName);
+				// Build full path: {meshDir}/Textures/{filename}
+				std::string fullTexPath = strMeshDir + "Textures/" + pstrTextureName;
+				pGameObject->SetTextureName(fullTexPath.c_str());
 
 				D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle;
 				D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle;
@@ -138,6 +140,11 @@ GameObject* MeshLoader::LoadGeometryFromFile(Scene* pScene, ID3D12Device* pd3dDe
 	}
 	::rewind(pInFile);
 
+	// Extract directory from mesh path (e.g. "Assets/Enemies/Elementals/StormElemental_Bl/")
+	std::string strMeshDir = pstrFileName;
+	size_t lastSlash = strMeshDir.find_last_of("/\\");
+	strMeshDir = (lastSlash != std::string::npos) ? strMeshDir.substr(0, lastSlash + 1) : "";
+
 	GameObject* pGameObject = NULL;
 	char pstrToken[64] = { '\0' };
 
@@ -147,7 +154,7 @@ GameObject* MeshLoader::LoadGeometryFromFile(Scene* pScene, ID3D12Device* pd3dDe
 
 		if (!strcmp(pstrToken, "<Hierarchy>:"))
 		{
-			pGameObject = MeshLoader::LoadFrameHierarchyFromFile(pScene, pd3dDevice, pd3dCommandList, pd3dGraphicsRootSignature, pInFile);
+			pGameObject = MeshLoader::LoadFrameHierarchyFromFile(pScene, pd3dDevice, pd3dCommandList, pd3dGraphicsRootSignature, pInFile, strMeshDir);
 		}
 		else if (!strcmp(pstrToken, "</Hierarchy>"))
 		{
@@ -158,7 +165,7 @@ GameObject* MeshLoader::LoadGeometryFromFile(Scene* pScene, ID3D12Device* pd3dDe
 	return(pGameObject);
 }
 
-GameObject* MeshLoader::LoadFrameHierarchyFromFile(Scene* pScene, ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature, FILE* pInFile)
+GameObject* MeshLoader::LoadFrameHierarchyFromFile(Scene* pScene, ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature, FILE* pInFile, const std::string& strMeshDir)
 {
     char pstrToken[64] = { '\0' };
     UINT nReads = 0;
@@ -221,7 +228,7 @@ GameObject* MeshLoader::LoadFrameHierarchyFromFile(Scene* pScene, ID3D12Device* 
         }
         else if (!strcmp(pstrToken, "<Materials>:"))
         {
-            LoadMaterialsInfoFromFile(pd3dDevice, pd3dCommandList, pInFile, pGameObject, pScene);
+            LoadMaterialsInfoFromFile(pd3dDevice, pd3dCommandList, pInFile, pGameObject, pScene, strMeshDir);
         }
         else if (!strcmp(pstrToken, "<Children>:"))
         {
@@ -230,7 +237,7 @@ GameObject* MeshLoader::LoadFrameHierarchyFromFile(Scene* pScene, ID3D12Device* 
             {
                 for (int i = 0; i < nChilds; i++)
                 {
-                    GameObject *pChild = MeshLoader::LoadFrameHierarchyFromFile(pScene, pd3dDevice, pd3dCommandList, pd3dGraphicsRootSignature, pInFile);
+                    GameObject *pChild = MeshLoader::LoadFrameHierarchyFromFile(pScene, pd3dDevice, pd3dCommandList, pd3dGraphicsRootSignature, pInFile, strMeshDir);
                     if (pGameObject && pChild)
                     {
                         pGameObject->SetChild(pChild);

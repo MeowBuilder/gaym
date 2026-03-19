@@ -56,10 +56,6 @@ public class AnimationExporterBin : Editor
         // 2. Collect all bone transforms (flatten hierarchy)
         List<Transform> allBones = new List<Transform>();
         CollectBones(selectedObject.transform, allBones);
-        
-        // Write Bone Names Map (Optional, but good for validation)
-        // WriteInteger("<BoneCount>:", allBones.Count);
-        // foreach(Transform t in allBones) WriteString(t.name);
 
         foreach (AnimationClip clip in clips)
         {
@@ -71,6 +67,72 @@ public class AnimationExporterBin : Editor
         binaryWriter = null;
 
         Debug.Log("Animation Binary Export Completed: " + path);
+    }
+
+    [MenuItem("Tools/Batch Export Animations to Binary (.bin)")]
+    static void BatchExportAnimations()
+    {
+        GameObject[] selectedObjects = Selection.gameObjects;
+        if (selectedObjects == null || selectedObjects.Length == 0)
+        {
+            EditorUtility.DisplayDialog("Error", "Please select one or more GameObjects to export.", "OK");
+            return;
+        }
+
+        string rootFolder = EditorUtility.OpenFolderPanel("Select Export Root Folder", "", "");
+        if (string.IsNullOrEmpty(rootFolder)) return;
+
+        int success = 0;
+        int skipped = 0;
+        foreach (GameObject go in selectedObjects)
+        {
+            Animator animator = go.GetComponent<Animator>();
+            Animation animationLegacy = go.GetComponent<Animation>();
+
+            List<AnimationClip> clips = new List<AnimationClip>();
+            if (animator != null && animator.runtimeAnimatorController != null)
+            {
+                foreach (AnimationClip clip in animator.runtimeAnimatorController.animationClips)
+                    if (!clips.Contains(clip)) clips.Add(clip);
+            }
+            else if (animationLegacy != null)
+            {
+                foreach (AnimationState state in animationLegacy)
+                    if (!clips.Contains(state.clip)) clips.Add(state.clip);
+            }
+
+            if (clips.Count == 0)
+            {
+                Debug.LogWarning($"Skipping {go.name}: No animation clips found.");
+                skipped++;
+                continue;
+            }
+
+            string objFolder = Path.Combine(rootFolder, go.name);
+            Directory.CreateDirectory(objFolder);
+
+            string binPath = Path.Combine(objFolder, go.name + "_Anim.bin");
+            binaryWriter = new BinaryWriter(File.Open(binPath, FileMode.Create));
+
+            WriteInteger("<ClipCount>:", clips.Count);
+
+            List<Transform> allBones = new List<Transform>();
+            CollectBones(go.transform, allBones);
+
+            foreach (AnimationClip clip in clips)
+                WriteAnimationClip(go, clip, allBones);
+
+            binaryWriter.Flush();
+            binaryWriter.Close();
+            binaryWriter = null;
+
+            success++;
+            Debug.Log("Batch Animation Exported: " + binPath);
+        }
+
+        string msg = $"Exported {success}/{selectedObjects.Length} animations.";
+        if (skipped > 0) msg += $"\nSkipped {skipped} (no clips found).";
+        EditorUtility.DisplayDialog("Done", msg, "OK");
     }
 
     static void CollectBones(Transform current, List<Transform> bones)

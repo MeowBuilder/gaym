@@ -43,6 +43,48 @@ public class MeshExporterBin : Editor
         Debug.Log("Model Binary Write Completed: " + path);
     }
 
+    [MenuItem("Tools/Batch Export Meshes to Binary (.bin)")]
+    static void BatchExportToBinary()
+    {
+        GameObject[] selectedObjects = Selection.gameObjects;
+        if (selectedObjects == null || selectedObjects.Length == 0)
+        {
+            EditorUtility.DisplayDialog("Error", "Please select one or more GameObjects to export.", "OK");
+            return;
+        }
+
+        string rootFolder = EditorUtility.OpenFolderPanel("Select Export Root Folder", "", "");
+        if (string.IsNullOrEmpty(rootFolder)) return;
+
+        int success = 0;
+        foreach (GameObject go in selectedObjects)
+        {
+            string objFolder = Path.Combine(rootFolder, go.name);
+            Directory.CreateDirectory(objFolder);
+
+            s_textureExportDir = Path.Combine(objFolder, "Textures");
+            Directory.CreateDirectory(s_textureExportDir);
+            s_exportedTextures.Clear();
+
+            m_nFrames = 0;
+            string binPath = Path.Combine(objFolder, go.name + ".bin");
+            binaryWriter = new BinaryWriter(File.Open(binPath, FileMode.Create));
+
+            WriteString("<Hierarchy>:");
+            WriteFrameHierarchyInfo(go.transform);
+            WriteString("</Hierarchy>");
+
+            binaryWriter.Flush();
+            binaryWriter.Close();
+            binaryWriter = null;
+
+            success++;
+            Debug.Log("Batch Mesh Exported: " + binPath);
+        }
+
+        EditorUtility.DisplayDialog("Done", $"Exported {success}/{selectedObjects.Length} meshes.", "OK");
+    }
+
     static void WriteObjectName(Object obj)
     {
         binaryWriter.Write((obj) ? string.Copy(obj.name).Replace(" ", "_") : "null");

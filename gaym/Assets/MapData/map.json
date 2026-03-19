@@ -34,10 +34,10 @@
         "coneAngle": 0.00
       },
       "visual": {
-        "meshPath": "",
-        "animationPath": "",
-        "scale": [1.0000, 1.0000, 1.0000],
-        "color": [255, 0, 0, 255]
+        "meshPath": "Assets/Enemies/Elementals/StormElemental_Bl/StormElemental_Bl.bin",
+        "animationPath": "Assets/Enemies/Elementals/StormElemental_Bl/StormElemental_Bl_Anim.bin",
+        "scale": [2.0000, 2.0000, 2.0000],
+        "color": [255, 255, 255, 255]
       },
       "animClips": {
         "idle": "idle",
@@ -54,24 +54,24 @@
       "position": [-1.7600, 1.2900, -2.9000],
       "rotationY": 0.00,
       "stats": {
-        "maxHP": 100.0,
+        "maxHP": 80.0,
         "moveSpeed": 5.00,
-        "attackRange": 4.76,
-        "attackCooldown": 1.00,
-        "detectionRange": 6.50
+        "attackRange": 4.00,
+        "attackCooldown": 2.00,
+        "detectionRange": 50.00
       },
-      "attackType": "Ranged",
+      "attackType": "Melee",
       "indicator": {
-        "type": "None",
-        "rushDistance": 4.30,
-        "hitRadius": 0.78,
+        "type": "Circle",
+        "rushDistance": 0.00,
+        "hitRadius": 4.00,
         "coneAngle": 0.00
       },
       "visual": {
-        "meshPath": "",
-        "animationPath": "",
-        "scale": [1.0000, 1.0000, 1.0000],
-        "color": [255, 0, 0, 255]
+        "meshPath": "Assets/Enemies/Elementals/AirElemental_Bl/AirElemental_Bl.bin",
+        "animationPath": "Assets/Enemies/Elementals/AirElemental_Bl/AirElemental_Bl_Anim.bin",
+        "scale": [2.0000, 2.0000, 2.0000],
+        "color": [255, 255, 255, 255]
       },
       "animClips": {
         "idle": "idle",
@@ -96,16 +96,16 @@
       },
       "attackType": "RushAoE",
       "indicator": {
-        "type": "None",
-        "rushDistance": 0.00,
-        "hitRadius": 0.00,
+        "type": "RushCircle",
+        "rushDistance": 18.00,
+        "hitRadius": 5.00,
         "coneAngle": 0.00
       },
       "visual": {
-        "meshPath": "",
-        "animationPath": "",
-        "scale": [1.0000, 1.0000, 1.0000],
-        "color": [255, 0, 0, 255]
+        "meshPath": "Assets/Enemies/Elementals/FireGolem_Rd/FireGolem_Rd.bin",
+        "animationPath": "Assets/Enemies/Elementals/FireGolem_Rd/FireGolem_Rd_Anim.bin",
+        "scale": [2.0000, 2.0000, 2.0000],
+        "color": [255, 255, 255, 255]
       },
       "animClips": {
         "idle": "idle",
