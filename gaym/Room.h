@@ -6,6 +6,9 @@
 class EnemyComponent;
 class EnemySpawner;
 class Scene;
+class LavaGeyserManager;
+class Shader;
+class CDescriptorHeap;
 
 enum class RoomState {
     Inactive,   // 플레이어가 아직 진입하지 않음
@@ -70,6 +73,12 @@ public:
     bool HasPortalCube() const { return m_pPortalCube != nullptr; }
     void ClearPortalCube() { m_pPortalCube = nullptr; }
 
+    // Lava Geyser system
+    void InitLavaGeyserManager(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList,
+                               Shader* pShader, CDescriptorHeap* pDescriptorHeap, UINT nDescriptorIndex);
+    void SetLavaGeyserEnabled(bool bEnabled);
+    LavaGeyserManager* GetLavaGeyserManager() const { return m_pGeyserManager.get(); }
+
 protected:
     std::vector<std::unique_ptr<GameObject>> m_vGameObjects; // 방에 속한 모든 오브젝트
     RoomState m_eState = RoomState::Inactive;
@@ -90,4 +99,7 @@ protected:
 
     // Portal cube system
     GameObject* m_pPortalCube = nullptr;
+
+    // Lava Geyser system
+    std::unique_ptr<LavaGeyserManager> m_pGeyserManager;
 };

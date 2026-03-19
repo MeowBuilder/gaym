@@ -188,6 +188,8 @@ xcopy /Y /I /E "$(ProjectDir)Assets\*.*" "$(OutDir)Assets\"</Command>
     <ClInclude Include="FluidParticleSystem.h" />
     <ClInclude Include="FluidSkillEffect.h" />
     <ClInclude Include="FluidSkillVFXManager.h" />
+    <ClInclude Include="LavaGeyserComponent.h" />
+    <ClInclude Include="LavaGeyserManager.h" />
     <ClInclude Include="RenderComponent.h" />
     <ClInclude Include="Resource.h" />
     <ClInclude Include="Room.h" />
@@ -234,6 +236,8 @@ xcopy /Y /I /E "$(ProjectDir)Assets\*.*" "$(OutDir)Assets\"</Command>
     <ClCompile Include="FluidParticleSystem.cpp" />
     <ClCompile Include="FluidSkillEffect.cpp" />
     <ClCompile Include="FluidSkillVFXManager.cpp" />
+    <ClCompile Include="LavaGeyserComponent.cpp" />
+    <ClCompile Include="LavaGeyserManager.cpp" />
     <ClCompile Include="RenderComponent.cpp" />
     <ClCompile Include="Room.cpp" />
     <ClCompile Include="RotatorComponent.cpp" />

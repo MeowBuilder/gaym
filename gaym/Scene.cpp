@@ -17,6 +17,7 @@
 #include "InteractableComponent.h"
 #include "EnemyComponent.h"
 #include "MathUtils.h"
+#include "LavaGeyserManager.h"
 #include <functional> // Added for std::function
 
 Scene::Scene()
@@ -268,43 +269,13 @@ void Scene::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList)
 
     if (!bMapLoaded) {
         OutputDebugString(L"[Scene] Map load failed – using default test room\n");
-        // Boss room - no regular enemy spawns, only dragon
         m_pCurrentRoom->SetEnemySpawner(m_pEnemySpawner.get());
         m_pCurrentRoom->SetPlayerTarget(m_pPlayerGameObject);
         m_pCurrentRoom->SetScene(this);
     }
 
-    // Boss room setup - clear any enemy spawns from MapLoader, spawn only Dragon
-    if (m_pCurrentRoom && m_pEnemySpawner)
-    {
-        // Clear existing spawn config (removes enemies defined in map JSON)
-        RoomSpawnConfig emptyConfig;
-        m_pCurrentRoom->SetSpawnConfig(emptyConfig);
-
-        OutputDebugString(L"[Scene] Spawning Dragon boss\n");
-        XMFLOAT3 dragonPos = XMFLOAT3(0.0f, 0.0f, 20.0f);
-        if (m_pPlayerGameObject)
-        {
-            XMFLOAT3 playerPos = m_pPlayerGameObject->GetTransform()->GetPosition();
-            dragonPos = XMFLOAT3(playerPos.x, playerPos.y, playerPos.z + 15.0f);
-        }
-        GameObject* pDragon = m_pEnemySpawner->SpawnEnemy(m_pCurrentRoom, "Dragon", dragonPos, m_pPlayerGameObject);
-
-        // Start boss intro cutscene
-        if (pDragon)
-        {
-            EnemyComponent* pEnemy = pDragon->GetComponent<EnemyComponent>();
-            if (pEnemy)
-            {
-                pEnemy->StartBossIntro(25.0f);  // Start 25 units high in the sky
-            }
-        }
-
-        // Set room to Active so dragon animates immediately
-        m_pCurrentRoom->SetState(RoomState::Active);
-
-        // Portal will spawn after dragon is defeated (via Room clear condition)
-    }
+    // 일반 맵: 적 스폰은 인터랙션 큐브 활성화 후 Room::SetState(Active)에서 처리됨
+    OutputDebugString(L"[Scene] Normal map loaded - enemies will spawn on room activation\n");
 
     // 맵 정적 오브젝트의 상수 버퍼를 한 번 초기화
     // (CRoom::Update는 Inactive 상태에서 스킵하므로, 맵 로드 직후 딱 한 번 강제 갱신)
@@ -320,6 +291,21 @@ void Scene::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList)
         XMFLOAT3 playerSpawn = m_pPlayerGameObject->GetTransform()->GetPosition();
         m_pInteractionCube->GetTransform()->SetPosition(
             playerSpawn.x + 5.0f, playerSpawn.y, playerSpawn.z);
+    }
+
+    // --------------------------------------------------------------------------
+    // 8. Initialize LavaGeyser Manager for current room (화염 맵 기믹)
+    // --------------------------------------------------------------------------
+    if (m_pCurrentRoom)
+    {
+        UINT nGeyserDescStart = m_nNextDescriptorIndex;
+        m_nNextDescriptorIndex += 1;  // FluidParticleSystem uses 1 descriptor slot
+
+        m_pCurrentRoom->InitLavaGeyserManager(
+            pDevice, pCommandList, m_vShaders[0].get(),
+            m_pDescriptorHeap.get(), nGeyserDescStart);
+
+        OutputDebugString(L"[Scene] LavaGeyserManager initialized for current room\n");
     }
 
     OutputDebugString(L"[Scene] Enemy spawn system initialized\n");
@@ -378,6 +364,13 @@ void Scene::Update(float deltaTime, InputSystem* pInputSystem)
     {
         m_pDebugRenderer->Toggle();
         OutputDebugString(m_pDebugRenderer->IsEnabled() ? L"[Debug] Colliders ON\n" : L"[Debug] Colliders OFF\n");
+    }
+
+    // B 키: 보스전 테스트 (즉시 보스 맵으로 전환)
+    if (pInputSystem && pInputSystem->IsKeyPressed('B'))
+    {
+        OutputDebugString(L"[Scene] Boss test key pressed - entering boss room!\n");
+        TransitionToBossRoom();
     }
 
     // Update camera
@@ -685,6 +678,24 @@ void Scene::Render(ID3D12GraphicsCommandList* pCommandList, D3D12_GPU_DESCRIPTOR
         XMStoreFloat4x4(&viewProj2, XMMatrixTranspose(mViewProj2));
 
         m_pFluidVFXManager->Render(pCommandList, viewProj2, camRight2, camUp2);
+    }
+
+    // Render lava geyser particles (Room 기반 맵 기믹)
+    if (m_pCurrentRoom)
+    {
+        LavaGeyserManager* pGeyserManager = m_pCurrentRoom->GetLavaGeyserManager();
+        if (pGeyserManager && pGeyserManager->IsActive())
+        {
+            XMMATRIX mView3 = XMLoadFloat4x4(&m_pCamera->GetViewMatrix());
+            XMFLOAT3 camRight3 = { XMVectorGetX(mView3.r[0]), XMVectorGetY(mView3.r[0]), XMVectorGetZ(mView3.r[0]) };
+            XMFLOAT3 camUp3    = { XMVectorGetX(mView3.r[1]), XMVectorGetY(mView3.r[1]), XMVectorGetZ(mView3.r[1]) };
+
+            XMMATRIX mViewProj3 = mView3 * XMLoadFloat4x4(&m_pCamera->GetProjectionMatrix());
+            XMFLOAT4X4 viewProj3;
+            XMStoreFloat4x4(&viewProj3, XMMatrixTranspose(mViewProj3));
+
+            pGeyserManager->Render(pCommandList, viewProj3, camRight3, camUp3);
+        }
     }
 
     // Render debug colliders (F1 to toggle)
@@ -1058,6 +1069,14 @@ void Scene::TransitionToNextRoom()
 
     m_nRoomCount++;
 
+    // 4스테이지 클리어 후 보스전 진입
+    if (m_nRoomCount >= 4)
+    {
+        OutputDebugString(L"[Scene] 4 stages cleared - entering boss room!\n");
+        TransitionToBossRoom();
+        return;
+    }
+
     if (m_vMapPool.empty())
     {
         OutputDebugString(L"[Scene] Map pool is empty – cannot transition\n");
@@ -1126,6 +1145,19 @@ void Scene::TransitionToNextRoom()
             pGO->Update(0.0f);
     }
 
+    // ── 7b. LavaGeyser Manager 초기화 (화염 맵 기믹)
+    if (m_pCurrentRoom)
+    {
+        UINT nGeyserDescStart = m_nNextDescriptorIndex;
+        m_nNextDescriptorIndex += 1;
+
+        m_pCurrentRoom->InitLavaGeyserManager(
+            pDevice, pCommandList, m_vShaders[0].get(),
+            m_pDescriptorHeap.get(), nGeyserDescStart);
+
+        OutputDebugString(L"[Scene] LavaGeyserManager initialized for new room\n");
+    }
+
     // ── 8. 포탈을 통해 입장하면 즉시 몬스터 스폰 (인터랙션 큐브 단계 없이)
     if (m_pCurrentRoom)
         m_pCurrentRoom->SetState(RoomState::Active);
@@ -1149,6 +1181,108 @@ void Scene::TransitionToNextRoom()
     swprintf_s(buffer, L"[Scene] Transitioned to map: %hs (room #%d)\n",
                m_strCurrentMap.c_str(), m_nRoomCount + 1);
     OutputDebugString(buffer);
+}
+
+void Scene::TransitionToBossRoom()
+{
+    OutputDebugString(L"[Scene] ========== BOSS ROOM ==========\n");
+
+    // ── 1. 셰이더 RC 목록 전체 클리어
+    m_vShaders[0]->ClearRenderComponents();
+    ProcessPendingDeletions();
+
+    // ── 2. 기존 룸 전체 파기
+    m_vRooms.clear();
+    m_pCurrentRoom = nullptr;
+
+    // ── 3. 디스크립터 인덱스를 워터마크로 리셋
+    m_nNextDescriptorIndex = m_nPersistentDescriptorEnd;
+
+    // ── 4. 영속 오브젝트의 RC를 셰이더에 다시 등록
+    for (auto& pGO : m_vGameObjects)
+        ReAddRenderComponentsToShader(pGO.get());
+
+    // ── 5. 보스 맵 로드 (일반 맵과 동일)
+    ID3D12Device*               pDevice      = Dx12App::GetInstance()->GetDevice();
+    ID3D12GraphicsCommandList*  pCommandList = Dx12App::GetInstance()->GetCommandList();
+
+    // 맵 풀에서 첫 번째 맵 사용 (보스 전용 맵이 있다면 별도 경로 지정 가능)
+    m_strCurrentMap = m_vMapPool.empty() ? "Assets/MapData/map.json" : m_vMapPool[0];
+
+    bool bLoaded = MapLoader::LoadIntoScene(
+        m_strCurrentMap.c_str(), this, pDevice, pCommandList, m_vShaders[0].get());
+
+    if (!bLoaded)
+    {
+        OutputDebugString(L"[Scene] Boss map load failed!\n");
+        return;
+    }
+
+    // ── 6. 맵 정적 오브젝트 상수 버퍼 초기화
+    if (m_pCurrentRoom)
+    {
+        for (const auto& pGO : m_pCurrentRoom->GetGameObjects())
+            pGO->Update(0.0f);
+    }
+
+    // ── 7. LavaGeyser Manager 초기화 (보스전에서도 기믹 적용)
+    if (m_pCurrentRoom)
+    {
+        UINT nGeyserDescStart = m_nNextDescriptorIndex;
+        m_nNextDescriptorIndex += 1;
+
+        m_pCurrentRoom->InitLavaGeyserManager(
+            pDevice, pCommandList, m_vShaders[0].get(),
+            m_pDescriptorHeap.get(), nGeyserDescStart);
+    }
+
+    // ── 8. 보스(드래곤) 스폰 - 일반 적 스폰 설정 제거
+    if (m_pCurrentRoom && m_pEnemySpawner)
+    {
+        // 일반 적 스폰 설정 제거
+        RoomSpawnConfig emptyConfig;
+        m_pCurrentRoom->SetSpawnConfig(emptyConfig);
+
+        // 드래곤 스폰
+        OutputDebugString(L"[Scene] Spawning Dragon boss\n");
+        XMFLOAT3 dragonPos = XMFLOAT3(0.0f, 0.0f, 20.0f);
+        if (m_pPlayerGameObject)
+        {
+            XMFLOAT3 playerPos = m_pPlayerGameObject->GetTransform()->GetPosition();
+            dragonPos = XMFLOAT3(playerPos.x, playerPos.y, playerPos.z + 15.0f);
+        }
+        GameObject* pDragon = m_pEnemySpawner->SpawnEnemy(m_pCurrentRoom, "Dragon", dragonPos, m_pPlayerGameObject);
+
+        // 보스 인트로 컷씬 시작
+        if (pDragon)
+        {
+            EnemyComponent* pEnemy = pDragon->GetComponent<EnemyComponent>();
+            if (pEnemy)
+            {
+                pEnemy->StartBossIntro(25.0f);  // 25유닛 위에서 착지
+            }
+        }
+
+        // 방 활성화
+        m_pCurrentRoom->SetState(RoomState::Active);
+    }
+
+    // ── 9. 인터랙션 큐브 숨김
+    if (m_pInteractionCube)
+    {
+        auto* pInteractable = m_pInteractionCube->GetComponent<InteractableComponent>();
+        if (pInteractable) pInteractable->Hide();
+        m_bInteractionCubeActive = false;
+    }
+
+    // ── 10. 플레이어 groundY 리셋
+    if (m_pPlayerGameObject)
+    {
+        auto* pPC = m_pPlayerGameObject->GetComponent<PlayerComponent>();
+        if (pPC) pPC->ResetGroundY();
+    }
+
+    OutputDebugString(L"[Scene] Boss room ready - Dragon spawned!\n");
 }
 
 void Scene::MarkForDeletion(GameObject* pGameObject)

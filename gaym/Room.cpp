@@ -10,6 +10,7 @@
 #include "TransformComponent.h"
 #include "Mesh.h"
 #include "Shader.h"
+#include "LavaGeyserManager.h"
 
 CRoom::CRoom()
 {
@@ -32,6 +33,12 @@ void CRoom::Update(float deltaTime)
         if (!m_bEnemiesSpawned)
         {
             SpawnEnemies();
+        }
+
+        // Update lava geyser manager
+        if (m_pGeyserManager)
+        {
+            m_pGeyserManager->Update(deltaTime);
         }
 
         CheckClearCondition();
@@ -109,9 +116,19 @@ void CRoom::SetState(RoomState state)
     case RoomState::Active:
         OutputDebugString(L"[Room] Room activated - enemies will spawn\n");
         // Enemies will be spawned in Update
+        // Activate lava geyser manager
+        if (m_pGeyserManager)
+        {
+            m_pGeyserManager->SetActive(true);
+        }
         break;
     case RoomState::Cleared:
         OutputDebugString(L"[Room] Room cleared!\n");
+        // Deactivate lava geyser manager
+        if (m_pGeyserManager)
+        {
+            m_pGeyserManager->SetActive(false);
+        }
         break;
     }
 }
@@ -303,4 +320,27 @@ void CRoom::SpawnPortalCube()
     });
 
     OutputDebugString(L"[Room] Portal cube spawned successfully!\n");
+}
+
+void CRoom::InitLavaGeyserManager(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList,
+                                   Shader* pShader, CDescriptorHeap* pDescriptorHeap, UINT nDescriptorIndex)
+{
+    if (m_pGeyserManager)
+    {
+        OutputDebugString(L"[Room] LavaGeyserManager already initialized\n");
+        return;
+    }
+
+    m_pGeyserManager = std::make_unique<LavaGeyserManager>();
+    m_pGeyserManager->Init(pDevice, pCommandList, this, pShader, pDescriptorHeap, nDescriptorIndex);
+
+    OutputDebugString(L"[Room] LavaGeyserManager initialized\n");
+}
+
+void CRoom::SetLavaGeyserEnabled(bool bEnabled)
+{
+    if (m_pGeyserManager)
+    {
+        m_pGeyserManager->SetActive(bEnabled);
+    }
 }

@@ -85,6 +85,7 @@ public:
     bool IsNearPortalCube() const;
     void TriggerPortalInteraction();
     void TransitionToNextRoom();
+    void TransitionToBossRoom();  // 보스전 전환 (4스테이지 후 또는 테스트용)
 
     // Drop interaction system
     DropInteractionState GetDropInteractionState() const { return m_eDropState; }
