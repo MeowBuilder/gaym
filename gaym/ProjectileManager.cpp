@@ -83,7 +83,7 @@ void ProjectileManager::SpawnProjectile(const Projectile& projectile)
         auto& proj = m_Projectiles.back();
         proj.fluidVFXId = m_pFluidVFXManager->SpawnEffect(
             proj.position, proj.direction,
-            FluidSkillVFXManager::GetVFXDef(proj.element, proj.runeCombo));
+            FluidSkillVFXManager::GetVFXDef(proj.element, proj.runeCombo, proj.chargeRatio));
     }
 
     wchar_t buffer[256];
@@ -104,7 +104,8 @@ void ProjectileManager::SpawnProjectile(
     GameObject* owner,
     bool isPlayerProjectile,
     float scale,
-    const RuneCombo& runeCombo)
+    const RuneCombo& runeCombo,
+    float chargeRatio)
 {
     Projectile proj;
     proj.position = startPos;
@@ -120,6 +121,7 @@ void ProjectileManager::SpawnProjectile(
     proj.isActive = true;
     proj.scale = scale;
     proj.runeCombo = runeCombo;
+    proj.chargeRatio = chargeRatio;
 
     // Calculate direction
     XMVECTOR start = XMLoadFloat3(&startPos);

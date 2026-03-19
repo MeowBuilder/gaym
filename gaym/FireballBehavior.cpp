@@ -104,6 +104,8 @@ void FireballBehavior::ExecuteInstant(GameObject* caster, const DirectX::XMFLOAT
             combo = pSkillComp->GetRuneCombo(m_slot);
     }
 
+    float chargeRatio = fmaxf(0.0f, fminf(1.0f, (damageMultiplier - 1.0f) / 2.0f));
+
     // Flatten target to launch height so the projectile flies horizontally.
     // (CalculateTargetPosition returns a ground-plane point; the height difference
     //  would otherwise give direction a negative Y, making the fireball arc down.)
@@ -121,7 +123,8 @@ void FireballBehavior::ExecuteInstant(GameObject* caster, const DirectX::XMFLOAT
         caster,
         true,
         scale,
-        combo  // Rune combo for VFX customization
+        combo,  // Rune combo for VFX customization
+        chargeRatio
     );
 }
 

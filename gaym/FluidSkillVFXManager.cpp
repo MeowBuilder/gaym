@@ -160,7 +160,7 @@ void FluidSkillVFXManager::PushControlPoints(FluidVFXSlot& slot) const
     slot.pSystem->SetControlPoints(cps);
 }
 
-FluidSkillVFXDef FluidSkillVFXManager::GetVFXDef(ElementType element, const RuneCombo& combo)
+FluidSkillVFXDef FluidSkillVFXManager::GetVFXDef(ElementType element, const RuneCombo& combo, float chargeRatio)
 {
     FluidSkillVFXDef def;
     def.element = element;
@@ -236,29 +236,61 @@ FluidSkillVFXDef FluidSkillVFXManager::GetVFXDef(ElementType element, const Rune
     }
     }
 
-    // Rune-based modifications
-    for (auto& cpd : def.cpDescs) {
-        if (combo.hasCharge) {
-            cpd.orbitRadius *= 0.65f;
-            cpd.orbitSpeed  *= 1.6f;
-            cpd.attractionStrength *= 1.4f;
-            cpd.sphereRadius *= 0.8f;
-        }
-        if (combo.hasChannel) {
-            cpd.orbitRadius *= 1.35f;
-            cpd.orbitSpeed  *= 0.7f;
-            cpd.sphereRadius *= 1.3f;
-        }
-        if (combo.hasEnhance) {
-            cpd.orbitRadius *= 1.4f;
-            cpd.attractionStrength *= 1.2f;
-            cpd.sphereRadius *= 1.35f;
-        }
+    // Shape override: Place > Channel > Charge (mutually exclusive)
+    if (combo.hasPlace) {
+        // Mine: single CP at center, no orbit — dense ball
+        def.cpDescs.clear();
+        FluidCPDesc cp;
+        cp.orbitRadius        = 0.0f;
+        cp.orbitSpeed         = 0.0f;
+        cp.orbitPhase         = 0.0f;
+        cp.forwardBias        = 0.0f;
+        cp.attractionStrength = 40.0f;
+        cp.sphereRadius       = 0.9f;
+        def.cpDescs           = { cp };
+        def.particleCount     = 120;
+        def.spawnRadius       = 1.2f;
     }
-    if (combo.hasCharge)  { def.particleCount = (int)(def.particleCount * 1.3f); def.spawnRadius *= 0.8f; }
-    if (combo.hasChannel) { def.particleCount = (int)(def.particleCount * 1.2f); }
-    if (combo.hasEnhance) { def.particleCount = (int)(def.particleCount * 1.5f); }
-    // particleCount 상한 제한
+    else if (combo.hasChannel) {
+        // Beam: 5 CPs along forward axis, no orbit
+        def.cpDescs.clear();
+        for (int i = 0; i < 5; ++i)
+        {
+            FluidCPDesc cp;
+            cp.orbitRadius        = 0.05f;
+            cp.orbitSpeed         = 0.0f;
+            cp.orbitPhase         = 0.0f;
+            cp.forwardBias        = -1.5f + i * 0.75f;
+            cp.attractionStrength = 22.0f;
+            cp.sphereRadius       = 0.8f;
+            def.cpDescs.push_back(cp);
+        }
+        def.particleCount = (int)(def.particleCount * 1.2f);
+        def.spawnRadius   = 0.5f;
+    }
+    else if (combo.hasCharge) {
+        // Charge: orbit radius grows with charge ratio
+        float cr = chargeRatio;
+        for (auto& cpd : def.cpDescs) {
+            cpd.orbitRadius        *= 0.5f + 1.5f * cr;
+            cpd.orbitSpeed         *= 1.0f + 0.6f * cr;
+            cpd.attractionStrength *= 1.2f + 0.4f * cr;
+            cpd.sphereRadius       *= 0.8f + 0.5f * cr;
+        }
+        def.particleCount = (int)(def.particleCount * (1.0f + 0.5f * cr));
+        def.spawnRadius   *= 0.7f + 0.5f * cr;
+    }
+
+    // Enhance: additional scale regardless of shape
+    if (combo.hasEnhance) {
+        for (auto& cpd : def.cpDescs) {
+            cpd.orbitRadius        *= 1.4f;
+            cpd.attractionStrength *= 1.2f;
+            cpd.sphereRadius       *= 1.35f;
+        }
+        def.particleCount = (int)(def.particleCount * 1.5f);
+    }
+
     if (def.particleCount > 128) def.particleCount = 128;
 
     return def;

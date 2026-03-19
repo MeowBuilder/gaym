@@ -56,7 +56,8 @@ public:
         GameObject* owner,
         bool isPlayerProjectile = true,
         float scale = 1.0f,
-        const RuneCombo& runeCombo = {}
+        const RuneCombo& runeCombo = {},
+        float chargeRatio = 0.0f
     );
 
     // Update all projectiles (movement + collision)

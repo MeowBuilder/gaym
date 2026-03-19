@@ -46,7 +46,7 @@ public:
                 const XMFLOAT4X4& viewProj, const XMFLOAT3& camRight, const XMFLOAT3& camUp);
 
     // 원소별 내장 VFX 정의 반환 (룬 combo에 따라 파라미터 조정)
-    static FluidSkillVFXDef GetVFXDef(ElementType element, const RuneCombo& combo = {});
+    static FluidSkillVFXDef GetVFXDef(ElementType element, const RuneCombo& combo = {}, float chargeRatio = 0.0f);
 
 private:
     void PushControlPoints(FluidVFXSlot& slot) const;

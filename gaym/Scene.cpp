@@ -904,7 +904,7 @@ void Scene::SelectRuneByClick(int runeIndex)
     m_eSelectedRune = pDropComp->GetRuneOption(runeIndex);
     m_eDropState = DropInteractionState::SelectingSkill;
 
-    const wchar_t* typeNames[] = { L"None", L"Instant", L"Charge", L"Channel", L"Place", L"Enhance" };
+    const wchar_t* typeNames[] = { L"None", L"Instant", L"Charge", L"Channel", L"Place", L"Enhance", L"Split" };
     wchar_t buffer[128];
     swprintf_s(buffer, L"[Scene] Rune clicked: %s - Now select skill slot\n", typeNames[static_cast<int>(m_eSelectedRune)]);
     OutputDebugString(buffer);
@@ -933,7 +933,7 @@ void Scene::SelectSkillSlot(SkillSlot slot, int runeSlotIndex)
             pSkill->SetActivationType(pSkill->GetSkillActivationType(SkillSlot::Q));
 
             const wchar_t* slotNames[] = { L"Q", L"E", L"R", L"RMB" };
-            const wchar_t* typeNames[] = { L"None", L"Instant", L"Charge", L"Channel", L"Place", L"Enhance" };
+            const wchar_t* typeNames[] = { L"None", L"Instant", L"Charge", L"Channel", L"Place", L"Enhance", L"Split" };
             wchar_t buffer[128];
             swprintf_s(buffer, L"[Scene] Rune %s assigned to %s slot %d\n",
                 typeNames[static_cast<int>(m_eSelectedRune)], slotNames[static_cast<int>(slot)], runeSlotIndex + 1);
