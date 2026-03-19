@@ -6,6 +6,7 @@
 #include "Camera.h" // Needed for CCamera
 #include "SkillComponent.h" // Needed for SkillComponent
 #include "AnimationComponent.h"
+#include "Dx12App.h" // For runtime window size
 
 PlayerComponent::PlayerComponent(GameObject* pOwner)
     : Component(pOwner)
@@ -42,8 +43,11 @@ void PlayerComponent::PlayerUpdate(float deltaTime, InputSystem* pInputSystem, C
     XMFLOAT2 mousePos = pInputSystem->GetMousePosition();
 
     // 2. Convert to Normalized Device Coordinates (NDC)
-    float ndcX = (2.0f * mousePos.x / kWindowWidth) - 1.0f;
-    float ndcY = 1.0f - (2.0f * mousePos.y / kWindowHeight);
+    // 런타임 윈도우 크기 사용 (고DPI/해상도 변경 대응)
+    float windowWidth = static_cast<float>(Dx12App::GetInstance()->GetWindowWidth());
+    float windowHeight = static_cast<float>(Dx12App::GetInstance()->GetWindowHeight());
+    float ndcX = (2.0f * mousePos.x / windowWidth) - 1.0f;
+    float ndcY = 1.0f - (2.0f * mousePos.y / windowHeight);
 
     // 3. Unproject from NDC to World Space to form a ray
     XMMATRIX viewMatrix = XMLoadFloat4x4(&pCamera->GetViewMatrix());
