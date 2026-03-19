@@ -184,6 +184,10 @@ xcopy /Y /I /E "$(ProjectDir)Assets\*.*" "$(OutDir)Assets\"</Command>
     <ClInclude Include="ProjectileManager.h" />
     <ClInclude Include="Particle.h" />
     <ClInclude Include="ParticleSystem.h" />
+    <ClInclude Include="FluidParticle.h" />
+    <ClInclude Include="FluidParticleSystem.h" />
+    <ClInclude Include="FluidSkillEffect.h" />
+    <ClInclude Include="FluidSkillVFXManager.h" />
     <ClInclude Include="RenderComponent.h" />
     <ClInclude Include="Resource.h" />
     <ClInclude Include="Room.h" />
@@ -227,6 +231,9 @@ xcopy /Y /I /E "$(ProjectDir)Assets\*.*" "$(OutDir)Assets\"</Command>
     <ClCompile Include="FireballBehavior.cpp" />
     <ClCompile Include="ProjectileManager.cpp" />
     <ClCompile Include="ParticleSystem.cpp" />
+    <ClCompile Include="FluidParticleSystem.cpp" />
+    <ClCompile Include="FluidSkillEffect.cpp" />
+    <ClCompile Include="FluidSkillVFXManager.cpp" />
     <ClCompile Include="RenderComponent.cpp" />
     <ClCompile Include="Room.cpp" />
     <ClCompile Include="RotatorComponent.cpp" />
@@ -260,6 +267,12 @@ xcopy /Y /I /E "$(ProjectDir)Assets\*.*" "$(OutDir)Assets\"</Command>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="shaders.hlsl">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </FxCompile>
+    <FxCompile Include="fluid_particles.hlsl">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </FxCompile>
   </ItemGroup>

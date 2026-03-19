@@ -10,6 +10,7 @@ class EnemyComponent;
 class Mesh;
 class CDescriptorHeap;
 class ParticleSystem;
+class FluidSkillVFXManager;
 
 // Forward declare MATERIAL from GameObject.h
 struct MATERIAL;
@@ -54,7 +55,9 @@ public:
         ElementType element,
         GameObject* owner,
         bool isPlayerProjectile = true,
-        float scale = 1.0f
+        float scale = 1.0f,
+        const RuneCombo& runeCombo = {},
+        float chargeRatio = 0.0f
     );
 
     // Update all projectiles (movement + collision)
@@ -85,9 +88,6 @@ private:
     // Get color based on element type
     XMFLOAT4 GetElementColor(ElementType element) const;
 
-    // Create particle trail for projectile
-    void CreateProjectileParticles(Projectile& projectile);
-
     // Spawn explosion particles at position
     void SpawnExplosionParticles(const XMFLOAT3& position, ElementType element);
 
@@ -95,6 +95,7 @@ private:
     std::vector<Projectile> m_Projectiles;
     Scene* m_pScene = nullptr;
     ParticleSystem* m_pParticleSystem = nullptr;
+    FluidSkillVFXManager* m_pFluidVFXManager = nullptr;
 
     // Rendering resources
     std::unique_ptr<Mesh> m_pProjectileMesh;

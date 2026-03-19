@@ -1,6 +1,7 @@
 #include "stdafx.h"
 #include "ProjectileManager.h"
 #include "ParticleSystem.h"
+#include "FluidSkillVFXManager.h"
 #include "Scene.h"
 #include "Room.h"
 #include "GameObject.h"
@@ -34,6 +35,7 @@ void ProjectileManager::Init(Scene* pScene, ID3D12Device* pDevice, ID3D12Graphic
 
     // Get particle system from scene
     m_pParticleSystem = pScene->GetParticleSystem();
+    m_pFluidVFXManager = pScene->GetFluidVFXManager();
 
     // Create projectile mesh (small cube)
     m_pProjectileMesh = std::make_unique<CubeMesh>(pDevice, pCommandList, 0.5f, 0.5f, 0.5f);
@@ -75,8 +77,14 @@ void ProjectileManager::SpawnProjectile(const Projectile& projectile)
 
     m_Projectiles.push_back(projectile);
 
-    // Create particle trail for this projectile
-    CreateProjectileParticles(m_Projectiles.back());
+    // Create fluid VFX trail for this projectile
+    if (m_pFluidVFXManager)
+    {
+        auto& proj = m_Projectiles.back();
+        proj.fluidVFXId = m_pFluidVFXManager->SpawnEffect(
+            proj.position, proj.direction,
+            FluidSkillVFXManager::GetVFXDef(proj.element, proj.runeCombo, proj.chargeRatio));
+    }
 
     wchar_t buffer[256];
     swprintf_s(buffer, 256, L"[ProjectileManager] Spawned projectile at (%.1f, %.1f, %.1f) -> dir (%.2f, %.2f, %.2f)\n",
@@ -95,7 +103,9 @@ void ProjectileManager::SpawnProjectile(
     ElementType element,
     GameObject* owner,
     bool isPlayerProjectile,
-    float scale)
+    float scale,
+    const RuneCombo& runeCombo,
+    float chargeRatio)
 {
     Projectile proj;
     proj.position = startPos;
@@ -110,6 +120,8 @@ void ProjectileManager::SpawnProjectile(
     proj.distanceTraveled = 0.0f;
     proj.isActive = true;
     proj.scale = scale;
+    proj.runeCombo = runeCombo;
+    proj.chargeRatio = chargeRatio;
 
     // Calculate direction
     XMVECTOR start = XMLoadFloat3(&startPos);
@@ -135,15 +147,9 @@ void ProjectileManager::Update(float deltaTime)
         // Update position
         projectile.Update(deltaTime);
 
-        // Update particle emitter position
-        if (m_pParticleSystem && projectile.particleEmitterId >= 0)
-        {
-            ParticleEmitter* pEmitter = m_pParticleSystem->GetEmitter(projectile.particleEmitterId);
-            if (pEmitter)
-            {
-                pEmitter->SetPosition(projectile.position);
-            }
-        }
+        // Update fluid VFX position
+        if (m_pFluidVFXManager && projectile.fluidVFXId >= 0)
+            m_pFluidVFXManager->TrackEffect(projectile.fluidVFXId, projectile.position, projectile.direction);
 
         // Check collisions
         if (projectile.isActive)
@@ -151,16 +157,17 @@ void ProjectileManager::Update(float deltaTime)
             CheckProjectileCollisions(projectile);
         }
 
-        // If projectile became inactive (hit something or expired), stop emitter and spawn explosion
+        // If projectile became inactive (hit something or expired), handle fluid VFX and spawn explosion
         if (!projectile.isActive)
         {
-            if (m_pParticleSystem && projectile.particleEmitterId >= 0)
+            if (m_pFluidVFXManager && projectile.fluidVFXId >= 0)
             {
-                ParticleEmitter* pEmitter = m_pParticleSystem->GetEmitter(projectile.particleEmitterId);
-                if (pEmitter)
-                {
-                    pEmitter->Stop();
-                }
+                if (projectile.wasHit)
+                    // 충돌: 파티클이 충돌 위치로 수렴 후 소멸
+                    m_pFluidVFXManager->ImpactEffect(projectile.fluidVFXId, projectile.position);
+                else
+                    // 사거리 초과: 즉시 소멸
+                    m_pFluidVFXManager->StopEffect(projectile.fluidVFXId);
             }
             // Spawn explosion particles
             SpawnExplosionParticles(projectile.position, projectile.element);
@@ -234,6 +241,7 @@ void ProjectileManager::CheckProjectileCollisions(Projectile& projectile)
                     ApplyDamage(projectile, pEnemy);
                 }
 
+                projectile.wasHit = true;
                 projectile.isActive = false;
 
                 wchar_t buffer[128];
@@ -259,6 +267,7 @@ void ProjectileManager::CheckProjectileCollisions(Projectile& projectile)
 
         if (projSphere.Intersects(playerSphere))
         {
+            projectile.wasHit = true;
             projectile.isActive = false;
 
             // Deal damage to player
@@ -363,6 +372,7 @@ void ProjectileManager::Render(ID3D12GraphicsCommandList* pCommandList)
     for (const auto& projectile : m_Projectiles)
     {
         if (!projectile.isActive) continue;
+        if (projectile.isPlayerProjectile) continue;  // Uses fluid VFX only
         if (renderIndex >= MAX_RENDERED_PROJECTILES) break;
 
         // Update constant buffer for this projectile
@@ -411,53 +421,6 @@ XMFLOAT4 ProjectileManager::GetElementColor(ElementType element) const
     default:
         return XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);  // White
     }
-}
-
-void ProjectileManager::CreateProjectileParticles(Projectile& projectile)
-{
-    if (!m_pParticleSystem) return;
-
-    // Create trail emitter based on element type
-    ParticleEmitterConfig config;
-
-    switch (projectile.element)
-    {
-    case ElementType::Fire:
-        config = FireParticlePresets::FireballTrail();
-        break;
-    case ElementType::Water:
-        config.emissionRate = 25.0f;
-        config.minLifetime = 0.2f;
-        config.maxLifetime = 0.4f;
-        config.startColor = { 0.3f, 0.6f, 1.0f, 1.0f };
-        config.endColor = { 0.1f, 0.3f, 0.8f, 0.0f };
-        config.gravity = { 0.0f, -1.0f, 0.0f };
-        break;
-    case ElementType::Wind:
-        config.emissionRate = 20.0f;
-        config.minLifetime = 0.15f;
-        config.maxLifetime = 0.3f;
-        config.startColor = { 0.8f, 1.0f, 0.8f, 0.8f };
-        config.endColor = { 0.6f, 0.9f, 0.6f, 0.0f };
-        config.minVelocity = { -1.0f, -1.0f, -1.0f };
-        config.maxVelocity = { 1.0f, 1.0f, 1.0f };
-        break;
-    case ElementType::Earth:
-        config.emissionRate = 15.0f;
-        config.minLifetime = 0.3f;
-        config.maxLifetime = 0.5f;
-        config.startColor = { 0.7f, 0.5f, 0.3f, 1.0f };
-        config.endColor = { 0.4f, 0.3f, 0.2f, 0.0f };
-        config.gravity = { 0.0f, -3.0f, 0.0f };
-        break;
-    default:
-        config.emissionRate = 20.0f;
-        config.startColor = { 1.0f, 1.0f, 1.0f, 1.0f };
-        config.endColor = { 0.5f, 0.5f, 0.5f, 0.0f };
-        break;
-    }
-
-    projectile.particleEmitterId = m_pParticleSystem->CreateEmitter(config, projectile.position);
 }
 
 void ProjectileManager::SpawnExplosionParticles(const XMFLOAT3& position, ElementType element)

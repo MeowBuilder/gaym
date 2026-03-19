@@ -26,6 +26,9 @@ Scene::Scene()
     m_pEnemySpawner = std::make_unique<EnemySpawner>();
     m_pProjectileManager = std::make_unique<ProjectileManager>();
     m_pParticleSystem = std::make_unique<ParticleSystem>();
+    m_pFluidParticleSystem = std::make_unique<FluidParticleSystem>();
+    m_pFluidSkillEffect    = std::make_unique<FluidSkillEffect>();
+    m_pFluidVFXManager     = std::make_unique<FluidSkillVFXManager>();
     m_pDebugRenderer = std::make_unique<DebugRenderer>();
 }
 
@@ -152,6 +155,29 @@ void Scene::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList)
         XMFLOAT3(0.0f, 0.0f, 0.0f)
     );
     OutputDebugString(L"[Scene] Floating embers emitter created\n");
+
+    // Fluid Particle System (SRV 디스크립터 슬롯 1개)
+    UINT nFluidParticleDescriptorStart = m_nNextDescriptorIndex;
+    m_nNextDescriptorIndex += 1;
+    m_pFluidParticleSystem->Init(pDevice, pCommandList, m_pDescriptorHeap.get(), nFluidParticleDescriptorStart);
+    OutputDebugString(L"[Scene] Fluid particle system initialized\n");
+
+    // FluidSkillVFXManager (최대 8개 동시 이펙트)
+    UINT nFluidVFXDescStart = m_nNextDescriptorIndex;
+    m_nNextDescriptorIndex += FluidSkillVFXManager::MAX_EFFECTS;
+    m_pFluidVFXManager->Init(pDevice, pCommandList, m_pDescriptorHeap.get(), nFluidVFXDescStart);
+    OutputDebugString(L"[Scene] FluidSkillVFXManager initialized\n");
+
+    // FluidSkillEffect: SkillComponent 연결 (플레이어 설정 후)
+    if (m_pPlayerGameObject)
+    {
+        auto* pSkill = m_pPlayerGameObject->GetComponent<SkillComponent>();
+        if (pSkill)
+        {
+            m_pFluidSkillEffect->Init(m_pFluidParticleSystem.get(), pSkill);
+            OutputDebugString(L"[Scene] FluidSkillEffect initialized\n");
+        }
+    }
 
     // Projectile Manager (64 reserved slots)
     UINT nProjectileDescriptorStart = m_nNextDescriptorIndex;
@@ -483,6 +509,25 @@ void Scene::Update(float deltaTime, InputSystem* pInputSystem)
         m_pParticleSystem->Update(deltaTime);
     }
 
+    // Update Fluid Particle System
+    if (m_pFluidParticleSystem)
+    {
+        m_pFluidParticleSystem->Update(deltaTime);
+    }
+
+    // Update Fluid Skill VFX Manager
+    if (m_pFluidVFXManager)
+    {
+        m_pFluidVFXManager->Update(deltaTime);
+    }
+
+    // Update Fluid Skill Effect (제어점을 플레이어 위치에 맞게 갱신)
+    if (m_pFluidSkillEffect && m_pPlayerGameObject)
+    {
+        m_pFluidSkillEffect->Update(deltaTime,
+            m_pPlayerGameObject->GetTransform()->GetPosition());
+    }
+
     // 2. Check for collisions
     if (m_pCollisionManager)
     {
@@ -610,6 +655,36 @@ void Scene::Render(ID3D12GraphicsCommandList* pCommandList, D3D12_GPU_DESCRIPTOR
     if (m_pParticleSystem)
     {
         m_pParticleSystem->Render(pCommandList);
+    }
+
+    // Render fluid particles
+    if (m_pFluidParticleSystem && m_pFluidParticleSystem->IsActive())
+    {
+        // 뷰 행렬에서 카메라 Right/Up 추출 (행 0, 1)
+        XMMATRIX mView = XMLoadFloat4x4(&m_pCamera->GetViewMatrix());
+        XMFLOAT3 camRight = { XMVectorGetX(mView.r[0]), XMVectorGetY(mView.r[0]), XMVectorGetZ(mView.r[0]) };
+        XMFLOAT3 camUp    = { XMVectorGetX(mView.r[1]), XMVectorGetY(mView.r[1]), XMVectorGetZ(mView.r[1]) };
+
+        XMMATRIX mViewProj = XMLoadFloat4x4(&m_pCamera->GetViewMatrix())
+                            * XMLoadFloat4x4(&m_pCamera->GetProjectionMatrix());
+        XMFLOAT4X4 viewProj;
+        XMStoreFloat4x4(&viewProj, XMMatrixTranspose(mViewProj));
+
+        m_pFluidParticleSystem->Render(pCommandList, viewProj, camRight, camUp);
+    }
+
+    // Render fluid skill VFX (투사체 유체 이펙트)
+    if (m_pFluidVFXManager)
+    {
+        XMMATRIX mView2 = XMLoadFloat4x4(&m_pCamera->GetViewMatrix());
+        XMFLOAT3 camRight2 = { XMVectorGetX(mView2.r[0]), XMVectorGetY(mView2.r[0]), XMVectorGetZ(mView2.r[0]) };
+        XMFLOAT3 camUp2    = { XMVectorGetX(mView2.r[1]), XMVectorGetY(mView2.r[1]), XMVectorGetZ(mView2.r[1]) };
+
+        XMMATRIX mViewProj2 = mView2 * XMLoadFloat4x4(&m_pCamera->GetProjectionMatrix());
+        XMFLOAT4X4 viewProj2;
+        XMStoreFloat4x4(&viewProj2, XMMatrixTranspose(mViewProj2));
+
+        m_pFluidVFXManager->Render(pCommandList, viewProj2, camRight2, camUp2);
     }
 
     // Render debug colliders (F1 to toggle)
@@ -878,7 +953,7 @@ void Scene::SelectRuneByClick(int runeIndex)
     m_eSelectedRune = pDropComp->GetRuneOption(runeIndex);
     m_eDropState = DropInteractionState::SelectingSkill;
 
-    const wchar_t* typeNames[] = { L"None", L"Instant", L"Charge", L"Channel", L"Place", L"Enhance" };
+    const wchar_t* typeNames[] = { L"None", L"Instant", L"Charge", L"Channel", L"Place", L"Enhance", L"Split" };
     wchar_t buffer[128];
     swprintf_s(buffer, L"[Scene] Rune clicked: %s - Now select skill slot\n", typeNames[static_cast<int>(m_eSelectedRune)]);
     OutputDebugString(buffer);
@@ -907,7 +982,7 @@ void Scene::SelectSkillSlot(SkillSlot slot, int runeSlotIndex)
             pSkill->SetActivationType(pSkill->GetSkillActivationType(SkillSlot::Q));
 
             const wchar_t* slotNames[] = { L"Q", L"E", L"R", L"RMB" };
-            const wchar_t* typeNames[] = { L"None", L"Instant", L"Charge", L"Channel", L"Place", L"Enhance" };
+            const wchar_t* typeNames[] = { L"None", L"Instant", L"Charge", L"Channel", L"Place", L"Enhance", L"Split" };
             wchar_t buffer[128];
             swprintf_s(buffer, L"[Scene] Rune %s assigned to %s slot %d\n",
                 typeNames[static_cast<int>(m_eSelectedRune)], slotNames[static_cast<int>(slot)], runeSlotIndex + 1);

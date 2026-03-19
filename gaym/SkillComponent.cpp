@@ -80,7 +80,7 @@ void SkillComponent::Update(float deltaTime)
                 }
                 else
                 {
-                    m_Skills[index]->Execute(m_pOwner, m_ChannelTargetPosition, tickMult);
+                    ExecuteOrSplit(index, m_ChannelTargetPosition, tickMult);
                 }
             }
         }
@@ -197,7 +197,7 @@ void SkillComponent::ProcessSkillInput(InputSystem* pInputSystem, CCamera* pCame
                 }
                 else
                 {
-                    m_Skills[index]->Execute(m_pOwner, m_ChargeTargetPosition, damageMultiplier);
+                    ExecuteOrSplit(index, m_ChargeTargetPosition, damageMultiplier);
                 }
                 m_SkillStates[index] = SkillState::Casting;
                 m_ActiveSkillSlot = m_ChargingSlot;
@@ -263,6 +263,7 @@ void SkillComponent::EquipSkill(SkillSlot slot, std::unique_ptr<ISkillBehavior> 
     if (index < m_Skills.size())
     {
         m_Skills[index] = std::move(pBehavior);
+        m_Skills[index]->SetSlot(slot);
         m_CooldownTimers[index] = 0.0f;
         m_SkillStates[index] = SkillState::Ready;
     }
@@ -407,7 +408,7 @@ void SkillComponent::SetActivationType(ActivationType type)
     {
         m_CurrentActivationType = type;
 
-        const wchar_t* typeNames[] = { L"None", L"Instant", L"Charge", L"Channel", L"Place", L"Enhance" };
+        const wchar_t* typeNames[] = { L"None", L"Instant", L"Charge", L"Channel", L"Place", L"Enhance", L"Split" };
         wchar_t buffer[128];
         swprintf_s(buffer, 128, L"[Skill] Activation type changed to: %s\n", typeNames[static_cast<int>(type)]);
         OutputDebugString(buffer);
@@ -423,7 +424,7 @@ void SkillComponent::SetRuneSlot(SkillSlot skill, int runeIndex, ActivationType 
     m_SkillRunes[skillIdx][runeIndex] = type;
 
     const wchar_t* slotNames[] = { L"Q", L"E", L"R", L"RMB" };
-    const wchar_t* typeNames[] = { L"None", L"Instant", L"Charge", L"Channel", L"Place", L"Enhance" };
+    const wchar_t* typeNames[] = { L"None", L"Instant", L"Charge", L"Channel", L"Place", L"Enhance", L"Split" };
     wchar_t buffer[128];
     swprintf_s(buffer, 128, L"[Skill] Rune set: %s slot %d = %s\n",
         slotNames[skillIdx], runeIndex + 1, typeNames[static_cast<int>(type)]);
@@ -463,11 +464,12 @@ ActivationType SkillComponent::GetSkillActivationType(SkillSlot skill) const
 {
     RuneCombo combo = GetRuneCombo(skill);
 
-    // Priority: Charge > Channel > Place > Enhance > Instant
+    // Priority: Charge > Channel > Place > Enhance > Split > Instant
     if (combo.hasCharge)   return ActivationType::Charge;
     if (combo.hasChannel)  return ActivationType::Channel;
     if (combo.hasPlace)    return ActivationType::Place;
     if (combo.hasEnhance)  return ActivationType::Enhance;
+    if (combo.hasSplit)    return ActivationType::Split;
     return ActivationType::Instant;
 }
 
@@ -490,6 +492,7 @@ RuneCombo SkillComponent::GetRuneCombo(SkillSlot skill) const
         case ActivationType::Channel:  combo.hasChannel = true; break;
         case ActivationType::Place:    combo.hasPlace = true; break;
         case ActivationType::Enhance:  combo.hasEnhance = true; break;
+        case ActivationType::Split:    combo.hasSplit = true; break;
         }
         ++combo.count;
     }
@@ -506,6 +509,33 @@ void SkillComponent::ProcessRuneInput(InputSystem* pInputSystem)
 {
     // Rune input is now handled through the drop item UI system
     // This function is kept for potential future use
+}
+
+void SkillComponent::ExecuteOrSplit(size_t index, const XMFLOAT3& target, float mult)
+{
+    using namespace DirectX;
+
+    RuneCombo combo = GetRuneCombo(static_cast<SkillSlot>(index));
+    if (!combo.hasSplit) {
+        m_Skills[index]->Execute(m_pOwner, target, mult);
+        return;
+    }
+    // Split: 2개 투사체 좌우로 퍼뜨림
+    XMVECTOR originV = (m_pOwner && m_pOwner->GetTransform())
+        ? XMLoadFloat3(&m_pOwner->GetTransform()->GetPosition())
+        : XMVectorZero();
+    XMVECTOR toTarget = XMVector3Normalize(XMLoadFloat3(&target) - originV);
+    XMVECTOR worldUp  = XMVectorSet(0, 1, 0, 0);
+    float dot = XMVectorGetX(XMVector3Dot(toTarget, worldUp));
+    XMVECTOR right = (fabsf(dot) > 0.99f)
+        ? XMVectorSet(1, 0, 0, 0)
+        : XMVector3Normalize(XMVector3Cross(worldUp, toTarget));
+    constexpr float SPREAD = 1.5f;
+    XMFLOAT3 t1, t2;
+    XMStoreFloat3(&t1, XMLoadFloat3(&target) + right * SPREAD);
+    XMStoreFloat3(&t2, XMLoadFloat3(&target) - right * SPREAD);
+    m_Skills[index]->Execute(m_pOwner, t1, mult);
+    m_Skills[index]->Execute(m_pOwner, t2, mult);
 }
 
 void SkillComponent::ExecuteWithActivationType(SkillSlot slot, const DirectX::XMFLOAT3& targetPosition)
@@ -564,7 +594,7 @@ void SkillComponent::ExecuteWithActivationType(SkillSlot slot, const DirectX::XM
         }
         else
         {
-            m_Skills[index]->Execute(m_pOwner, targetPosition, tickMult);
+            ExecuteOrSplit(index, targetPosition, tickMult);
         }
     }
     else if (enhanceOnly)
@@ -601,7 +631,7 @@ void SkillComponent::ExecuteWithActivationType(SkillSlot slot, const DirectX::XM
         }
         else
         {
-            m_Skills[index]->Execute(m_pOwner, targetPosition, damageMultiplier);
+            ExecuteOrSplit(index, targetPosition, damageMultiplier);
             OutputDebugString(L"[Skill] Instant cast!\n");
         }
         m_SkillStates[index] = SkillState::Casting;

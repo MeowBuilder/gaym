@@ -12,16 +12,6 @@ class CCamera;
 // Number of rune slots per skill
 constexpr int RUNES_PER_SKILL = 3;
 
-// Combo flags from multiple runes equipped on a single skill
-struct RuneCombo {
-    bool hasInstant = false;
-    bool hasCharge = false;
-    bool hasChannel = false;
-    bool hasPlace = false;
-    bool hasEnhance = false;
-    int count = 0;  // Total equipped rune count
-};
-
 // Component that manages skill slots and execution for a GameObject
 class SkillComponent : public Component
 {
@@ -144,4 +134,7 @@ private:
 
     // Execute skill based on current activation type
     void ExecuteWithActivationType(SkillSlot slot, const DirectX::XMFLOAT3& targetPosition);
+
+    // Execute or split into multiple projectiles if Split rune is equipped
+    void ExecuteOrSplit(size_t index, const DirectX::XMFLOAT3& target, float mult);
 };

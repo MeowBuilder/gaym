@@ -797,14 +797,15 @@ void Dx12App::RenderText()
                     DropItemComponent* pDropComp = pDropItem->GetComponent<DropItemComponent>();
                     if (pDropComp)
                     {
-                        const wchar_t* typeNames[] = { L"None", L"Instant", L"Charge", L"Channel", L"Place", L"Enhance" };
+                        const wchar_t* typeNames[] = { L"None", L"Instant", L"Charge", L"Channel", L"Place", L"Enhance", L"Split" };
                         const wchar_t* typeDescs[] = {
                             L"Empty",
                             L"1x damage",
                             L"Hold: 1x~3x damage",
                             L"Hold: 0.3x per tick",
                             L"1.5x trap damage",
-                            L"Buff: 2x next attack"
+                            L"Buff: 2x next attack",
+                            L"Fire 2 projectiles"
                         };
 
                         // Title
@@ -860,7 +861,7 @@ void Dx12App::RenderText()
                 DirectX::Colors::Gold);
 
             // Show selected rune info
-            const wchar_t* typeNames[] = { L"None", L"Instant", L"Charge", L"Channel", L"Place", L"Enhance" };
+            const wchar_t* typeNames[] = { L"None", L"Instant", L"Charge", L"Channel", L"Place", L"Enhance", L"Split" };
             ActivationType selectedRune = m_pScene->GetSelectedRune();
             std::wstringstream selectedText;
             selectedText << L"Selected Rune: " << typeNames[static_cast<int>(selectedRune)];
@@ -1057,7 +1058,7 @@ void Dx12App::RenderText()
                 float rightX = (float)m_nWndClientWidth - 400.0f;
                 float rightY = (float)m_nWndClientHeight - 240.0f;
 
-                const wchar_t* activationNames[] = { L"None", L"Instant", L"Charge", L"Channel", L"Place", L"Enhance" };
+                const wchar_t* activationNames[] = { L"None", L"Instant", L"Charge", L"Channel", L"Place", L"Enhance", L"Split" };
                 const wchar_t* runeSlotNames[] = { L"Q", L"E", L"R", L"RMB" };
 
                 m_spriteFont->DrawString(m_spriteBatch.get(), L"[Rune Combos]",
@@ -1087,6 +1088,7 @@ void Dx12App::RenderText()
                         if (combo.hasChannel) { if (!first) comboLine << L"+"; comboLine << L"Channel"; first = false; }
                         if (combo.hasPlace)   { if (!first) comboLine << L"+"; comboLine << L"Place"; first = false; }
                         if (combo.hasEnhance) { if (!first) comboLine << L"+"; comboLine << L"Enhance"; first = false; }
+                        if (combo.hasSplit)   { if (!first) comboLine << L"+"; comboLine << L"Split";   first = false; }
                         if (combo.hasInstant) { if (!first) comboLine << L"+"; comboLine << L"Instant"; first = false; }
 
                         m_spriteFont->DrawString(m_spriteBatch.get(), comboLine.str().c_str(),
