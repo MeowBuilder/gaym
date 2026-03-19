@@ -78,6 +78,7 @@
       <ConformanceMode>false</ConformanceMode>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <LanguageStandard>stdcpplatest</LanguageStandard>
+      <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -94,6 +95,7 @@
       <ConformanceMode>false</ConformanceMode>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <LanguageStandard>stdcpplatest</LanguageStandard>
+      <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -110,6 +112,7 @@
       <ConformanceMode>false</ConformanceMode>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <LanguageStandard>stdcpplatest</LanguageStandard>
+      <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -132,6 +135,7 @@ xcopy /Y /I /E "$(ProjectDir)Assets\*.*" "$(OutDir)Assets\"</Command>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <Optimization>Disabled</Optimization>
       <RuntimeTypeInfo>true</RuntimeTypeInfo>
+      <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -166,6 +170,7 @@ xcopy /Y /I /E "$(ProjectDir)Assets\*.*" "$(OutDir)Assets\"</Command>
     <ClInclude Include="RushAoEAttackBehavior.h" />
     <ClInclude Include="RushFrontAttackBehavior.h" />
     <ClInclude Include="RangedAttackBehavior.h" />
+    <ClInclude Include="BreathAttackBehavior.h" />
     <ClInclude Include="Mesh.h" />
     <ClInclude Include="MeshLoader.h" />
     <ClInclude Include="MapLoader.h" />
@@ -217,6 +222,7 @@ xcopy /Y /I /E "$(ProjectDir)Assets\*.*" "$(OutDir)Assets\"</Command>
     <ClCompile Include="RushAoEAttackBehavior.cpp" />
     <ClCompile Include="RushFrontAttackBehavior.cpp" />
     <ClCompile Include="RangedAttackBehavior.cpp" />
+    <ClCompile Include="BreathAttackBehavior.cpp" />
     <ClCompile Include="Mesh.cpp" />
     <ClCompile Include="MeshLoader.cpp" />
     <ClCompile Include="MapLoader.cpp" />

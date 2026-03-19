@@ -11,6 +11,7 @@
 #include "RushAoEAttackBehavior.h"
 #include "RushFrontAttackBehavior.h"
 #include "RangedAttackBehavior.h"
+#include "BreathAttackBehavior.h"
 #include "Room.h"
 #include "Scene.h"
 #include "ProjectileManager.h"
@@ -150,10 +151,43 @@ void EnemySpawner::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pComma
 
     RegisterEnemyPreset("RangedEnemy", ranged);
 
+    // Register Dragon Boss preset (Flying)
+    EnemySpawnData dragon;
+    dragon.m_strMeshPath = "Assets/Enemies/Dragon/Red.bin";
+    dragon.m_strAnimationPath = "Assets/Enemies/Dragon/Red_Anim.bin";
+    dragon.m_strTexturePath = "Assets/Enemies/Dragon/Textures/RedHP.png";
+    dragon.m_xmf3Scale = XMFLOAT3(2.5f, 2.5f, 2.5f);
+    dragon.m_xmf4Color = XMFLOAT4(1.0f, 0.3f, 0.1f, 1.0f);
+    dragon.m_Stats.m_fMaxHP = 150.0f;
+    dragon.m_Stats.m_fCurrentHP = 150.0f;
+    dragon.m_Stats.m_fMoveSpeed = 6.0f;
+    dragon.m_Stats.m_fAttackRange = 15.0f;
+    dragon.m_Stats.m_fAttackCooldown = 2.5f;
+
+    // Flying mode disabled - boss intro handles the entrance
+    dragon.m_bIsFlying = false;
+    dragon.m_fFlyHeight = 0.0f;
+
+    // Ground combat animations (intro handles flying entrance)
+    dragon.m_AnimConfig.m_strIdleClip = "Idle01";
+    dragon.m_AnimConfig.m_strChaseClip = "Walk";
+    dragon.m_AnimConfig.m_strAttackClip = "Flame Attack";
+    dragon.m_AnimConfig.m_strStaggerClip = "Get Hit";
+    dragon.m_AnimConfig.m_strDeathClip = "Die";
+
+    dragon.m_IndicatorConfig.m_eType = IndicatorType::Circle;
+    dragon.m_IndicatorConfig.m_fHitRadius = 15.0f;
+
+    // Breath attack for flying dragon
+    dragon.m_fnCreateAttack = [pProjMgr]() {
+        // damage, speed, count, spread, windup, duration, recovery
+        return std::make_unique<BreathAttackBehavior>(pProjMgr, 20.0f, 30.0f, 7, 45.0f, 0.6f, 1.2f, 0.4f);
+    };
+    RegisterEnemyPreset("Dragon", dragon);
+
     // Create shared meshes for attack indicators
     m_pRingMesh = new RingMesh(pDevice, pCommandList, 1.0f, 0.93f, 48);
     m_pRingMesh->AddRef();
-
     m_pLineMesh = new LineMesh(pDevice, pCommandList, 0.4f);
     m_pLineMesh->AddRef();
 
@@ -295,6 +329,12 @@ void EnemySpawner::SetupEnemyComponents(GameObject* pEnemy, const EnemySpawnData
     pEnemyComp->SetTarget(pTarget);
     pEnemyComp->SetRoom(pRoom);
 
+    // Set flying mode if enabled
+    if (data.m_bIsFlying)
+    {
+        pEnemyComp->SetFlying(true, data.m_fFlyHeight);
+    }
+
     // Create attack behavior
     if (data.m_fnCreateAttack)
     {
@@ -379,8 +419,16 @@ GameObject* EnemySpawner::CreateMeshEnemy(CRoom* pRoom, const XMFLOAT3& position
     // Add RenderComponents to hierarchy
     AddRenderComponentsToHierarchy(pEnemy);
 
-    // Apply color tint to all meshes in hierarchy
-    ApplyColorToHierarchy(pEnemy, data.m_xmf4Color);
+    // Load texture if specified
+    if (!data.m_strTexturePath.empty())
+    {
+        LoadTextureToHierarchy(pEnemy, data.m_strTexturePath);
+    }
+    else
+    {
+        // Apply color tint to all meshes in hierarchy (only if no texture)
+        ApplyColorToHierarchy(pEnemy, data.m_xmf4Color);
+    }
 
     // Add ColliderComponent (reduced size to avoid getting stuck on terrain)
     auto* pCollider = pEnemy->AddComponent<ColliderComponent>();
@@ -410,6 +458,10 @@ void EnemySpawner::AddRenderComponentsToHierarchy(GameObject* pGameObject)
         pRenderComp->SetMesh(pGameObject->GetMesh());
         pRenderComp->SetCastsShadow(true);  // Enemies cast shadows
         m_pShader->AddRenderComponent(pRenderComp);
+
+        wchar_t buffer[128];
+        swprintf_s(buffer, L"[EnemySpawner] Added RenderComponent to: %hs\n", pGameObject->m_pstrFrameName);
+        OutputDebugString(buffer);
     }
 
     if (pGameObject->m_pChild)
@@ -440,6 +492,45 @@ void EnemySpawner::ApplyColorToHierarchy(GameObject* pGameObject, const XMFLOAT4
     if (pGameObject->m_pSibling)
     {
         ApplyColorToHierarchy(pGameObject->m_pSibling, color);
+    }
+}
+
+void EnemySpawner::LoadTextureToHierarchy(GameObject* pGameObject, const std::string& texturePath)
+{
+    if (!pGameObject || !m_pDevice || !m_pCommandList || !m_pScene) return;
+
+    // Load texture for objects with mesh
+    if (pGameObject->GetMesh())
+    {
+        pGameObject->SetTextureName(texturePath.c_str());
+
+        D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle;
+        D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle;
+        m_pScene->AllocateDescriptor(&cpuHandle, &gpuHandle);
+
+        pGameObject->LoadTexture(m_pDevice, m_pCommandList, cpuHandle);
+        pGameObject->SetSrvGpuDescriptorHandle(gpuHandle);
+
+        // Set white material to show texture properly
+        MATERIAL material;
+        material.m_cAmbient = XMFLOAT4(0.3f, 0.3f, 0.3f, 1.0f);
+        material.m_cDiffuse = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
+        material.m_cSpecular = XMFLOAT4(0.3f, 0.3f, 0.3f, 32.0f);
+        material.m_cEmissive = XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f);
+        pGameObject->SetMaterial(material);
+
+        wchar_t buffer[256];
+        swprintf_s(buffer, L"[EnemySpawner] Loaded texture for: %hs\n", pGameObject->m_pstrFrameName);
+        OutputDebugString(buffer);
+    }
+
+    if (pGameObject->m_pChild)
+    {
+        LoadTextureToHierarchy(pGameObject->m_pChild, texturePath);
+    }
+    if (pGameObject->m_pSibling)
+    {
+        LoadTextureToHierarchy(pGameObject->m_pSibling, texturePath);
     }
 }
 

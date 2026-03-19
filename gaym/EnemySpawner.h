@@ -52,6 +52,9 @@ private:
     // Apply color tint to all meshes in game object hierarchy
     void ApplyColorToHierarchy(GameObject* pGameObject, const XMFLOAT4& color);
 
+    // Load texture to all meshes in game object hierarchy
+    void LoadTextureToHierarchy(GameObject* pGameObject, const std::string& texturePath);
+
     // Setup common enemy components
     void SetupEnemyComponents(GameObject* pEnemy, const EnemySpawnData& data, CRoom* pRoom, GameObject* pTarget);
 

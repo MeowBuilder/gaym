@@ -131,4 +131,24 @@ namespace FireParticlePresets
         config.spawnRadius = 0.5f;
         return config;
     }
+
+    // Floating embers for volcanic atmosphere
+    inline ParticleEmitterConfig FloatingEmbers()
+    {
+        ParticleEmitterConfig config;
+        config.emissionRate = 8.0f;  // Slow, steady emission
+        config.minLifetime = 2.0f;
+        config.maxLifetime = 4.0f;
+        config.minStartSize = 0.05f;
+        config.maxStartSize = 0.15f;
+        config.minEndSize = 0.0f;
+        config.maxEndSize = 0.02f;
+        config.minVelocity = { -1.0f, 1.5f, -1.0f };   // Drift upward
+        config.maxVelocity = { 1.0f, 3.0f, 1.0f };
+        config.startColor = { 1.0f, 0.5f, 0.1f, 1.0f };  // Bright orange
+        config.endColor = { 1.0f, 0.2f, 0.0f, 0.0f };    // Fade to dark red
+        config.gravity = { 0.0f, 0.3f, 0.0f };           // Slight upward drift
+        config.spawnRadius = 15.0f;  // Wide spawn area around emitter
+        return config;
+    }
 }

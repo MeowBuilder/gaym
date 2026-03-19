@@ -20,9 +20,29 @@ EnemyComponent::~EnemyComponent()
 
 void EnemyComponent::Update(float deltaTime)
 {
-    // Apply gravity
-    if (!m_bOnGround)
+    // Boss intro cutscene takes priority
+    if (IsInIntro())
     {
+        UpdateBossIntro(deltaTime);
+        return;
+    }
+
+    // Flying enemies maintain altitude, ground enemies use gravity
+    if (m_bIsFlying)
+    {
+        auto* pTransform = m_pOwner ? m_pOwner->GetTransform() : nullptr;
+        if (pTransform)
+        {
+            XMFLOAT3 pos = pTransform->GetPosition();
+            // Smoothly maintain fly height
+            float targetY = m_fFlyHeight;
+            pos.y = pos.y + (targetY - pos.y) * 3.0f * deltaTime;
+            pTransform->SetPosition(pos);
+        }
+    }
+    else if (!m_bOnGround)
+    {
+        // Apply gravity for ground enemies
         auto* pTransform = m_pOwner ? m_pOwner->GetTransform() : nullptr;
         if (pTransform)
         {
@@ -439,5 +459,121 @@ void EnemyComponent::Die()
     if (m_OnDeathCallback)
     {
         m_OnDeathCallback(this);
+    }
+}
+
+void EnemyComponent::StartBossIntro(float fStartHeight)
+{
+    m_eIntroPhase = BossIntroPhase::FlyingIn;
+    m_fIntroTimer = 0.0f;
+    m_fIntroStartHeight = fStartHeight;
+
+    // Set target to ground level
+    auto* pTransform = m_pOwner ? m_pOwner->GetTransform() : nullptr;
+    if (pTransform)
+    {
+        XMFLOAT3 pos = pTransform->GetPosition();
+        m_fIntroTargetHeight = GROUND_Y;  // Land at ground level (0)
+        // Move to start position (high in sky)
+        pos.y = fStartHeight;
+        pTransform->SetPosition(pos);
+    }
+
+    // Start with glide animation
+    if (m_pAnimationComp)
+    {
+        m_pAnimationComp->CrossFade("Fly Glide", 0.2f, true);
+    }
+
+    OutputDebugString(L"[Boss] Intro started - Flying In\n");
+}
+
+void EnemyComponent::UpdateBossIntro(float dt)
+{
+    auto* pTransform = m_pOwner ? m_pOwner->GetTransform() : nullptr;
+    if (!pTransform) return;
+
+    m_fIntroTimer += dt;
+
+    switch (m_eIntroPhase)
+    {
+    case BossIntroPhase::FlyingIn:
+    {
+        // Descend from sky
+        XMFLOAT3 pos = pTransform->GetPosition();
+        float fDescendSpeed = 8.0f;
+        pos.y -= fDescendSpeed * dt;
+
+        // Face the player while descending
+        if (m_pTarget)
+        {
+            FaceTarget();
+        }
+
+        if (pos.y <= m_fIntroTargetHeight + 0.5f)
+        {
+            pos.y = m_fIntroTargetHeight;
+            pTransform->SetPosition(pos);
+
+            // Transition to landing
+            m_eIntroPhase = BossIntroPhase::Landing;
+            m_fIntroTimer = 0.0f;
+
+            if (m_pAnimationComp)
+            {
+                m_pAnimationComp->CrossFade("Land", 0.15f, false);
+            }
+            OutputDebugString(L"[Boss] Landing\n");
+        }
+        else
+        {
+            pTransform->SetPosition(pos);
+        }
+        break;
+    }
+
+    case BossIntroPhase::Landing:
+    {
+        // Wait for landing animation (approx 1.5 seconds)
+        if (m_fIntroTimer >= 1.5f)
+        {
+            m_eIntroPhase = BossIntroPhase::Roaring;
+            m_fIntroTimer = 0.0f;
+
+            if (m_pAnimationComp)
+            {
+                m_pAnimationComp->CrossFade("Scream", 0.15f, false);
+            }
+            OutputDebugString(L"[Boss] Roaring\n");
+        }
+        break;
+    }
+
+    case BossIntroPhase::Roaring:
+    {
+        // Wait for roar animation (approx 2 seconds)
+        if (m_fIntroTimer >= 2.0f)
+        {
+            m_eIntroPhase = BossIntroPhase::Done;
+            m_fIntroTimer = 0.0f;
+
+            // Disable flying mode for ground combat
+            m_bIsFlying = false;
+            m_bOnGround = true;
+
+            // Switch to ground combat animations
+            m_AnimConfig.m_strIdleClip = "Idle01";
+            m_AnimConfig.m_strChaseClip = "Walk";
+            m_AnimConfig.m_strAttackClip = "Flame Attack";
+
+            // Start combat
+            ChangeState(EnemyState::Idle);
+            OutputDebugString(L"[Boss] Intro complete - Combat started\n");
+        }
+        break;
+    }
+
+    default:
+        break;
     }
 }

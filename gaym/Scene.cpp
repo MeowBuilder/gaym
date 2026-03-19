@@ -15,6 +15,7 @@
 #include "ProjectileManager.h"
 #include "DropItemComponent.h"
 #include "InteractableComponent.h"
+#include "EnemyComponent.h"
 #include "MathUtils.h"
 #include <functional> // Added for std::function
 
@@ -148,6 +149,13 @@ void Scene::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList)
     m_pParticleSystem->Init(pDevice, pCommandList, m_pDescriptorHeap.get(), nParticleDescriptorStart);
     OutputDebugString(L"[Scene] Particle system initialized\n");
 
+    // Floating embers for volcanic atmosphere
+    m_nEmberEmitterId = m_pParticleSystem->CreateEmitter(
+        FireParticlePresets::FloatingEmbers(),
+        XMFLOAT3(0.0f, 0.0f, 0.0f)
+    );
+    OutputDebugString(L"[Scene] Floating embers emitter created\n");
+
     // Fluid Particle System (SRV 디스크립터 슬롯 1개)
     UINT nFluidParticleDescriptorStart = m_nNextDescriptorIndex;
     m_nNextDescriptorIndex += 1;
@@ -161,7 +169,6 @@ void Scene::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList)
     OutputDebugString(L"[Scene] FluidSkillVFXManager initialized\n");
 
     // FluidSkillEffect: SkillComponent 연결 (플레이어 설정 후)
-    // 실제 Spawn은 Update 첫 프레임에서 FluidSkillEffect가 수행한다
     if (m_pPlayerGameObject)
     {
         auto* pSkill = m_pPlayerGameObject->GetComponent<SkillComponent>();
@@ -261,14 +268,42 @@ void Scene::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList)
 
     if (!bMapLoaded) {
         OutputDebugString(L"[Scene] Map load failed – using default test room\n");
-        RoomSpawnConfig spawnConfig;
-        spawnConfig.AddSpawn("RushAoEEnemy",  10.0f, 0.0f,  5.0f);
-        spawnConfig.AddSpawn("RushFrontEnemy",-10.0f, 0.0f,  5.0f);
-        spawnConfig.AddSpawn("RangedEnemy",    0.0f, 0.0f, 20.0f);
-        m_pCurrentRoom->SetSpawnConfig(spawnConfig);
+        // Boss room - no regular enemy spawns, only dragon
         m_pCurrentRoom->SetEnemySpawner(m_pEnemySpawner.get());
         m_pCurrentRoom->SetPlayerTarget(m_pPlayerGameObject);
         m_pCurrentRoom->SetScene(this);
+    }
+
+    // Boss room setup - clear any enemy spawns from MapLoader, spawn only Dragon
+    if (m_pCurrentRoom && m_pEnemySpawner)
+    {
+        // Clear existing spawn config (removes enemies defined in map JSON)
+        RoomSpawnConfig emptyConfig;
+        m_pCurrentRoom->SetSpawnConfig(emptyConfig);
+
+        OutputDebugString(L"[Scene] Spawning Dragon boss\n");
+        XMFLOAT3 dragonPos = XMFLOAT3(0.0f, 0.0f, 20.0f);
+        if (m_pPlayerGameObject)
+        {
+            XMFLOAT3 playerPos = m_pPlayerGameObject->GetTransform()->GetPosition();
+            dragonPos = XMFLOAT3(playerPos.x, playerPos.y, playerPos.z + 15.0f);
+        }
+        GameObject* pDragon = m_pEnemySpawner->SpawnEnemy(m_pCurrentRoom, "Dragon", dragonPos, m_pPlayerGameObject);
+
+        // Start boss intro cutscene
+        if (pDragon)
+        {
+            EnemyComponent* pEnemy = pDragon->GetComponent<EnemyComponent>();
+            if (pEnemy)
+            {
+                pEnemy->StartBossIntro(25.0f);  // Start 25 units high in the sky
+            }
+        }
+
+        // Set room to Active so dragon animates immediately
+        m_pCurrentRoom->SetState(RoomState::Active);
+
+        // Portal will spawn after dragon is defeated (via Room clear condition)
     }
 
     // 맵 정적 오브젝트의 상수 버퍼를 한 번 초기화
@@ -358,7 +393,7 @@ void Scene::Update(float deltaTime, InputSystem* pInputSystem)
     XMStoreFloat4x4(&m_pcbMappedPass->m_xmf4x4ViewProj, XMMatrixTranspose(mViewProj));
 
     // Set lighting parameters for a more realistic look
-    m_pcbMappedPass->m_xmf4LightColor = XMFLOAT4(0.9f, 0.85f, 0.75f, 1.0f); // Slightly warm white directional light (sun)
+    m_pcbMappedPass->m_xmf4LightColor = XMFLOAT4(1.0f, 0.6f, 0.35f, 1.0f); // Warm orange light (volcanic)
     XMVECTOR lightDir = XMVector3Normalize(XMVectorSet(-0.6f, -0.7f, 0.3f, 0.0f)); // 비스듬한 조명 (옆으로 긴 그림자)
     XMStoreFloat3(&m_pcbMappedPass->m_xmf3LightDirection, lightDir);
 
@@ -405,12 +440,16 @@ void Scene::Update(float deltaTime, InputSystem* pInputSystem)
     m_pcbMappedPass->m_fPad3 = 0.0f; // Padding
     m_pcbMappedPass->m_fPad4 = 0.0f; // Padding
 
-    m_pcbMappedPass->m_xmf4AmbientLight = XMFLOAT4(0.05f, 0.07f, 0.1f, 1.0f); // Darker, slightly bluish ambient (indirect sky light)
+    m_pcbMappedPass->m_xmf4AmbientLight = XMFLOAT4(0.25f, 0.08f, 0.03f, 1.0f); // Brighter volcanic ambient glow
 
     // Set Camera Position for Specular Calculation
     XMFLOAT3 cameraPosition = m_pCamera->GetPosition();
     m_pcbMappedPass->m_xmf3CameraPosition = cameraPosition;
     m_pcbMappedPass->m_fPadCam = 0.0f; // Padding
+
+    // Update time for lava animation
+    m_fTotalTime += deltaTime;
+    m_pcbMappedPass->m_fTime = m_fTotalTime;
 
     // Update SpotLight parameters based on player position
     if (m_pPlayerGameObject)
@@ -457,6 +496,16 @@ void Scene::Update(float deltaTime, InputSystem* pInputSystem)
     // Update Particle System
     if (m_pParticleSystem)
     {
+        // Update floating embers to follow player
+        if (m_nEmberEmitterId >= 0 && m_pPlayerGameObject)
+        {
+            auto* pEmitter = m_pParticleSystem->GetEmitter(m_nEmberEmitterId);
+            if (pEmitter)
+            {
+                XMFLOAT3 playerPos = m_pPlayerGameObject->GetTransform()->GetPosition();
+                pEmitter->SetPosition(playerPos);
+            }
+        }
         m_pParticleSystem->Update(deltaTime);
     }
 

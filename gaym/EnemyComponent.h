@@ -51,6 +51,16 @@ enum class EnemyState
     Dead
 };
 
+// Boss intro cutscene phases
+enum class BossIntroPhase
+{
+    None,           // No intro (regular enemy)
+    FlyingIn,       // Flying down from sky
+    Landing,        // Landing animation
+    Roaring,        // Scream/roar animation
+    Done            // Intro complete, start combat
+};
+
 struct EnemyStats
 {
     float m_fMaxHP = 100.0f;
@@ -106,6 +116,14 @@ public:
     void SetAnimationComponent(AnimationComponent* pAnimComp) { m_pAnimationComp = pAnimComp; }
     void SetAnimationConfig(const EnemyAnimationConfig& config) { m_AnimConfig = config; }
 
+    // Flying mode
+    void SetFlying(bool bFlying, float fHeight = 15.0f) { m_bIsFlying = bFlying; m_fFlyHeight = fHeight; }
+    bool IsFlying() const { return m_bIsFlying; }
+
+    // Boss intro cutscene
+    void StartBossIntro(float fStartHeight = 30.0f);
+    bool IsInIntro() const { return m_eIntroPhase != BossIntroPhase::None && m_eIntroPhase != BossIntroPhase::Done; }
+
     // Attack indicators
     void SetIndicatorConfig(const AttackIndicatorConfig& config) { m_IndicatorConfig = config; }
     void SetRushLineIndicator(GameObject* pIndicator) { m_pRushLineIndicator = pIndicator; }
@@ -156,4 +174,15 @@ private:
     bool m_bOnGround = false;
     static constexpr float GRAVITY = 50.0f;
     static constexpr float GROUND_Y = 0.0f;  // Tile surface height
+
+    // Flying mode
+    bool m_bIsFlying = false;
+    float m_fFlyHeight = 15.0f;
+
+    // Boss intro cutscene
+    BossIntroPhase m_eIntroPhase = BossIntroPhase::None;
+    float m_fIntroTimer = 0.0f;
+    float m_fIntroStartHeight = 30.0f;
+    float m_fIntroTargetHeight = 0.0f;
+    void UpdateBossIntro(float dt);
 };

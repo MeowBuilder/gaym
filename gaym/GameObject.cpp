@@ -144,6 +144,7 @@ void GameObject::LoadTexture(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
     std::vector<std::string> searchPaths = {
         "Assets/Player/Textures/" + textureName,
         "Assets/Enemies/AirElemental/Textures/" + textureName,
+        "Assets/Enemies/Dragon/Textures/" + textureName,
         "Assets/Textures/" + textureName,
         "Animation/" + textureName,  // Legacy path
         textureName  // Direct path

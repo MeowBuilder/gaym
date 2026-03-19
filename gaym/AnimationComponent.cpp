@@ -48,16 +48,6 @@ void AnimationComponent::Play(std::string strClipName, bool bLoop)
         m_bLoop = bLoop;
         m_fCurrentTime = 0.0f;
         m_bIsPlaying = true;
-
-        char buffer[256];
-        sprintf_s(buffer, "Animation Playing: %s (Duration: %f)\n", strClipName.c_str(), pClip->m_fDuration);
-        OutputDebugStringA(buffer);
-    }
-    else
-    {
-        char buffer[256];
-        sprintf_s(buffer, "Animation Clip Not Found: %s\n", strClipName.c_str());
-        OutputDebugStringA(buffer);
     }
 }
 
@@ -263,12 +253,24 @@ void AnimationComponent::Update(float deltaTime)
 
     if (!s_bCastLog)
     {
-        char buf[256];
+        char buf[512];
         sprintf_s(buf, "AnimComponent: Found %zu SkinnedMesh(es) in hierarchy\n", vSkinnedMeshes.size());
         OutputDebugStringA(buf);
         for (const auto& entry : vSkinnedMeshes)
         {
-            sprintf_s(buf, "  - SkinnedMesh on [%s]\n", entry.pHolder->m_pstrFrameName);
+            sprintf_s(buf, "  - SkinnedMesh on [%s] with %zu bones\n",
+                entry.pHolder->m_pstrFrameName, entry.pMesh->m_vBoneNames.size());
+            OutputDebugStringA(buf);
+
+            // Check bone matching
+            int matched = 0;
+            for (const auto& boneName : entry.pMesh->m_vBoneNames)
+            {
+                if (m_mapBoneTransforms.find(boneName) != m_mapBoneTransforms.end())
+                    matched++;
+            }
+            sprintf_s(buf, "    Bone cache size: %zu, Matched bones: %d\n",
+                m_mapBoneTransforms.size(), matched);
             OutputDebugStringA(buf);
         }
         s_bCastLog = true;

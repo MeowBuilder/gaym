@@ -221,9 +221,14 @@ void ProjectileManager::CheckProjectileCollisions(Projectile& projectile)
             if (!pTransform) continue;
 
             XMFLOAT3 enemyPos = pTransform->GetPosition();
+            XMFLOAT3 enemyScale = pTransform->GetScale();
 
-            BoundingSphere enemySphere(enemyPos, 1.5f);
-            enemySphere.Center.y += 1.0f;
+            // Scale collision sphere based on enemy size
+            float maxScale = max(enemyScale.x, max(enemyScale.y, enemyScale.z));
+            float radius = max(1.5f, maxScale * 1.2f);
+
+            BoundingSphere enemySphere(enemyPos, radius);
+            enemySphere.Center.y += radius * 0.7f;
 
             if (projSphere.Intersects(enemySphere))
             {
@@ -308,8 +313,14 @@ void ProjectileManager::ApplyAoEDamage(Projectile& projectile, const XMFLOAT3& i
         if (!pTransform) continue;
 
         XMFLOAT3 enemyPos = pTransform->GetPosition();
-        BoundingSphere enemySphere(enemyPos, 1.5f);
-        enemySphere.Center.y += 1.0f;
+        XMFLOAT3 enemyScale = pTransform->GetScale();
+
+        // Scale collision sphere based on enemy size
+        float maxScale = max(enemyScale.x, max(enemyScale.y, enemyScale.z));
+        float radius = max(1.5f, maxScale * 1.2f);
+
+        BoundingSphere enemySphere(enemyPos, radius);
+        enemySphere.Center.y += radius * 0.7f;
 
         if (explosionSphere.Intersects(enemySphere))
         {
