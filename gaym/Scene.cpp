@@ -294,6 +294,96 @@ void Scene::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList)
     }
 
     // --------------------------------------------------------------------------
+    // Volcano 장식 메쉬 배치 (맵 외곽 배경용)
+    // --------------------------------------------------------------------------
+    {
+        struct VolcanoPlacement {
+            float x, y, z;
+            float scale;
+            float rotY;  // Y축 회전 (도)
+        };
+        // 맵 범위: X(-7~3), Z(-6~8), 중심 약 (-2, 1)
+        // 안전 거리: 최소 30 이상 떨어져야 타일 침범 안함
+        VolcanoPlacement placements[] = {
+            // ===== 랜드마크 대형 화산 (4방향 각 1개) =====
+            { -90.0f, -12.0f, 0.0f, 5500.0f, 15.0f },      // 우측 (X-)
+            { 80.0f, -12.0f, 0.0f, 5000.0f, -20.0f },      // 좌측 (X+)
+            { -2.0f, -12.0f, -90.0f, 5000.0f, 10.0f },     // 상단 (Z-, W방향)
+            { -2.0f, -12.0f, 110.0f, 4500.0f, -15.0f },    // 하단 (Z+, S방향)
+
+            // ===== 중형 화산 (각 방향 1-2개) =====
+            { -60.0f, -8.0f, -50.0f, 2000.0f, 25.0f },     // 우측 상단
+            { -60.0f, -8.0f, 60.0f, 1800.0f, -30.0f },     // 우측 하단
+            { 55.0f, -8.0f, -45.0f, 1800.0f, 35.0f },      // 좌측 상단
+            { 55.0f, -8.0f, 55.0f, 2000.0f, -10.0f },      // 좌측 하단
+
+            // ===== 중형 바위 (상단 - W방향) =====
+            { 30.0f, -6.0f, -60.0f, 1000.0f, 15.0f },
+            { -30.0f, -6.0f, -65.0f, 1100.0f, -20.0f },
+
+            // ===== 중형 바위 (하단 - S방향) =====
+            { 30.0f, -6.0f, 65.0f, 1000.0f, 40.0f },
+            { -35.0f, -6.0f, 70.0f, 1100.0f, -35.0f },
+
+            // ===== 중형 바위 (좌측) =====
+            { 50.0f, -6.0f, 15.0f, 900.0f, 50.0f },
+            { 50.0f, -6.0f, -25.0f, 950.0f, -25.0f },
+
+            // ===== 중형 바위 (우측) =====
+            { -50.0f, -6.0f, 25.0f, 900.0f, 30.0f },
+            { -50.0f, -6.0f, -30.0f, 950.0f, -45.0f },
+
+            // ===== 소형 바위 (상단 - W방향) =====
+            { 20.0f, -4.0f, -45.0f, 500.0f, 10.0f },
+            { -20.0f, -4.0f, -50.0f, 550.0f, -15.0f },
+            { 0.0f, -4.0f, -55.0f, 480.0f, 25.0f },
+
+            // ===== 소형 바위 (하단 - S방향) =====
+            { 20.0f, -4.0f, 50.0f, 500.0f, -20.0f },
+            { -20.0f, -4.0f, 55.0f, 550.0f, 35.0f },
+            { 0.0f, -4.0f, 60.0f, 480.0f, -30.0f },
+
+            // ===== 소형 바위 (좌측) =====
+            { 40.0f, -4.0f, 5.0f, 450.0f, 45.0f },
+            { 40.0f, -4.0f, -15.0f, 500.0f, -40.0f },
+
+            // ===== 소형 바위 (우측) =====
+            { -40.0f, -4.0f, 15.0f, 450.0f, 20.0f },
+            { -40.0f, -4.0f, -20.0f, 500.0f, -50.0f },
+        };
+
+        XMFLOAT4X4 identity;
+        XMStoreFloat4x4(&identity, XMMatrixIdentity());
+
+        for (const auto& placement : placements)
+        {
+            CRoom* pTempRoom = m_pCurrentRoom;
+            m_pCurrentRoom = nullptr;  // 글로벌 오브젝트로 생성
+
+            GameObject* pVolcano = MeshLoader::LoadGeometryFromFile(
+                this, pDevice, pCommandList, NULL,
+                "Assets/MapData/meshes/volcano/volcano.bin");
+
+            m_pCurrentRoom = pTempRoom;
+
+            if (pVolcano)
+            {
+                // matLocal을 identity로 리셋
+                pVolcano->GetTransform()->SetLocalMatrix(identity);
+
+                pVolcano->GetTransform()->SetPosition(placement.x, placement.y, placement.z);
+                pVolcano->GetTransform()->SetScale(placement.scale, placement.scale, placement.scale);
+                // X축 -90도로 세우고, Y축 회전 추가
+                pVolcano->GetTransform()->SetRotation(-90.0f, placement.rotY, 0.0f);
+
+                // 렌더 컴포넌트 추가
+                AddRenderComponentsToHierarchy(pDevice, pCommandList, pVolcano, m_vShaders[0].get(), false);
+            }
+        }
+        OutputDebugString(L"[Scene] Volcano decorations placed (22 objects + 1 giant)\n");
+    }
+
+    // --------------------------------------------------------------------------
     // 8. Initialize LavaGeyser Manager for current room (화염 맵 기믹)
     // --------------------------------------------------------------------------
     if (m_pCurrentRoom)

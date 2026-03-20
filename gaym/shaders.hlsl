@@ -181,13 +181,15 @@ float4 PS(PS_INPUT input) : SV_TARGET
     float3 normal = normalize(input.worldNormal);
     float3 vToCamera = normalize(g_CameraPosition - input.worldPosition); // Vector from fragment to camera
 
-    // UV animation for lava (temporarily disabled)
+    // UV animation for lava
     float2 uv = input.uv;
-    /*if (bIsLava)
+    if (bIsLava)
     {
-        // Simple one-direction scroll
-        uv = input.uv + float2(g_Time * 0.01f, 0.0f);
-    }*/
+        // Very slow flowing lava effect
+        float2 flow1 = float2(g_Time * 0.003f, g_Time * 0.002f);
+        float2 flow2 = float2(-g_Time * 0.002f, g_Time * 0.0025f);
+        uv = input.uv + flow1 + flow2 * 0.5f;
+    }
 
     float4 albedoColor;
     if (bHasTexture)
