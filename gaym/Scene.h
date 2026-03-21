@@ -112,6 +112,13 @@ public:
 
     void AllocateDescriptor(D3D12_CPU_DESCRIPTOR_HANDLE* pCpuHandle, D3D12_GPU_DESCRIPTOR_HANDLE* pGpuHandle)
     {
+        if (m_nNextDescriptorIndex >= 4096)
+        {
+            OutputDebugString(L"[Scene] ERROR: Descriptor heap overflow! Increase heap size.\n");
+            *pCpuHandle = m_pDescriptorHeap->GetCPUHandle(0);
+            *pGpuHandle = m_pDescriptorHeap->GetGPUHandle(0);
+            return;
+        }
         *pCpuHandle = m_pDescriptorHeap->GetCPUHandle(m_nNextDescriptorIndex);
         *pGpuHandle = m_pDescriptorHeap->GetGPUHandle(m_nNextDescriptorIndex);
         m_nNextDescriptorIndex++;
@@ -148,6 +155,8 @@ private:
     // Add map JSON paths here. TransitionToNextRoom picks one at random.
     std::vector<std::string> m_vMapPool;
     std::string              m_strCurrentMap;   // Path of the currently loaded map
+    std::string              m_strBossMap;       // Path of the boss room JSON (from rooms.json "bossRoom")
+    int                      m_nCurrentPoolIndex = 0; // Index into m_vMapPool for 9/0 nav
 
     void ReAddRenderComponentsToShader(GameObject* pGO);  // Traverse hierarchy
 
@@ -198,6 +207,7 @@ private:
     void CollectColliders(GameObject* pGameObject, std::vector<ColliderComponent*>& outColliders);
     void ProcessPendingDeletions();
     void UpdateRenderList();  // Update RenderComponent list for current frame
+    void TransitionToRoomByIndex(int index); // 9/0 키 직접 이동용
 public:
     D3D12_GPU_VIRTUAL_ADDRESS GetPassCBVAddress() const { if(m_pd3dcbPass) return m_pd3dcbPass->GetGPUVirtualAddress(); return 0; }
 };

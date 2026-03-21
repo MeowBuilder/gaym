@@ -83,7 +83,7 @@ public class EnemySpawnPoint : MonoBehaviour
 
     public Vector3 scale = Vector3.one;
 
-    public Color color = Color.red;
+    public Color color = Color.white;
 
     // ─────────────────────────────────────────
     //  애니메이션 클립 이름  (C++ EnemyAnimationConfig)

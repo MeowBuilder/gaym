@@ -30,6 +30,9 @@ public class MapExporter : EditorWindow
     bool m_exportNavMesh   = true;
     bool m_prettyPrint     = true;
 
+    // Room-per-file export
+    string m_roomsOutputDir = "Assets/MapData";
+
     Vector2 m_scrollPos;
     string  m_lastLog = "";
 
@@ -76,7 +79,7 @@ public class MapExporter : EditorWindow
         m_exportPlayer    = EditorGUILayout.Toggle("플레이어 스폰", m_exportPlayer);
         m_exportRooms     = EditorGUILayout.Toggle("방 구조 (Room 태그)", m_exportRooms);
         m_exportEnemies   = EditorGUILayout.Toggle("적 스폰 포인트", m_exportEnemies);
-        m_exportObstacles = EditorGUILayout.Toggle("장애물 콜라이더 (Obstacle 태그)", m_exportObstacles);
+        m_exportObstacles = EditorGUILayout.Toggle("조형물 포함 (Obstacle 태그, 충돌 없음)", m_exportObstacles);
 
         // 메시 익스포트 + 서브폴더 설정
         m_exportMeshes = EditorGUILayout.Toggle("맵 메시 OBJ (MapMesh 태그)", m_exportMeshes);
@@ -100,10 +103,33 @@ public class MapExporter : EditorWindow
         DrawSceneSummary();
         EditorGUILayout.Space(8);
 
-        // ── 익스포트 버튼 ──
+        // ── 단일 파일 익스포트 버튼 ──
         GUI.backgroundColor = new Color(0.3f, 0.7f, 0.4f);
-        if (GUILayout.Button("Export", GUILayout.Height(36)))
+        if (GUILayout.Button("Export (단일 map.json)", GUILayout.Height(32)))
             Export();
+        GUI.backgroundColor = Color.white;
+
+        EditorGUILayout.Space(6);
+
+        // ── 룸별 분리 익스포트 ──
+        EditorGUILayout.LabelField("룸별 분리 익스포트", EditorStyles.boldLabel);
+        EditorGUILayout.BeginHorizontal();
+        m_roomsOutputDir = EditorGUILayout.TextField("출력 폴더", m_roomsOutputDir);
+        if (GUILayout.Button("...", GUILayout.Width(30)))
+        {
+            string path = EditorUtility.SaveFolderPanel("룸 파일 저장 위치", "Assets/MapData", "");
+            if (!string.IsNullOrEmpty(path))
+                m_roomsOutputDir = "Assets" + path.Replace(Application.dataPath, "");
+        }
+        EditorGUILayout.EndHorizontal();
+        EditorGUILayout.HelpBox(
+            "Room 태그 오브젝트마다 별도 JSON 파일로 추출합니다.\n" +
+            "각 파일에는 해당 Room의 자식 MapMesh/Obstacle/EnemySpawnPoint가 포함됩니다.\n" +
+            "rooms.json 매니페스트를 생성해 C++ 프로젝트가 자동으로 인식합니다.",
+            MessageType.None);
+        GUI.backgroundColor = new Color(0.3f, 0.5f, 0.9f);
+        if (GUILayout.Button("Export Rooms (룸별 분리)", GUILayout.Height(36)))
+            ExportRooms();
         GUI.backgroundColor = Color.white;
 
         // ── 결과 로그 ──
@@ -197,7 +223,7 @@ public class MapExporter : EditorWindow
         if (m_exportPlayer)    AppendPlayerSpawn(sb);
         if (m_exportRooms)     AppendRooms(sb);
         if (m_exportEnemies)   AppendEnemySpawns(sb);
-        if (m_exportObstacles) AppendObstacles(sb);
+        // Obstacle 태그 오브젝트는 AppendMapObjects에서 "prop":true로 처리됨
         if (m_exportMeshes)    AppendMapObjects(sb, meshDir);
         if (m_exportNavMesh)   AppendNavMesh(sb);
 
@@ -334,8 +360,24 @@ public class MapExporter : EditorWindow
     /// </summary>
     void AppendMapObjects(StringBuilder sb, string meshOutputDir)
     {
-        var meshObjects = GameObject.FindGameObjectsWithTag("MapMesh");
-        if (meshObjects.Length == 0) return;
+        // MapMesh (충돌 포함) + Obstacle (prop: 렌더만, 충돌 없음)
+        var mapMeshGOs  = SafeFindWithTag("MapMesh");
+        var obstacleGOs = m_exportObstacles ? SafeFindWithTag("Obstacle") : new GameObject[0];
+
+        // 유효한 MeshFilter 오브젝트 목록 구성 (isProp 플래그 포함)
+        var meshObjects = new System.Collections.Generic.List<(GameObject go, bool isProp)>();
+        foreach (var go in mapMeshGOs)
+        {
+            var mf = go.GetComponent<MeshFilter>();
+            if (mf != null && mf.sharedMesh != null) meshObjects.Add((go, false));
+        }
+        foreach (var go in obstacleGOs)
+        {
+            var mf = go.GetComponent<MeshFilter>();
+            if (mf != null && mf.sharedMesh != null) meshObjects.Add((go, true));
+            else if (mf == null) Debug.LogWarning($"[MapExporter] Obstacle '{go.name}': MeshFilter 없음, 건너뜀");
+        }
+        if (meshObjects.Count == 0) return;
 
         Directory.CreateDirectory(meshOutputDir);
 
@@ -353,16 +395,10 @@ public class MapExporter : EditorWindow
         sb.AppendLine("  \"mapObjects\": [");
 
         int written = 0;
-        for (int i = 0; i < meshObjects.Length; i++)
+        for (int i = 0; i < meshObjects.Count; i++)
         {
-            var go = meshObjects[i];
+            var (go, isProp) = meshObjects[i];
             var mf = go.GetComponent<MeshFilter>();
-            if (mf == null || mf.sharedMesh == null)
-            {
-                Debug.LogWarning($"[MapExporter] {go.name}: MeshFilter 없음, 건너뜀");
-                continue;
-            }
-
             Mesh mesh   = mf.sharedMesh;
             int  meshID = mesh.GetInstanceID();
 
@@ -464,20 +500,290 @@ public class MapExporter : EditorWindow
             sb.AppendLine($"      \"color\": {Color32Json(matColor)},");
             sb.AppendLine($"      \"smoothness\": {matSmooth:F3},");
             sb.AppendLine($"      \"metallic\": {matMetallic:F3},");
-            sb.AppendLine($"      \"texture\": \"{EscapeJson(texJsonPath)}\""  );
-            // 다음 항목이 있는지 확인해 쉼표 추가
-            bool hasNext = false;
-            for (int j = i + 1; j < meshObjects.Length; j++)
+            // prop이면 "texture", 후 "prop": true가 마지막 필드
+            if (isProp)
             {
-                var nextMf = meshObjects[j].GetComponent<MeshFilter>();
-                if (nextMf != null && nextMf.sharedMesh != null) { hasNext = true; break; }
+                sb.AppendLine($"      \"texture\": \"{EscapeJson(texJsonPath)}\",");
+                sb.AppendLine($"      \"prop\": true");
             }
+            else
+            {
+                sb.AppendLine($"      \"texture\": \"{EscapeJson(texJsonPath)}\"");
+            }
+            bool hasNext = (i < meshObjects.Count - 1);
             sb.Append("    }");
             sb.AppendLine(hasNext ? "," : "");
             written++;
         }
 
         sb.AppendLine("  ],");
+    }
+
+    // ─────────────────────────────────────────
+    //  룸별 분리 익스포트
+    // ─────────────────────────────────────────
+
+    /// <summary>
+    /// Room 태그 오브젝트마다 별도 JSON 파일로 익스포트하고 rooms.json 매니페스트를 생성합니다.
+    /// 각 방 파일은 기존 map.json과 동일한 포맷이며 MapLoader가 그대로 로드할 수 있습니다.
+    /// </summary>
+    void ExportRooms()
+    {
+        string fullOutputDir = Path.Combine(Application.dataPath,
+            m_roomsOutputDir.StartsWith("Assets/") ? m_roomsOutputDir.Substring(7) : m_roomsOutputDir);
+        string meshDir = Path.Combine(fullOutputDir, m_meshSubfolder);
+        Directory.CreateDirectory(fullOutputDir);
+        Directory.CreateDirectory(meshDir);
+        Directory.CreateDirectory(Path.Combine(meshDir, "textures"));
+
+        var roomObjects = SafeFindWithTag("Room");
+        if (roomObjects.Length == 0)
+        {
+            m_lastLog = "Room 태그 오브젝트가 없습니다.";
+            Debug.LogWarning("[MapExporter] " + m_lastLog);
+            return;
+        }
+
+        // 메시/텍스처 익스포트 상태 공유 (중복 OBJ 방지)
+        var exportedMeshes   = new Dictionary<int, string>();
+        var nameCounter      = new Dictionary<string, int>();
+        var exportedTextures = new Dictionary<string, string>();
+
+        var roomJsonPaths = new System.Collections.Generic.List<string>();
+
+        for (int i = 0; i < roomObjects.Length; i++)
+        {
+            var roomGO   = roomObjects[i];
+            string safe  = SanitizeFileName(roomGO.name);
+            string fname = $"room_{safe}.json";
+            string fullPath = Path.Combine(fullOutputDir, fname);
+            string assetPath = "Assets" + fullPath.Replace(Application.dataPath, "").Replace('\\', '/');
+
+            ExportRoomFile(roomGO, fullPath, meshDir, exportedMeshes, nameCounter, exportedTextures);
+            roomJsonPaths.Add(assetPath);
+        }
+
+        // manifest: rooms.json
+        var msb = new StringBuilder();
+        msb.AppendLine("{");
+        msb.AppendLine("  \"rooms\": [");
+        for (int i = 0; i < roomJsonPaths.Count; i++)
+        {
+            msb.Append($"    \"{EscapeJson(roomJsonPaths[i])}\"");
+            msb.AppendLine(i < roomJsonPaths.Count - 1 ? "," : "");
+        }
+        msb.AppendLine("  ]");
+        msb.AppendLine("}");
+        File.WriteAllText(Path.Combine(fullOutputDir, "rooms.json"), msb.ToString(), Encoding.UTF8);
+
+        AssetDatabase.Refresh();
+        m_lastLog = $"룸 분리 완료: {roomObjects.Length}개 방\n폴더: {m_roomsOutputDir}";
+        Debug.Log($"[MapExporter] {m_lastLog}");
+    }
+
+    /// <summary>
+    /// 단일 Room 오브젝트를 standalone map.json 포맷으로 익스포트합니다.
+    /// 자식 중 MapMesh 태그 → mapObjects (충돌 포함)
+    /// 자식 중 Obstacle 태그 → mapObjects (prop: true, 렌더만)
+    /// 자식 EnemySpawnPoint 컴포넌트 → enemySpawns
+    /// </summary>
+    void ExportRoomFile(
+        GameObject roomGO, string roomJsonPath, string meshDir,
+        Dictionary<int, string> exportedMeshes,
+        Dictionary<string, int> nameCounter,
+        Dictionary<string, string> exportedTextures)
+    {
+        string texOutputDir = Path.Combine(meshDir, "textures");
+        var sb = new StringBuilder();
+        sb.AppendLine("{");
+
+        // Player spawn (자식 PlayerSpawnPoint 또는 방 중심)
+        Vector3 spawnPos = GetObjectBounds(roomGO).center;
+        var playerSpawnComp = roomGO.GetComponentInChildren<PlayerSpawnPoint>();
+        if (playerSpawnComp != null) spawnPos = playerSpawnComp.transform.position;
+
+        sb.AppendLine("  \"playerSpawn\": {");
+        sb.AppendLine($"    \"position\": {V3(spawnPos)},");
+        sb.AppendLine($"    \"rotationY\": 0");
+        sb.AppendLine("  },");
+
+        // 방 경계 (단일 Room 항목)
+        Bounds bounds = GetObjectBounds(roomGO);
+        sb.AppendLine("  \"rooms\": [");
+        sb.AppendLine("    {");
+        sb.AppendLine($"      \"id\": 0,");
+        sb.AppendLine($"      \"name\": \"{EscapeJson(roomGO.name)}\",");
+        sb.AppendLine($"      \"boundsMin\": {V3(bounds.min)},");
+        sb.AppendLine($"      \"boundsMax\": {V3(bounds.max)},");
+        sb.AppendLine($"      \"center\": {V3(bounds.center)}");
+        sb.AppendLine("    }");
+        sb.AppendLine("  ],");
+
+        // 적 스폰 (자식 EnemySpawnPoint)
+        var spawns = roomGO.GetComponentsInChildren<EnemySpawnPoint>();
+        sb.AppendLine("  \"enemySpawns\": [");
+        for (int j = 0; j < spawns.Length; j++)
+        {
+            WriteEnemySpawnEntry(sb, spawns[j], "    ");
+            sb.AppendLine(j < spawns.Length - 1 ? "," : "");
+        }
+        sb.AppendLine("  ],");
+
+        sb.AppendLine("  \"obstacles\": [],");
+
+        // 맵 오브젝트 (자식 MapMesh + Obstacle 태그)
+        var allObjects = new System.Collections.Generic.List<(GameObject go, bool isProp)>();
+        foreach (Transform t in roomGO.GetComponentsInChildren<Transform>(true))
+        {
+            if (t == roomGO.transform) continue;
+            var mf = t.GetComponent<MeshFilter>();
+            if (mf == null || mf.sharedMesh == null) continue;
+            if (t.CompareTag("MapMesh"))  allObjects.Add((t.gameObject, false));
+            else if (t.CompareTag("Obstacle")) allObjects.Add((t.gameObject, true));
+        }
+
+        sb.AppendLine("  \"mapObjects\": [");
+        for (int k = 0; k < allObjects.Count; k++)
+        {
+            var (go, isProp) = allObjects[k];
+            WriteMapObjectEntry(sb, go, isProp, meshDir, texOutputDir,
+                                exportedMeshes, nameCounter, exportedTextures);
+            sb.AppendLine(k < allObjects.Count - 1 ? "," : "");
+        }
+        sb.AppendLine("  ]");
+        sb.Append("}");
+
+        File.WriteAllText(roomJsonPath, sb.ToString(), Encoding.UTF8);
+        Debug.Log($"[MapExporter] 방 파일 저장: {Path.GetFileName(roomJsonPath)} " +
+                  $"({allObjects.Count} 오브젝트, {spawns.Length} 스폰)");
+    }
+
+    void WriteEnemySpawnEntry(StringBuilder sb, EnemySpawnPoint sp, string indent)
+    {
+        sb.AppendLine($"{indent}{{");
+        sb.AppendLine($"{indent}  \"presetName\": \"{EscapeJson(sp.presetName)}\",");
+        sb.AppendLine($"{indent}  \"count\": {sp.count},");
+        sb.AppendLine($"{indent}  \"activationDelay\": {sp.activationDelay:F2},");
+        sb.AppendLine($"{indent}  \"position\": {V3(sp.transform.position)},");
+        sb.AppendLine($"{indent}  \"rotationY\": {sp.transform.eulerAngles.y:F2},");
+        sb.AppendLine($"{indent}  \"stats\": {{");
+        sb.AppendLine($"{indent}    \"maxHP\": {sp.maxHP:F1},");
+        sb.AppendLine($"{indent}    \"moveSpeed\": {sp.moveSpeed:F2},");
+        sb.AppendLine($"{indent}    \"attackRange\": {sp.attackRange:F2},");
+        sb.AppendLine($"{indent}    \"attackCooldown\": {sp.attackCooldown:F2},");
+        sb.AppendLine($"{indent}    \"detectionRange\": {sp.detectionRange:F2}");
+        sb.AppendLine($"{indent}  }},");
+        sb.AppendLine($"{indent}  \"attackType\": \"{sp.attackType}\",");
+        sb.AppendLine($"{indent}  \"indicator\": {{");
+        sb.AppendLine($"{indent}    \"type\": \"{sp.indicatorType}\",");
+        sb.AppendLine($"{indent}    \"rushDistance\": {sp.rushDistance:F2},");
+        sb.AppendLine($"{indent}    \"hitRadius\": {sp.hitRadius:F2},");
+        sb.AppendLine($"{indent}    \"coneAngle\": {sp.coneAngle:F2}");
+        sb.AppendLine($"{indent}  }},");
+        sb.AppendLine($"{indent}  \"visual\": {{");
+        sb.AppendLine($"{indent}    \"meshPath\": \"{EscapeJson(sp.meshPath)}\",");
+        sb.AppendLine($"{indent}    \"animationPath\": \"{EscapeJson(sp.animationPath)}\",");
+        sb.AppendLine($"{indent}    \"scale\": {V3S(sp.scale)},");
+        sb.AppendLine($"{indent}    \"color\": {Color32Json(sp.color)}");
+        sb.AppendLine($"{indent}  }},");
+        sb.AppendLine($"{indent}  \"animClips\": {{");
+        sb.AppendLine($"{indent}    \"idle\": \"{EscapeJson(sp.clipIdle)}\",");
+        sb.AppendLine($"{indent}    \"chase\": \"{EscapeJson(sp.clipChase)}\",");
+        sb.AppendLine($"{indent}    \"attack\": \"{EscapeJson(sp.clipAttack)}\",");
+        sb.AppendLine($"{indent}    \"stagger\": \"{EscapeJson(sp.clipStagger)}\",");
+        sb.AppendLine($"{indent}    \"death\": \"{EscapeJson(sp.clipDeath)}\"");
+        sb.AppendLine($"{indent}  }}");
+        sb.Append($"{indent}}}");
+    }
+
+    void WriteMapObjectEntry(
+        StringBuilder sb, GameObject go, bool isProp,
+        string meshDir, string texOutputDir,
+        Dictionary<int, string> exportedMeshes,
+        Dictionary<string, int> nameCounter,
+        Dictionary<string, string> exportedTextures)
+    {
+        var mf     = go.GetComponent<MeshFilter>();
+        Mesh mesh  = mf.sharedMesh;
+        int meshID = mesh.GetInstanceID();
+
+        if (!exportedMeshes.TryGetValue(meshID, out string meshFileName))
+        {
+            string baseName = SanitizeFileName(string.IsNullOrEmpty(mesh.name) ? "mesh" : mesh.name);
+            if (nameCounter.TryGetValue(baseName, out int cnt))
+            {
+                nameCounter[baseName] = cnt + 1;
+                baseName = $"{baseName}_{cnt}";
+            }
+            else nameCounter[baseName] = 1;
+            meshFileName = baseName + ".obj";
+            ExportOBJ(mesh, Path.Combine(meshDir, meshFileName));
+            exportedMeshes[meshID] = meshFileName;
+        }
+
+        Color  matColor    = Color.white;
+        float  matSmooth   = 0.5f;
+        float  matMetallic = 0.0f;
+        string texJsonPath = "";
+
+        var rend = go.GetComponent<Renderer>();
+        if (rend != null && rend.sharedMaterial != null)
+        {
+            var mat = rend.sharedMaterial;
+            if      (mat.HasProperty("_BaseColor")) matColor = mat.GetColor("_BaseColor");
+            else if (mat.HasProperty("_Color"))     matColor = mat.GetColor("_Color");
+            if      (mat.HasProperty("_Smoothness"))  matSmooth   = mat.GetFloat("_Smoothness");
+            else if (mat.HasProperty("_Glossiness"))  matSmooth   = mat.GetFloat("_Glossiness");
+            if      (mat.HasProperty("_Metallic"))    matMetallic = mat.GetFloat("_Metallic");
+
+            Texture2D albedo = null;
+            if      (mat.HasProperty("_BaseMap")) albedo = mat.GetTexture("_BaseMap") as Texture2D;
+            else if (mat.HasProperty("_MainTex")) albedo = mat.GetTexture("_MainTex") as Texture2D;
+
+            if (albedo != null)
+            {
+                string assetPath = AssetDatabase.GetAssetPath(albedo);
+                if (!string.IsNullOrEmpty(assetPath))
+                {
+                    if (!exportedTextures.TryGetValue(assetPath, out string texFileName))
+                    {
+                        string srcExt      = Path.GetExtension(assetPath).ToLower();
+                        bool   needConvert = (srcExt == ".tga" || srcExt == ".psd" || srcExt == ".exr" || srcExt == ".hdr");
+                        string texBaseName = Path.GetFileNameWithoutExtension(assetPath);
+                        string destExt     = needConvert ? ".png" : srcExt;
+                        texFileName        = texBaseName + destExt;
+                        string destPath    = Path.Combine(texOutputDir, texFileName);
+                        if (!File.Exists(destPath))
+                        {
+                            if (needConvert) { var r = MakeTextureReadable(albedo); File.WriteAllBytes(destPath, r.EncodeToPNG()); }
+                            else { string srcFull = Path.Combine(Path.GetDirectoryName(Application.dataPath), assetPath); File.Copy(srcFull, destPath, true); }
+                        }
+                        exportedTextures[assetPath] = texFileName;
+                    }
+                    texJsonPath = $"{m_meshSubfolder}/textures/{texFileName}";
+                }
+            }
+        }
+
+        sb.AppendLine($"    {{");
+        sb.AppendLine($"      \"name\": \"{EscapeJson(go.name)}\",");
+        sb.AppendLine($"      \"meshFile\": \"{m_meshSubfolder}/{meshFileName}\",");
+        sb.AppendLine($"      \"position\": {V3(go.transform.position)},");
+        sb.AppendLine($"      \"rotation\": {Quat(go.transform.rotation)},");
+        sb.AppendLine($"      \"scale\": {V3S(go.transform.lossyScale)},");
+        sb.AppendLine($"      \"color\": {Color32Json(matColor)},");
+        sb.AppendLine($"      \"smoothness\": {matSmooth:F3},");
+        sb.AppendLine($"      \"metallic\": {matMetallic:F3},");
+        if (isProp)
+        {
+            sb.AppendLine($"      \"texture\": \"{EscapeJson(texJsonPath)}\",");
+            sb.AppendLine($"      \"prop\": true");
+        }
+        else
+        {
+            sb.AppendLine($"      \"texture\": \"{EscapeJson(texJsonPath)}\"");
+        }
+        sb.Append($"    }}");
     }
 
     void AppendNavMesh(StringBuilder sb)

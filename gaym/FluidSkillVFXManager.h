@@ -23,7 +23,7 @@ struct FluidVFXSlot {
 class FluidSkillVFXManager
 {
 public:
-    static constexpr int MAX_EFFECTS = 8;
+    static constexpr int MAX_EFFECTS = 32;
 
     void Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList,
               CDescriptorHeap* pDescriptorHeap, UINT nStartDescIndex);

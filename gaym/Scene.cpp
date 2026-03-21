@@ -19,6 +19,7 @@
 #include "MathUtils.h"
 #include "LavaGeyserManager.h"
 #include <functional> // Added for std::function
+#include "MapLoader.h"
 
 Scene::Scene()
 {
@@ -46,7 +47,7 @@ void Scene::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList)
 {
     // Create Descriptor Heap
     m_pDescriptorHeap = std::make_unique<CDescriptorHeap>();
-    m_pDescriptorHeap->Create(pDevice, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 2048, true);
+    m_pDescriptorHeap->Create(pDevice, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 4096, true);
 
     // Create Pass Constant Buffer
     UINT nConstantBufferSize = (sizeof(PassConstants) + 255) & ~255;
@@ -256,9 +257,22 @@ void Scene::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList)
     // --------------------------------------------------------------------------
     // Map pool – 여기에 맵 JSON 경로를 추가하세요
     // --------------------------------------------------------------------------
-    m_vMapPool.push_back("Assets/MapData/map.json");
-    // m_vMapPool.push_back("Assets/MapData/map2.json");
-    // m_vMapPool.push_back("Assets/MapData/map3.json");
+    // rooms.json manifest가 있으면 그 목록을 pool로 사용, 없으면 map.json 폴백
+    {
+        JsonVal manifest = JsonVal::parseFile("Assets/MapData/rooms.json");
+        if (!manifest.isNull() && manifest.has("rooms"))
+        {
+            const JsonVal& roomFiles = manifest["rooms"];
+            for (size_t i = 0; i < roomFiles.size(); i++)
+                m_vMapPool.push_back(roomFiles[i].str);
+        }
+        if (!manifest.isNull() && manifest.has("bossRoom"))
+            m_strBossMap = manifest["bossRoom"].str;
+        if (m_vMapPool.empty())
+            m_vMapPool.push_back("Assets/MapData/map.json");
+        if (m_strBossMap.empty())
+            m_strBossMap = "Assets/MapData/map.json";
+    }
 
     // --------------------------------------------------------------------------
     // Load map from JSON (recyclable slots from m_nPersistentDescriptorEnd onward)
@@ -461,6 +475,16 @@ void Scene::Update(float deltaTime, InputSystem* pInputSystem)
     {
         OutputDebugString(L"[Scene] Boss test key pressed - entering boss room!\n");
         TransitionToBossRoom();
+    }
+
+    // 0 키: 다음 방 / 9 키: 이전 방 (개발용 직접 이동)
+    if (pInputSystem && !m_vMapPool.empty())
+    {
+        int poolSize = (int)m_vMapPool.size();
+        if (pInputSystem->IsKeyPressed('0'))
+            TransitionToRoomByIndex((m_nCurrentPoolIndex + 1) % poolSize);
+        else if (pInputSystem->IsKeyPressed('9'))
+            TransitionToRoomByIndex((m_nCurrentPoolIndex - 1 + poolSize) % poolSize);
     }
 
     // Update camera
@@ -825,10 +849,17 @@ GameObject* Scene::CreateGameObject(ID3D12Device* pDevice, ID3D12GraphicsCommand
     if (cacheIt != m_vCBCache.end())
     {
         // 같은 슬롯 번호에 이미 생성된 리소스 재사용
-        // CBV는 힙에 그대로 → CreateConstantBufferView 불필요
         ObjectConstants* pMapped = nullptr;
         cacheIt->second->Map(0, nullptr, (void**)&pMapped);
         newGameObject->ReuseConstantBuffer(cacheIt->second, pMapped);
+
+        // 다른 방 방문 시 AllocateDescriptor(SRV)가 이 슬롯을 덮어썼을 수 있으므로
+        // CBV 뷰를 항상 재생성하여 슬롯 타입 충돌 버그를 방지
+        UINT nCBSize = (sizeof(ObjectConstants) + 255) & ~255;
+        D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc;
+        cbvDesc.BufferLocation = cacheIt->second->GetGPUVirtualAddress();
+        cbvDesc.SizeInBytes    = nCBSize;
+        pDevice->CreateConstantBufferView(&cbvDesc, m_pDescriptorHeap->GetCPUHandle(slot));
     }
     else
     {
@@ -1159,10 +1190,10 @@ void Scene::TransitionToNextRoom()
 
     m_nRoomCount++;
 
-    // 4스테이지 클리어 후 보스전 진입
-    if (m_nRoomCount >= 4)
+    // 5스테이지 클리어 후 보스전 진입
+    if (m_nRoomCount >= 5)
     {
-        OutputDebugString(L"[Scene] 4 stages cleared - entering boss room!\n");
+        OutputDebugString(L"[Scene] 5 stages cleared - entering boss room!\n");
         TransitionToBossRoom();
         return;
     }
@@ -1273,6 +1304,80 @@ void Scene::TransitionToNextRoom()
     OutputDebugString(buffer);
 }
 
+void Scene::TransitionToRoomByIndex(int index)
+{
+    if (m_vMapPool.empty()) return;
+
+    int poolSize = (int)m_vMapPool.size();
+    index = ((index % poolSize) + poolSize) % poolSize; // 안전한 wrapping
+    m_nCurrentPoolIndex = index;
+
+    wchar_t dbg[128];
+    swprintf_s(dbg, L"[Scene] Dev nav → room index %d: %hs\n", index, m_vMapPool[index].c_str());
+    OutputDebugString(dbg);
+
+    // ── 공통 정리 단계 (TransitionToNextRoom과 동일)
+    m_vShaders[0]->ClearRenderComponents();
+    ProcessPendingDeletions();
+
+    m_vRooms.clear();
+    m_pCurrentRoom = nullptr;
+
+    m_nNextDescriptorIndex = m_nPersistentDescriptorEnd;
+
+    if (m_pInteractionCube)
+    {
+        auto* pInteractable = m_pInteractionCube->GetComponent<InteractableComponent>();
+        if (pInteractable) pInteractable->SetActive(true);
+        m_bInteractionCubeActive = true;
+    }
+
+    for (auto& pGO : m_vGameObjects)
+        ReAddRenderComponentsToShader(pGO.get());
+
+    // ── 지정 인덱스 맵 로드
+    m_strCurrentMap = m_vMapPool[index];
+
+    ID3D12Device*              pDevice      = Dx12App::GetInstance()->GetDevice();
+    ID3D12GraphicsCommandList* pCommandList = Dx12App::GetInstance()->GetCommandList();
+
+    bool bLoaded = MapLoader::LoadIntoScene(
+        m_strCurrentMap.c_str(), this, pDevice, pCommandList, m_vShaders[0].get());
+
+    if (!bLoaded)
+    {
+        OutputDebugString(L"[Scene] TransitionToRoomByIndex: map load failed\n");
+        return;
+    }
+
+    if (m_pCurrentRoom)
+    {
+        for (const auto& pGO : m_pCurrentRoom->GetGameObjects())
+            pGO->Update(0.0f);
+
+        UINT nGeyserDescStart = m_nNextDescriptorIndex;
+        m_nNextDescriptorIndex += 1;
+        m_pCurrentRoom->InitLavaGeyserManager(
+            pDevice, pCommandList, m_vShaders[0].get(),
+            m_pDescriptorHeap.get(), nGeyserDescStart);
+
+        m_pCurrentRoom->SetState(RoomState::Active);
+    }
+
+    if (m_pInteractionCube)
+    {
+        auto* pInteractable = m_pInteractionCube->GetComponent<InteractableComponent>();
+        if (pInteractable) pInteractable->Hide();
+        m_bInteractionCubeActive = false;
+    }
+
+    if (m_pPlayerGameObject)
+    {
+        auto* pPC = m_pPlayerGameObject->GetComponent<PlayerComponent>();
+        if (pPC) pPC->ResetGroundY();
+    }
+}
+
 void Scene::TransitionToBossRoom()
 {
     OutputDebugString(L"[Scene] ========== BOSS ROOM ==========\n");
@@ -1296,8 +1401,7 @@ void Scene::TransitionToBossRoom()
     ID3D12Device*               pDevice      = Dx12App::GetInstance()->GetDevice();
     ID3D12GraphicsCommandList*  pCommandList = Dx12App::GetInstance()->GetCommandList();
 
-    // 맵 풀에서 첫 번째 맵 사용 (보스 전용 맵이 있다면 별도 경로 지정 가능)
-    m_strCurrentMap = m_vMapPool.empty() ? "Assets/MapData/map.json" : m_vMapPool[0];
+    m_strCurrentMap = m_strBossMap;
 
     bool bLoaded = MapLoader::LoadIntoScene(
         m_strCurrentMap.c_str(), this, pDevice, pCommandList, m_vShaders[0].get());

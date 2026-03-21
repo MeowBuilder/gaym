@@ -1,0 +1,7 @@
+{
+  "rooms": [
+    "Assets/MapData/room_Room1.json",
+    "Assets/MapData/room_Room2.json"
+  ],
+  "bossRoom": "Assets/MapData/room_Boss_Room.json"
+}

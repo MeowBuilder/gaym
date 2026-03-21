@@ -497,8 +497,11 @@ bool MapLoader::LoadIntoScene(
         if (worldExtY > maxWorldExt) maxWorldExt = worldExtY;
         if (worldExtZ > maxWorldExt) maxWorldExt = worldExtZ;
 
+        // Props ("prop": true) are render-only – no collision
+        bool isProp = mo.has("prop") && mo["prop"].b;
+
         // Skip tiny objects (decorations, grass blades, pebbles)
-        if (maxWorldExt > 0.3f) {
+        if (!isProp && maxWorldExt > 0.3f) {
             // Skip horizontal surfaces (floors, ceilings) – they cause the player to
             // be flung sideways when the push-back MTV picks the smaller XZ axis.
             // A mesh is "horizontal" if its world Y-extent is much smaller than XZ.
@@ -511,7 +514,7 @@ bool MapLoader::LoadIntoScene(
             pCol->SetLayer(CollisionLayer::Wall);
             pCol->SetCollisionMask(CollisionMask::Wall);
             } // !isHorizontal
-        } // maxWorldExt > 0.3f
+        } // !isProp && maxWorldExt > 0.3f
     }
 
     // ── 4. Obstacles (collision only) ────────────────────────────────────────
