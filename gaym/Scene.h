@@ -75,6 +75,7 @@ public:
     FluidParticleSystem* GetFluidParticleSystem() { return m_pFluidParticleSystem.get(); }
     FluidSkillVFXManager* GetFluidVFXManager() { return m_pFluidVFXManager.get(); }
     GameObject* GetPlayer() const { return m_pPlayerGameObject; }
+    Shader* GetDefaultShader() const { return m_vShaders.empty() ? nullptr : m_vShaders[0].get(); }
 
     // Interaction system
     bool IsNearInteractionCube() const;

@@ -6,6 +6,7 @@
 #include "SkillData.h"
 #include "DropItemComponent.h"
 #include "PlayerComponent.h"
+#include "TransformComponent.h"
 #include <DescriptorHeap.h>  // DirectXTK12
 #include <sstream>
 #include <iomanip>
@@ -64,11 +65,22 @@ void Dx12App::OnCreate(HINSTANCE hInstance, HWND hMainWnd)
     // 텍스트 렌더링 초기화
     InitializeText();
 
+    // 네트워크 초기화
+    InitializeNetwork();
+
     m_GameTimer.Reset();
 }
 
 void Dx12App::OnDestroy()
 {
+    // 네트워크 정리
+    if (m_pNetworkManager)
+    {
+        m_pNetworkManager->Shutdown();
+        delete m_pNetworkManager;
+        m_pNetworkManager = nullptr;
+    }
+
     WaitForGpuComplete();
     if (m_pdxgiSwapChain)
     {
@@ -329,10 +341,20 @@ void Dx12App::FrameAdvance()
 {
     m_GameTimer.Tick();
 
+    // 네트워크 업데이트 (GPU 대기 전에 수행)
+    float deltaTime = m_GameTimer.GetTimeElapsed();
+    UpdateNetwork(deltaTime);
+
     WaitForGpuComplete();
 
     CHECK_HR(m_pd3dCommandAllocator->Reset());
     CHECK_HR(m_pd3dCommandList->Reset(m_pd3dCommandAllocator.Get(), NULL));
+
+    // 네트워크 명령 처리 (메인 스레드에서 GameObject 생성/삭제)
+    if (m_pNetworkManager)
+    {
+        m_pNetworkManager->Update(m_pScene.get(), m_pd3dDevice.Get(), m_pd3dCommandList.Get());
+    }
 
     // Update scene first (calculates light matrices)
     m_pScene->Update(m_GameTimer.GetTimeElapsed(), &m_inputSystem);
@@ -1135,4 +1157,67 @@ void Dx12App::RenderText()
     }
 
     m_spriteBatch->End();
+}
+
+void Dx12App::InitializeNetwork()
+{
+    // NetworkManager 초기화
+    m_pNetworkManager = NetworkManager::GetInstance();
+
+    if (!m_pNetworkManager->Initialize())
+    {
+        OutputDebugString(L"[Network] Failed to initialize NetworkManager\n");
+        return;
+    }
+
+    // 서버에 연결 (127.0.0.1:7777)
+    if (!m_pNetworkManager->Connect(L"127.0.0.1", 7777))
+    {
+        OutputDebugString(L"[Network] Failed to connect to server\n");
+        // 연결 실패해도 게임은 계속 진행 (싱글 플레이)
+    }
+    else
+    {
+        OutputDebugString(L"[Network] Connecting to server...\n");
+    }
+}
+
+void Dx12App::UpdateNetwork(float deltaTime)
+{
+    if (!m_pNetworkManager || !m_pNetworkManager->IsConnected())
+        return;
+
+    // 이동 패킷 전송 간격 체크
+    m_fNetworkSendTimer += deltaTime;
+    if (m_fNetworkSendTimer < m_fNetworkSendInterval)
+        return;
+
+    m_fNetworkSendTimer = 0.0f;
+
+    // 로컬 플레이어 위치 가져오기
+    if (!m_pScene)
+        return;
+
+    GameObject* pPlayer = m_pScene->GetPlayer();
+    if (!pPlayer)
+        return;
+
+    TransformComponent* pTransform = pPlayer->GetTransform();
+    if (!pTransform)
+        return;
+
+    const XMFLOAT3& currentPos = pTransform->GetPosition();
+
+    // 위치가 변경되었는지 확인 (오차 범위 0.01)
+    float dx = currentPos.x - m_lastSentPosition.x;
+    float dy = currentPos.y - m_lastSentPosition.y;
+    float dz = currentPos.z - m_lastSentPosition.z;
+    float distSq = dx * dx + dy * dy + dz * dz;
+
+    if (distSq > 0.0001f)  // 0.01 squared
+    {
+        // 위치 전송
+        m_pNetworkManager->SendMove(currentPos.x, currentPos.y, currentPos.z);
+        m_lastSentPosition = currentPos;
+    }
 }

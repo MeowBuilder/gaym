@@ -3,6 +3,7 @@
 #include "Scene.h"
 #include "InputSystem.h" // Added InputSystem include
 #include "HealthBarUI.h"
+#include "NetworkManager.h" // Added NetworkManager include
 #include <memory>
 
 // DirectXTK12 for text rendering
@@ -101,6 +102,14 @@ private:
     // Health Bar UI
     std::unique_ptr<HealthBarUI> m_pHealthBarUI;
 
+    // Network Manager
+    NetworkManager* m_pNetworkManager = nullptr;
+    XMFLOAT3 m_lastSentPosition = { 0.0f, 0.0f, 0.0f };
+    float m_fNetworkSendInterval = 0.05f;  // 50ms (20 packets/sec)
+    float m_fNetworkSendTimer = 0.0f;
+
     void InitializeText();
+    void InitializeNetwork();
     void RenderText();
+    void UpdateNetwork(float deltaTime);
 };

@@ -77,10 +77,12 @@
     <IncludePath>$(ProjectDir)ServerCore;$(ProjectDir)Libraries\Include;$(ProjectDir)Protocol;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <IncludePath>$(ProjectDir)ServerCore;$(ProjectDir)Libraries\Include;$(ProjectDir)Protocol;$(IncludePath)</IncludePath>
+    <IncludePath>C:\Users\khj16\Downloads\vcpkg\installed\x64-windows\include;$(ProjectDir)ServerCore;$(ProjectDir)Protocol;$(IncludePath)</IncludePath>
+    <LibraryPath>C:\Users\khj16\Downloads\vcpkg\installed\x64-windows\debug\lib;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <IncludePath>$(ProjectDir)ServerCore;$(ProjectDir)Libraries\Include;$(ProjectDir)Protocol;$(IncludePath)</IncludePath>
+    <IncludePath>C:\Users\khj16\Downloads\vcpkg\installed\x64-windows\include;$(ProjectDir)ServerCore;$(ProjectDir)Protocol;$(IncludePath)</IncludePath>
+    <LibraryPath>C:\Users\khj16\Downloads\vcpkg\installed\x64-windows\lib;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -131,11 +133,12 @@
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>ws2_32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>libprotobufd.lib;abseil_dll.lib;utf8_range.lib;ws2_32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
       <Command>xcopy /Y /I "$(ProjectDir)Fonts\*.*" "$(OutDir)Fonts\"
-xcopy /Y /I /E "$(ProjectDir)Assets\*.*" "$(OutDir)Assets\"</Command>
+xcopy /Y /I /E "$(ProjectDir)Assets\*.*" "$(OutDir)Assets\"
+xcopy /Y "C:\Users\khj16\Downloads\vcpkg\installed\x64-windows\debug\bin\*.dll" "$(OutDir)"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -157,11 +160,12 @@ xcopy /Y /I /E "$(ProjectDir)Assets\*.*" "$(OutDir)Assets\"</Command>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>ws2_32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>libprotobuf.lib;abseil_dll.lib;utf8_range.lib;ws2_32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
       <Command>xcopy /Y /I "$(ProjectDir)Fonts\*.*" "$(OutDir)Fonts\"
-xcopy /Y /I /E "$(ProjectDir)Assets\*.*" "$(OutDir)Assets\"</Command>
+xcopy /Y /I /E "$(ProjectDir)Assets\*.*" "$(OutDir)Assets\"
+xcopy /Y "C:\Users\khj16\Downloads\vcpkg\installed\x64-windows\bin\*.dll" "$(OutDir)"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
@@ -261,6 +265,7 @@ xcopy /Y /I /E "$(ProjectDir)Assets\*.*" "$(OutDir)Assets\"</Command>
     <ClInclude Include="Protocol\Protocol.pb.h" />
     <ClInclude Include="Protocol\Struct.pb.h" />
     <ClInclude Include="Protocol\ServerPacketHandler.h" />
+    <ClInclude Include="NetworkManager.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Animation.cpp" />
@@ -360,6 +365,7 @@ xcopy /Y /I /E "$(ProjectDir)Assets\*.*" "$(OutDir)Assets\"</Command>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="Protocol\ServerPacketHandler.cpp" />
+    <ClCompile Include="NetworkManager.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="gaym.rc" />
