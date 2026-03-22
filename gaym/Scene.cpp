@@ -308,62 +308,65 @@ void Scene::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList)
     }
 
     // --------------------------------------------------------------------------
-    // Volcano 장식 메쉬 배치 (맵 외곽 배경용)
+    // 용암 바닥 배치 (타일 아래에 큰 평면 하나)
+    // --------------------------------------------------------------------------
+    {
+        CRoom* pTempRoom = m_pCurrentRoom;
+        m_pCurrentRoom = nullptr;
+
+        GameObject* pLavaPlane = CreateGameObject(pDevice, pCommandList);
+        m_pCurrentRoom = pTempRoom;
+
+        if (pLavaPlane)
+        {
+            // 하나의 큰 평면 메쉬 (타일 아래 전체를 덮음)
+            CubeMesh* pPlaneMesh = new CubeMesh(pDevice, pCommandList, 1.0f, 0.1f, 1.0f);
+            pLavaPlane->SetMesh(pPlaneMesh);
+
+            // 타일보다 약간 아래에 배치, 맵 전체를 넓게 덮음
+            pLavaPlane->GetTransform()->SetPosition(0.0f, -3.5f, 0.0f);
+            pLavaPlane->GetTransform()->SetScale(300.0f, 1.0f, 350.0f);
+
+            pLavaPlane->SetLava(true);
+
+            // 용암 머티리얼 (텍스쳐 원본 색상 유지)
+            MATERIAL lavaMat;
+            lavaMat.m_cAmbient  = XMFLOAT4(0.25f, 0.25f, 0.25f, 1.0f);
+            lavaMat.m_cDiffuse  = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
+            lavaMat.m_cSpecular = XMFLOAT4(0.85f, 0.85f, 0.85f, 8.0f);  // smoothness 0.85
+            lavaMat.m_cEmissive = XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f);
+            pLavaPlane->SetMaterial(lavaMat);
+
+            // 텍스쳐 로드
+            pLavaPlane->SetTextureName("Assets/MapData/meshes/textures/lava-texture.png");
+            D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle;
+            D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle;
+            AllocateDescriptor(&cpuHandle, &gpuHandle);
+            pLavaPlane->LoadTexture(pDevice, pCommandList, cpuHandle);
+            pLavaPlane->SetSrvGpuDescriptorHandle(gpuHandle);
+
+            auto* pRC = pLavaPlane->AddComponent<RenderComponent>();
+            pRC->SetMesh(pPlaneMesh);
+            pRC->SetCastsShadow(false);
+            m_vShaders[0]->AddRenderComponent(pRC);
+        }
+        OutputDebugString(L"[Scene] Lava floor plane placed under tiles\n");
+    }
+
+    // --------------------------------------------------------------------------
+    // Volcano 장식 메쉬 배치 (맵 외곽 배경용) - 개수 축소
     // --------------------------------------------------------------------------
     {
         struct VolcanoPlacement {
             float x, y, z;
             float scale;
-            float rotY;  // Y축 회전 (도)
+            float rotY;
         };
-        // 맵 범위: X(-7~3), Z(-6~8), 중심 약 (-2, 1)
-        // 안전 거리: 최소 30 이상 떨어져야 타일 침범 안함
+        // 대형 화산 3개 (상단 2개 + 하단 1개)
         VolcanoPlacement placements[] = {
-            // ===== 랜드마크 대형 화산 (4방향 각 1개) =====
-            { -90.0f, -12.0f, 0.0f, 5500.0f, 15.0f },      // 우측 (X-)
-            { 80.0f, -12.0f, 0.0f, 5000.0f, -20.0f },      // 좌측 (X+)
-            { -2.0f, -12.0f, -90.0f, 5000.0f, 10.0f },     // 상단 (Z-, W방향)
-            { -2.0f, -12.0f, 110.0f, 4500.0f, -15.0f },    // 하단 (Z+, S방향)
-
-            // ===== 중형 화산 (각 방향 1-2개) =====
-            { -60.0f, -8.0f, -50.0f, 2000.0f, 25.0f },     // 우측 상단
-            { -60.0f, -8.0f, 60.0f, 1800.0f, -30.0f },     // 우측 하단
-            { 55.0f, -8.0f, -45.0f, 1800.0f, 35.0f },      // 좌측 상단
-            { 55.0f, -8.0f, 55.0f, 2000.0f, -10.0f },      // 좌측 하단
-
-            // ===== 중형 바위 (상단 - W방향) =====
-            { 30.0f, -6.0f, -60.0f, 1000.0f, 15.0f },
-            { -30.0f, -6.0f, -65.0f, 1100.0f, -20.0f },
-
-            // ===== 중형 바위 (하단 - S방향) =====
-            { 30.0f, -6.0f, 65.0f, 1000.0f, 40.0f },
-            { -35.0f, -6.0f, 70.0f, 1100.0f, -35.0f },
-
-            // ===== 중형 바위 (좌측) =====
-            { 50.0f, -6.0f, 15.0f, 900.0f, 50.0f },
-            { 50.0f, -6.0f, -25.0f, 950.0f, -25.0f },
-
-            // ===== 중형 바위 (우측) =====
-            { -50.0f, -6.0f, 25.0f, 900.0f, 30.0f },
-            { -50.0f, -6.0f, -30.0f, 950.0f, -45.0f },
-
-            // ===== 소형 바위 (상단 - W방향) =====
-            { 20.0f, -4.0f, -45.0f, 500.0f, 10.0f },
-            { -20.0f, -4.0f, -50.0f, 550.0f, -15.0f },
-            { 0.0f, -4.0f, -55.0f, 480.0f, 25.0f },
-
-            // ===== 소형 바위 (하단 - S방향) =====
-            { 20.0f, -4.0f, 50.0f, 500.0f, -20.0f },
-            { -20.0f, -4.0f, 55.0f, 550.0f, 35.0f },
-            { 0.0f, -4.0f, 60.0f, 480.0f, -30.0f },
-
-            // ===== 소형 바위 (좌측) =====
-            { 40.0f, -4.0f, 5.0f, 450.0f, 45.0f },
-            { 40.0f, -4.0f, -15.0f, 500.0f, -40.0f },
-
-            // ===== 소형 바위 (우측) =====
-            { -40.0f, -4.0f, 15.0f, 450.0f, 20.0f },
-            { -40.0f, -4.0f, -20.0f, 500.0f, -50.0f },
+            { -70.0f, -8.0f, -50.0f, 3000.0f, 20.0f },    // 우측 상단
+            { 80.0f, -8.0f, -40.0f, 2800.0f, -15.0f },    // 좌측 상단
+            { 0.0f, -10.0f, 100.0f, 5000.0f, 10.0f },     // 하단 중앙 (더 큰 화산)
         };
 
         XMFLOAT4X4 identity;
@@ -372,7 +375,7 @@ void Scene::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList)
         for (const auto& placement : placements)
         {
             CRoom* pTempRoom = m_pCurrentRoom;
-            m_pCurrentRoom = nullptr;  // 글로벌 오브젝트로 생성
+            m_pCurrentRoom = nullptr;
 
             GameObject* pVolcano = MeshLoader::LoadGeometryFromFile(
                 this, pDevice, pCommandList, NULL,
@@ -382,19 +385,15 @@ void Scene::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList)
 
             if (pVolcano)
             {
-                // matLocal을 identity로 리셋
                 pVolcano->GetTransform()->SetLocalMatrix(identity);
-
                 pVolcano->GetTransform()->SetPosition(placement.x, placement.y, placement.z);
                 pVolcano->GetTransform()->SetScale(placement.scale, placement.scale, placement.scale);
-                // X축 -90도로 세우고, Y축 회전 추가
                 pVolcano->GetTransform()->SetRotation(-90.0f, placement.rotY, 0.0f);
 
-                // 렌더 컴포넌트 추가
                 AddRenderComponentsToHierarchy(pDevice, pCommandList, pVolcano, m_vShaders[0].get(), false);
             }
         }
-        OutputDebugString(L"[Scene] Volcano decorations placed (22 objects + 1 giant)\n");
+        OutputDebugString(L"[Scene] Volcano decorations placed (4 large volcanoes)\n");
     }
 
     // --------------------------------------------------------------------------
