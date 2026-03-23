@@ -1,4 +1,4 @@
-#include "pch.h"
+﻿#include "pch.h"
 #include "DBSynchronizer.h"
 #include "DBBind.h"
 #include "CoreGlobal.h"
@@ -319,7 +319,7 @@ bool DBSynchronizer::GatherDBIndexes()
 			findIndex = indexes.end() - 1;
 		}
 
-		// 인덱스가 걸린 column 찾아서 매핑해준다.
+		// ?몃깆ㅺ? 嫄몃┛ column 李얠? 留ㅽ?댁???
 		Vector<DBModel::ColumnRef>& columns = (*findTable)->_columns;
 		auto findColumn = std::find_if(columns.begin(), columns.end(), [columnId](DBModel::ColumnRef& column) { return column->_columnId == columnId; });
 		ASSERT_CRASH(findColumn != columns.end());
@@ -356,17 +356,17 @@ bool DBSynchronizer::GatherDBStoredProcedures()
 
 void DBSynchronizer::CompareDBModel()
 {
-	// 업데이트 목록 초기화.
+	// ??곗댄?紐⑸? 珥湲고.
 	_dependentIndexes.clear();
 	for (Vector<String>& queries : _updateQueries)
 		queries.clear();
 
-	// XML에 있는 목록을 우선 갖고 온다.
+	// XML? ?? 紐⑸?? ?곗 媛怨 ?⑤?
 	Map<String, DBModel::TableRef> xmlTableMap;
 	for (DBModel::TableRef& xmlTable : _xmlTables)
 		xmlTableMap[xmlTable->_name] = xmlTable;
 
-	// DB에 실존하는 테이블들을 돌면서 XML에 정의된 테이블들과 비교한다.
+	// DB? ?ㅼ〈?? ??대??ㅼ ?硫댁 XML? ??? ??대??ㅺ낵 鍮援???
 	for (DBModel::TableRef& dbTable : _dbTables)
 	{
 		auto findTable = xmlTableMap.find(dbTable->_name);
@@ -386,7 +386,7 @@ void DBSynchronizer::CompareDBModel()
 		}
 	}
 
-	// 맵에서 제거되지 않은 XML 테이블 정의는 새로 추가.
+	// 留듭? ?嫄곕吏 ?? XML ??대? ??? ?濡 異媛.
 	for (auto& mapIt : xmlTableMap)
 	{
 		DBModel::TableRef& xmlTable = mapIt.second;
@@ -458,12 +458,12 @@ void DBSynchronizer::ExecuteUpdateQueries()
 
 void DBSynchronizer::CompareTables(DBModel::TableRef dbTable, DBModel::TableRef xmlTable)
 {
-	// XML에 있는 컬럼 목록을 갖고 온다.
+	// XML? ?? 而щ?紐⑸?? 媛怨 ?⑤?
 	Map<String, DBModel::ColumnRef> xmlColumnMap;
 	for (DBModel::ColumnRef& xmlColumn : xmlTable->_columns)
 		xmlColumnMap[xmlColumn->_name] = xmlColumn;
 
-	// DB에 실존하는 테이블 컬럼들을 돌면서 XML에 정의된 컬럼들과 비교한다.
+	// DB? ?ㅼ〈?? ??대? 而щ쇰ㅼ ?硫댁 XML? ??? 而щ쇰ㅺ낵 鍮援???
 	for (DBModel::ColumnRef& dbColumn : dbTable->_columns)
 	{
 		auto findColumn = xmlColumnMap.find(dbColumn->_name);
@@ -483,7 +483,7 @@ void DBSynchronizer::CompareTables(DBModel::TableRef dbTable, DBModel::TableRef 
 		}
 	}
 
-	// 맵에서 제거되지 않은 XML 컬럼 정의는 새로 추가.
+	// 留듭? ?嫄곕吏 ?? XML 而щ???? ?濡 異媛.
 	for (auto& mapIt : xmlColumnMap)
 	{
 		DBModel::ColumnRef& xmlColumn = mapIt.second;
@@ -513,12 +513,12 @@ void DBSynchronizer::CompareTables(DBModel::TableRef dbTable, DBModel::TableRef 
 		}
 	}
 
-	// XML에 있는 인덱스 목록을 갖고 온다.
+	// XML? ?? ?몃깆?紐⑸?? 媛怨 ?⑤?
 	Map<String, DBModel::IndexRef> xmlIndexMap;
 	for (DBModel::IndexRef& xmlIndex : xmlTable->_indexes)
 		xmlIndexMap[xmlIndex->GetUniqueName()] = xmlIndex;
 
-	// DB에 실존하는 테이블 인덱스들을 돌면서 XML에 정의된 인덱스들과 비교한다.
+	// DB? ?ㅼ〈?? ??대? ?몃깆ㅻㅼ ?硫댁 XML? ??? ?몃깆ㅻㅺ낵 鍮援???
 	for (DBModel::IndexRef& dbIndex : dbTable->_indexes)
 	{
 		auto findIndex = xmlIndexMap.find(dbIndex->GetUniqueName());
@@ -537,7 +537,7 @@ void DBSynchronizer::CompareTables(DBModel::TableRef dbTable, DBModel::TableRef 
 		}
 	}
 
-	// 맵에서 제거되지 않은 XML 인덱스 정의는 새로 추가.
+	// 留듭? ?嫄곕吏 ?? XML ?몃깆???? ?濡 異媛.
 	for (auto& mapIt : xmlIndexMap)
 	{
 		DBModel::IndexRef xmlIndex = mapIt.second;
@@ -575,7 +575,7 @@ void DBSynchronizer::CompareColumns(DBModel::TableRef dbTable, DBModel::ColumnRe
 		GConsoleLogger->WriteStdOut(Color::YELLOW, L"Updating Column [%s] : (%s) -> (%s)\n", dbTable->_name.c_str(), dbColumn->CreateText().c_str(), xmlColumn->CreateText().c_str());
 	}
 
-	// 연관된 인덱스가 있으면 나중에 삭제하기 위해 기록한다.
+	// ?곌?? ?몃깆ㅺ? ??쇰㈃ ?以? ???湲????湲곕????
 	if (flag & (ColumnFlag::Type | ColumnFlag::Length | ColumnFlag::Nullable))
 	{
 		for (DBModel::IndexRef& dbIndex : dbTable->_indexes)
@@ -646,12 +646,12 @@ void DBSynchronizer::CompareColumns(DBModel::TableRef dbTable, DBModel::ColumnRe
 
 void DBSynchronizer::CompareStoredProcedures()
 {
-	// XML에 있는 프로시저 목록을 갖고 온다.
+	// XML? ?? ?濡?? 紐⑸?? 媛怨 ?⑤?
 	Map<String, DBModel::ProcedureRef> xmlProceduresMap;
 	for (DBModel::ProcedureRef& xmlProcedure : _xmlProcedures)
 		xmlProceduresMap[xmlProcedure->_name] = xmlProcedure;
 
-	// DB에 실존하는 테이블 프로시저들을 돌면서 XML에 정의된 프로시저들과 비교한다.
+	// DB? ?ㅼ〈?? ??대? ?濡???ㅼ ?硫댁 XML? ??? ?濡???ㅺ낵 鍮援???
 	for (DBModel::ProcedureRef& dbProcedure : _dbProcedures)
 	{
 		auto findProcedure = xmlProceduresMap.find(dbProcedure->_name);
@@ -668,7 +668,7 @@ void DBSynchronizer::CompareStoredProcedures()
 		}
 	}
 
-	// 맵에서 제거되지 않은 XML 프로시저 정의는 새로 추가.
+	// 留듭? ?嫄곕吏 ?? XML ?濡?? ??? ?濡 異媛.
 	for (auto& mapIt : xmlProceduresMap)
 	{
 		GConsoleLogger->WriteStdOut(Color::YELLOW, L"Updating Procedure : %s\n", mapIt.first.c_str());

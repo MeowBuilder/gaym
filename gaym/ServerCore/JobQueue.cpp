@@ -1,4 +1,4 @@
-#include "pch.h"
+﻿#include "pch.h"
 #include "JobQueue.h"
 #include "GlobalQueue.h"
 
@@ -8,27 +8,27 @@
 
 void JobQueue::Push(JobRef job, bool pushOnly)
 {
-    const int32 prevCount = _jobCount.fetch_add(1); // 항상 카운트를 증가시킨 후에 잡을 푸쉬를 하고 실행한 다음에
+    const int32 prevCount = _jobCount.fetch_add(1); // ?? 移댁댄몃? 利媛????? ?≪ ?몄щ? ?怨 ?ㅽ? ?ㅼ?
     _jobs.Push(job); // WRITE_LOCK
 
-    // 첫번째 Job을 넣은 쓰레드가 실행까지 담당
+    // 泥ル?吏?Job? ?ｌ ?곕?媛 ?ㅽ源吏 ?대?
     if (prevCount == 0)
     {
-        // 이미 실행중인 JobQueue가 없으면 실행
+        // ?대??ㅽ以??JobQueue媛 ??쇰㈃ ?ㅽ
         if (LCurrentJobQueue == nullptr && pushOnly == false)
         {
             Execute();
         }
         else
         {
-            // 여유 있는 다른 쓰레드가 실행하도록 GlobalQueue에 넘긴다
+            // ?ъ ?? ?ㅻⅨ ?곕?媛 ?ㅽ??濡 GlobalQueue? ?湲대?
             GGlobalQueue->Push(shared_from_this());
         }
     }
 }
 
-// 1) 일감이 너~무 몰리면?
-// 2) DoAsync 타고 타고 가서~ 절대 끝나지 않는 상황 (일감이 한 쓰레드한테 몰림)
+// 1) ?쇨????~臾?紐곕━硫?
+// 2) DoAsync ?怨 ?怨 媛?~ ?? ??吏 ?? ???(?쇨???? ?곕??? 紐곕┝)
 void JobQueue::Execute()
 {
     LCurrentJobQueue = this;
@@ -42,8 +42,8 @@ void JobQueue::Execute()
         for (int32 i = 0; i < jobCount; i++)
             jobs[i]->Execute();
 
-        // 남은 일감이 0개라면 종료
-        if (_jobCount.fetch_sub(jobCount) == jobCount) // 다 한후 잡 카운트를 빼줘야한다.
+        // ?⑥ ?쇨???0媛?쇰㈃ 醫猷
+        if (_jobCount.fetch_sub(jobCount) == jobCount) // ???? ??移댁댄몃? 鍮쇱??쇳??
         {
             LCurrentJobQueue = nullptr;
             return;
@@ -53,7 +53,7 @@ void JobQueue::Execute()
         if (now >= LEndTickCount)
         {
             LCurrentJobQueue = nullptr;
-            // 여유 있는 다른 쓰레드가 실행하도록 GlobalQueue에 넘긴다
+            // ?ъ ?? ?ㅻⅨ ?곕?媛 ?ㅽ??濡 GlobalQueue? ?湲대?
             GGlobalQueue->Push(shared_from_this());
             break;
         }

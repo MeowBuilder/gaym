@@ -615,6 +615,7 @@ class S_ENTER_GAME final :
 
   enum : int {
     kSuccessFieldNumber = 1,
+    kPlayeridFieldNumber = 2,
   };
   // bool success = 1;
   void clear_success();
@@ -625,6 +626,15 @@ class S_ENTER_GAME final :
   void _internal_set_success(bool value);
   public:
 
+  // uint64 playerid = 2;
+  void clear_playerid();
+  ::PROTOBUF_NAMESPACE_ID::uint64 playerid() const;
+  void set_playerid(::PROTOBUF_NAMESPACE_ID::uint64 value);
+  private:
+  ::PROTOBUF_NAMESPACE_ID::uint64 _internal_playerid() const;
+  void _internal_set_playerid(::PROTOBUF_NAMESPACE_ID::uint64 value);
+  public:
+
   // @@protoc_insertion_point(class_scope:Protocol.S_ENTER_GAME)
  private:
   class _Internal;
@@ -632,6 +642,7 @@ class S_ENTER_GAME final :
   template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
   typedef void InternalArenaConstructable_;
   typedef void DestructorSkippable_;
+  ::PROTOBUF_NAMESPACE_ID::uint64 playerid_;
   bool success_;
   mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
   friend struct ::TableStruct_Protocol_2eproto;
@@ -1630,6 +1641,26 @@ inline void S_ENTER_GAME::_internal_set_success(bool value) {
 inline void S_ENTER_GAME::set_success(bool value) {
   _internal_set_success(value);
   // @@protoc_insertion_point(field_set:Protocol.S_ENTER_GAME.success)
+}
+
+// uint64 playerid = 2;
+inline void S_ENTER_GAME::clear_playerid() {
+  playerid_ = uint64_t{0u};
+}
+inline ::PROTOBUF_NAMESPACE_ID::uint64 S_ENTER_GAME::_internal_playerid() const {
+  return playerid_;
+}
+inline ::PROTOBUF_NAMESPACE_ID::uint64 S_ENTER_GAME::playerid() const {
+  // @@protoc_insertion_point(field_get:Protocol.S_ENTER_GAME.playerid)
+  return _internal_playerid();
+}
+inline void S_ENTER_GAME::_internal_set_playerid(::PROTOBUF_NAMESPACE_ID::uint64 value) {
+
+  playerid_ = value;
+}
+inline void S_ENTER_GAME::set_playerid(::PROTOBUF_NAMESPACE_ID::uint64 value) {
+  _internal_set_playerid(value);
+  // @@protoc_insertion_point(field_set:Protocol.S_ENTER_GAME.playerid)
 }
 
 // -------------------------------------------------------------------
