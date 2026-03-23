@@ -6,6 +6,8 @@
 #include "RenderComponent.h"
 #include "Mesh.h"
 #include "Shader.h"
+#include "MeshLoader.h"
+#include "AnimationComponent.h"
 
 // 싱글톤 인스턴스
 NetworkManager* NetworkManager::s_pInstance = nullptr;
@@ -310,46 +312,43 @@ void NetworkManager::ProcessSpawnPlayer(Scene* pScene, ID3D12Device* pDevice,
         return;
     }
 
-    // 새 원격 플레이어 GameObject 생성
-    GameObject* pRemotePlayer = pScene->CreateGameObject(pDevice, pCommandList);
+    // 새 원격 플레이어 모델 로드 (MageBlue.bin 사용)
+    GameObject* pRemotePlayer = MeshLoader::LoadGeometryFromFile(pScene, pDevice, pCommandList, NULL, "Assets/Player/MageBlue.bin");
     if (!pRemotePlayer)
     {
-        OutputDebugString(L"[Network] Failed to create remote player GameObject\n");
-        return;
+        OutputDebugString(L"[Network] Failed to load remote player model, falling back to cube\n");
+        pRemotePlayer = pScene->CreateGameObject(pDevice, pCommandList);
+        
+        CubeMesh* pCubeMesh = new CubeMesh(pDevice, pCommandList, 1.0f, 2.0f, 1.0f);
+        pCubeMesh->AddRef();
+        pRemotePlayer->SetMesh(pCubeMesh);
+        pRemotePlayer->AddComponent<RenderComponent>()->SetMesh(pCubeMesh);
     }
 
     // 이름 설정
     sprintf_s(pRemotePlayer->m_pstrFrameName, "RemotePlayer_%llu", playerId);
 
-    // 위치 설정
+    // 위치 및 스케일 설정 (내 캐릭터와 동일한 5.0f 스케일)
     TransformComponent* pTransform = pRemotePlayer->GetTransform();
     if (pTransform)
     {
         pTransform->SetPosition(x, y, z);
-        pTransform->SetScale(1.0f, 2.0f, 1.0f);  // 플레이어 크기로 설정
+        pTransform->SetScale(5.0f, 5.0f, 5.0f); 
     }
 
-    // 메쉬 생성 (플레이어 크기의 큐브)
-    CubeMesh* pCubeMesh = new CubeMesh(pDevice, pCommandList, 1.0f, 2.0f, 1.0f);
-    pCubeMesh->AddRef();
-    pRemotePlayer->SetMesh(pCubeMesh);
-
-    // 기본 머티리얼 설정 (원격 플레이어는 파란색)
-    MATERIAL material = {};
-    material.m_cAmbient = XMFLOAT4(0.1f, 0.1f, 0.3f, 1.0f);
-    material.m_cDiffuse = XMFLOAT4(0.2f, 0.2f, 0.8f, 1.0f);
-    material.m_cSpecular = XMFLOAT4(0.5f, 0.5f, 0.5f, 32.0f);
-    material.m_cEmissive = XMFLOAT4(0.0f, 0.0f, 0.0f, 0.0f);
-    pRemotePlayer->SetMaterial(material);
-
-    // RenderComponent 추가 및 셰이더 등록
-    RenderComponent* pRender = pRemotePlayer->AddComponent<RenderComponent>();
-    pRender->SetMesh(pCubeMesh);
-
-    Shader* pShader = pScene->GetDefaultShader();
-    if (pShader)
+    // 애니메이션 추가 및 실행
+    auto* pAnim = pRemotePlayer->AddComponent<AnimationComponent>();
+    if (pAnim)
     {
-        pShader->AddRenderComponent(pRender);
+        pAnim->LoadAnimation("Assets/Player/MageBlue_Anim.bin");
+        pAnim->Play("Idle", true);
+    }
+
+    // 셰이더 등록 (계층 구조 전체 등록)
+    Shader* pDefaultShader = pScene->GetDefaultShader();
+    if (pDefaultShader)
+    {
+        pScene->AddRenderComponentsToHierarchy(pDevice, pCommandList, pRemotePlayer, pDefaultShader, true);
     }
 
     // 맵에 등록

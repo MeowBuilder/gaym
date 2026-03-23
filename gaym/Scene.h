@@ -111,6 +111,9 @@ public:
     EnemySpawner* GetEnemySpawner() { return m_pEnemySpawner.get(); }
     const std::vector<std::unique_ptr<CRoom>>& GetRooms() const { return m_vRooms; }
 
+    // Network support
+    void AddRenderComponentsToHierarchy(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList, GameObject* pGameObject, Shader* pShader, bool bCastsShadow = false);
+
     void AllocateDescriptor(D3D12_CPU_DESCRIPTOR_HANDLE* pCpuHandle, D3D12_GPU_DESCRIPTOR_HANDLE* pGpuHandle)
     {
         if (m_nNextDescriptorIndex >= 4096)
@@ -130,6 +133,8 @@ public:
     {
         m_nPersistentDescriptorEnd = m_nNextDescriptorIndex;
     }
+
+    D3D12_GPU_VIRTUAL_ADDRESS GetPassCBVAddress() const { if(m_pd3dcbPass) return m_pd3dcbPass->GetGPUVirtualAddress(); return 0; }
 
 private:
     float m_fTotalTime = 0.0f; // 누적 시간 (용암 애니메이션용)
@@ -203,12 +208,9 @@ private:
     // Debug Renderer (F1 to toggle)
     std::unique_ptr<DebugRenderer> m_pDebugRenderer;
 
-    void AddRenderComponentsToHierarchy(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList, GameObject* pGameObject, Shader* pShader, bool bCastsShadow = false);
     void PrintHierarchy(GameObject* pGameObject, int nDepth);
     void CollectColliders(GameObject* pGameObject, std::vector<ColliderComponent*>& outColliders);
     void ProcessPendingDeletions();
     void UpdateRenderList();  // Update RenderComponent list for current frame
     void TransitionToRoomByIndex(int index); // 9/0 키 직접 이동용
-public:
-    D3D12_GPU_VIRTUAL_ADDRESS GetPassCBVAddress() const { if(m_pd3dcbPass) return m_pd3dcbPass->GetGPUVirtualAddress(); return 0; }
 };
