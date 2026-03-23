@@ -45,6 +45,17 @@ bool Handle_S_ENTER_GAME(PacketSessionRef& session, Protocol::S_ENTER_GAME& pkt)
     if (pkt.success())
     {
         OutputDebugStringA("[Network] Enter game success!\n");
+
+        // 로컬 플레이어 ID 설정
+        NetworkManager* pNetMgr = NetworkManager::GetInstance();
+        if (pNetMgr)
+        {
+            pNetMgr->SetLocalPlayerId(pkt.playerid());
+
+            wchar_t buf[128];
+            swprintf_s(buf, L"[Network] Local PlayerId set to: %llu\n", pkt.playerid());
+            OutputDebugString(buf);
+        }
     }
     else
     {
@@ -82,12 +93,6 @@ bool Handle_S_SPAWN(PacketSessionRef& session, Protocol::S_SPAWN& pkt)
     NetworkManager* pNetMgr = NetworkManager::GetInstance();
     if (pNetMgr)
     {
-        // 첫 번째 스폰이면 로컬 플레이어 ID로 설정
-        if (pNetMgr->GetLocalPlayerId() == 0)
-        {
-            pNetMgr->QueueSetLocalPlayerId(playerId);
-        }
-
         pNetMgr->QueueSpawnPlayer(playerId, name, playerType, x, y, z);
     }
 
