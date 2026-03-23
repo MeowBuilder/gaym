@@ -294,25 +294,31 @@ void NetworkManager::ProcessSpawnPlayer(Scene* pScene, ID3D12Device* pDevice,
                                         uint64 playerId, const std::string& name,
                                         int playerType, float x, float y, float z)
 {
-    // 로컬 플레이어라면 무시 (이미 Scene에서 관리)
-    if (playerId == m_nLocalPlayerId)
+    wchar_t idLog[256]; // 로그용 버퍼 선언
+
+    // 로컬 플레이어 ID 확인
+    uint64 myId = GetLocalPlayerId();
+    
+    swprintf_s(idLog, 256, L"[Network] Handle Spawn: PktId=%llu, MyLocalId=%llu\n", playerId, myId);
+    OutputDebugString(idLog);
+
+    // 로컬 플레이어라면 무시
+    if (playerId == myId)
     {
-        wchar_t buf[128];
-        swprintf_s(buf, L"[Network] Skipping spawn for local player %llu\n", playerId);
-        OutputDebugString(buf);
+        OutputDebugString(L"[Network] Skipping spawn for local player (Self)\n");
         return;
     }
 
     // 이미 존재하는 플레이어라면 무시
     if (m_mapRemotePlayers.find(playerId) != m_mapRemotePlayers.end())
     {
-        wchar_t buf[128];
-        swprintf_s(buf, L"[Network] Remote player %llu already exists\n", playerId);
-        OutputDebugString(buf);
+        swprintf_s(idLog, 256, L"[Network] Remote player %llu already exists. Updating position.\n", playerId);
+        OutputDebugString(idLog);
+        ProcessMovePlayer(playerId, x, y, z);
         return;
     }
 
-    // 새 원격 플레이어 모델 로드 (MageBlue.bin 사용)
+    // 새 원격 플레이어 모델 로드
     GameObject* pRemotePlayer = MeshLoader::LoadGeometryFromFile(pScene, pDevice, pCommandList, NULL, "Assets/Player/MageBlue.bin");
     if (!pRemotePlayer)
     {
@@ -328,7 +334,7 @@ void NetworkManager::ProcessSpawnPlayer(Scene* pScene, ID3D12Device* pDevice,
     // 이름 설정
     sprintf_s(pRemotePlayer->m_pstrFrameName, "RemotePlayer_%llu", playerId);
 
-    // 위치 및 스케일 설정 (내 캐릭터와 동일한 5.0f 스케일)
+    // 위치 및 스케일 설정
     TransformComponent* pTransform = pRemotePlayer->GetTransform();
     if (pTransform)
     {
@@ -336,7 +342,7 @@ void NetworkManager::ProcessSpawnPlayer(Scene* pScene, ID3D12Device* pDevice,
         pTransform->SetScale(5.0f, 5.0f, 5.0f); 
     }
 
-    // 애니메이션 추가 및 실행
+    // 애니메이션 추가
     auto* pAnim = pRemotePlayer->AddComponent<AnimationComponent>();
     if (pAnim)
     {
@@ -344,7 +350,7 @@ void NetworkManager::ProcessSpawnPlayer(Scene* pScene, ID3D12Device* pDevice,
         pAnim->Play("Idle", true);
     }
 
-    // 셰이더 등록 (계층 구조 전체 등록)
+    // 셰이더 등록
     Shader* pDefaultShader = pScene->GetDefaultShader();
     if (pDefaultShader)
     {
@@ -354,10 +360,9 @@ void NetworkManager::ProcessSpawnPlayer(Scene* pScene, ID3D12Device* pDevice,
     // 맵에 등록
     m_mapRemotePlayers[playerId] = pRemotePlayer;
 
-    wchar_t buf[256];
-    swprintf_s(buf, L"[Network] Spawned remote player %llu (%hs) at (%.1f, %.1f, %.1f)\n",
-              playerId, name.c_str(), x, y, z);
-    OutputDebugString(buf);
+    swprintf_s(idLog, 256, L"[Network] SUCCESS: Spawned RemotePlayer_%llu (%hs). Total RemoteCount: %zu\n",
+              playerId, name.c_str(), m_mapRemotePlayers.size());
+    OutputDebugString(idLog);
 }
 
 void NetworkManager::ProcessDespawnPlayer(Scene* pScene, uint64 playerId)
