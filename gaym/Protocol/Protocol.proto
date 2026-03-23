@@ -1,52 +1,62 @@
 syntax = "proto3";
-
 package Protocol;
 
 import "Enum.proto";
 import "Struct.proto";
 
-message C_LOGIN {
+message C_LOGIN // 클라 -> 서버 로그인 요청 패킷
+{
+
 }
 
-message S_LOGIN {
-  bool success = 1;
-  repeated Player players = 2;
+message S_LOGIN // 서버 -> 클라 로그인 결과 패킷
+{
+	bool success = 1;
+	repeated Player players = 2; // 아이디 발급 전
 }
 
-message C_ENTER_GAME {
-  uint64 playerIndex = 1;
+message C_ENTER_GAME // 클라 -> 서버 게임 입장 요청 패킷
+{
+	uint64 playerIndex = 1;
 }
 
-message S_ENTER_GAME {
-  bool success = 1;
+message S_ENTER_GAME // 서버 -> 클라 게임 입장 성공 여부 패킷
+{
+	bool success = 1;
 }
 
-message C_CHAT {
-  string msg = 1;
+message C_CHAT // 클라 -> 서버 채팅 보내는 패킷
+{
+	string msg = 1;
 }
 
-message S_CHAT {
-  uint64 playerId = 1;
-  string msg = 2;
+message S_CHAT // 서버 -> 클라 채팅 뿌리는 패킷
+{
+	uint64 playerId = 1;
+	string msg = 2;
 }
 
-message S_SPAWN {
-  Player player = 1;
+message S_SPAWN // 서버 -> 클라 플레이어 생성 요청 패킷
+{
+	Player player = 1;
 }
 
-message S_DESPAWN {
-  uint64 playerId = 1;
+message S_DESPAWN // 서버 -> 클라 플레이어 제거 요청 패킷
+{
+	uint64 playerId = 1;
 }
 
-message C_MOVE {
-  float x = 1;
-  float y = 2;
-  float z = 3;
+message C_MOVE // 클라 -> 서버 이동 요청 패킷
+{
+	float x = 1;
+	float y = 2;
+	float z = 3;
 }
 
-message S_MOVE {
-  uint64 playerId = 1;
-  float x = 2;
-  float y = 3;
-  float z = 4;
+message S_MOVE // 서버 -> 클라 플레이어 이동 알림 패킷
+{
+	uint64 playerId = 1;
+	float x = 2;
+	float y = 3;
+	float z = 4;
 }

@@ -1,11 +1,12 @@
 syntax = "proto3";
-
 package Protocol;
 
 import "Enum.proto";
 
-message Player {
-  uint64 playerId = 1;
-  string name = 2;
-  PlayerType playerType = 3;
+message Player
+{
+	uint64 playerId = 1;
+	string name = 2;
+	PlayerType playerType = 3;
+	// Ω∫≈» ¡§∫∏...
 }
