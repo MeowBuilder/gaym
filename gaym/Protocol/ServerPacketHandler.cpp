@@ -112,36 +112,19 @@ bool Handle_S_SPAWN(PacketSessionRef& session, Protocol::S_SPAWN& pkt)
     NetworkManager* pNetMgr = NetworkManager::GetInstance();
     uint64 myLocalId = pNetMgr ? pNetMgr->GetLocalPlayerId() : 0;
 
-<<<<<<< HEAD
     wchar_t wbuf[256];
-    swprintf_s(wbuf, L"[Network] S_SPAWN received: PlayerId=%llu (MyLocalId=%llu) Name=%hs\n",
-        playerId, myLocalId, name.c_str());
+    swprintf_s(wbuf, L"[Network] S_SPAWN received: PlayerId=%llu (MyLocalId=%llu, IsSelf=%s) Name=%hs\n",
+        playerId, myLocalId, (playerId == myLocalId ? L"TRUE" : L"FALSE"), name.c_str());
     OutputDebugString(wbuf);
 
     char buf[256];
-    sprintf_s(buf, "[Network] Handle Spawn: PktId=%llu, MyLocalId=%llu, Name=%s",
-        playerId, myLocalId, name.c_str());
+    sprintf_s(buf, "[Network] Handle Spawn: PktId=%llu, MyLocalId=%llu, IsSelf=%s, Name=%s",
+        playerId, myLocalId, (playerId == myLocalId ? "TRUE" : "FALSE"), name.c_str());
     WriteNetworkLog(buf);
-=======
-    wchar_t buf[256];
-    swprintf_s(buf, L"[Network] S_SPAWN Received: PktId=%llu, MyLocalId=%llu (IsSelf: %s) Name=%hs\n", 
-              playerId, myLocalId, (playerId == myLocalId ? L"TRUE" : L"FALSE"), name.c_str());
-    OutputDebugString(buf);
->>>>>>> 40067a5c033f4e3db87c8caf7c86a64a70235c59
 
     // 기본 위치 (서버 데이터가 있으면 사용)
     float x = 0.0f, y = 0.0f, z = 0.0f;
 
-<<<<<<< HEAD
-    // 나 자신이 아닌 원격 플레이어면 임시 오프셋 부여
-    if (playerId != myLocalId)
-    {
-        x = (float)(rand() % 10 - 5);
-        z = (float)(rand() % 10 - 5);
-    }
-
-=======
->>>>>>> 40067a5c033f4e3db87c8caf7c86a64a70235c59
     // NetworkManager를 통해 메인 스레드에서 처리하도록 큐에 추가
     if (pNetMgr)
     {

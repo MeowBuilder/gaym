@@ -114,7 +114,7 @@ void NetworkManager::Shutdown()
         m_vCommandQueue.clear();
     }
     m_vPendingSpawns.clear();
-    m_nLocalPlayerId = 0;
+    m_nLocalPlayerId.store(0);
 
     OutputDebugString(L"[Network] NetworkManager shutdown complete\n");
 }
@@ -198,7 +198,7 @@ void NetworkManager::Update(Scene* pScene, ID3D12Device* pDevice, ID3D12Graphics
     {
         if (cmd.type == NetworkCommand::SetLocalPlayerId)
         {
-            m_nLocalPlayerId = cmd.playerId;
+            m_nLocalPlayerId.store(cmd.playerId);
             localIdWasSet = true;
             wchar_t buf[128];
             swprintf_s(buf, L"[Network] Local player ID set to: %llu\n", cmd.playerId);
@@ -226,7 +226,7 @@ void NetworkManager::Update(Scene* pScene, ID3D12Device* pDevice, ID3D12Graphics
         {
         case NetworkCommand::Spawn:
             // LocalPlayerId가 아직 설정되지 않았으면 pending 큐에 보관
-            if (m_nLocalPlayerId == 0)
+            if (m_nLocalPlayerId.load() == 0)
             {
                 wchar_t buf[128];
                 swprintf_s(buf, L"[Network] Spawn deferred (LocalPlayerId not set): PlayerId=%llu\n", cmd.playerId);
@@ -360,18 +360,26 @@ void NetworkManager::ProcessSpawnPlayer(Scene* pScene, ID3D12Device* pDevice,
         return;
     }
 
+    // 원격 플레이어를 전역 오브젝트로 생성하기 위해 CurrentRoom을 임시 해제
+    // (Room에 등록되면 Room 전환 시 삭제되거나 업데이트가 안 될 수 있음)
+    CRoom* pTempRoom = pScene->GetCurrentRoom();
+    pScene->SetCurrentRoom(nullptr);
+
     // 새 원격 플레이어 모델 로드
     GameObject* pRemotePlayer = MeshLoader::LoadGeometryFromFile(pScene, pDevice, pCommandList, NULL, "Assets/Player/MageBlue.bin");
     if (!pRemotePlayer)
     {
         OutputDebugString(L"[Network] Failed to load remote player model, falling back to cube\n");
         pRemotePlayer = pScene->CreateGameObject(pDevice, pCommandList);
-        
+
         CubeMesh* pCubeMesh = new CubeMesh(pDevice, pCommandList, 1.0f, 2.0f, 1.0f);
         pCubeMesh->AddRef();
         pRemotePlayer->SetMesh(pCubeMesh);
         pRemotePlayer->AddComponent<RenderComponent>()->SetMesh(pCubeMesh);
     }
+
+    // CurrentRoom 복원
+    pScene->SetCurrentRoom(pTempRoom);
 
     // 이름 설정
     sprintf_s(pRemotePlayer->m_pstrFrameName, "RemotePlayer_%llu", playerId);
@@ -410,7 +418,7 @@ void NetworkManager::ProcessSpawnPlayer(Scene* pScene, ID3D12Device* pDevice,
 void NetworkManager::ProcessDespawnPlayer(Scene* pScene, uint64 playerId)
 {
     // 로컬 플레이어라면 무시
-    if (playerId == m_nLocalPlayerId)
+    if (playerId == m_nLocalPlayerId.load())
         return;
 
     auto it = m_mapRemotePlayers.find(playerId);
@@ -437,7 +445,7 @@ void NetworkManager::ProcessDespawnPlayer(Scene* pScene, uint64 playerId)
 void NetworkManager::ProcessMovePlayer(uint64 playerId, float x, float y, float z)
 {
     // 로컬 플레이어라면 무시 (로컬은 자체 업데이트)
-    if (playerId == m_nLocalPlayerId)
+    if (playerId == m_nLocalPlayerId.load())
         return;
 
     auto it = m_mapRemotePlayers.find(playerId);

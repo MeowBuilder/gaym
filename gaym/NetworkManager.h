@@ -90,9 +90,9 @@ public:
     // 로컬 플레이어 이동 전송
     void SendMove(float x, float y, float z);
 
-    // 로컬 플레이어 ID 설정/조회
-    void SetLocalPlayerId(uint64 playerId) { m_nLocalPlayerId = playerId; }
-    uint64 GetLocalPlayerId() const { return m_nLocalPlayerId; }
+    // 로컬 플레이어 ID 설정/조회 (atomic으로 스레드 안전)
+    void SetLocalPlayerId(uint64 playerId) { m_nLocalPlayerId.store(playerId); }
+    uint64 GetLocalPlayerId() const { return m_nLocalPlayerId.load(); }
 
     // 세션 참조 설정 (GameSession::OnConnected에서 호출)
     void SetSession(std::shared_ptr<GameSession> session) { m_pSession = session; }
@@ -114,8 +114,8 @@ private:
     std::atomic<bool> m_bConnected = false;
     std::atomic<bool> m_bShutdownRequested = false;
 
-    // 로컬 플레이어 ID (S_SPAWN에서 받음)
-    uint64 m_nLocalPlayerId = 0;
+    // 로컬 플레이어 ID (atomic으로 스레드 안전하게 관리)
+    std::atomic<uint64> m_nLocalPlayerId = 0;
 
     // 네트워크 서비스 및 세션
     std::shared_ptr<ClientService> m_pService;
