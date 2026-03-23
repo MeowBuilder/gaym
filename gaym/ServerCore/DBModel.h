@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include "Types.h"
 
 NAMESPACE_BEGIN(DBModel)

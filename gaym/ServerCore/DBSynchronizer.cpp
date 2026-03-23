@@ -1,4 +1,4 @@
-﻿#include "pch.h"
+#include "pch.h"
 #include "DBSynchronizer.h"
 #include "DBBind.h"
 #include "CoreGlobal.h"
@@ -319,11 +319,7 @@ bool DBSynchronizer::GatherDBIndexes()
 			findIndex = indexes.end() - 1;
 		}
 
-<<<<<<< HEAD
-		// ?몃깆ㅺ? 嫄몃┛ column 李얠? 留ㅽ?댁???
-=======
-		// ?몃뜳?ㅺ? 嫄몃┛ column 李얠븘??留ㅽ븨?댁???
->>>>>>> 72bf515ecd449477261c8282b604b7db81a3a499
+		// 인덱스가 걸린 column 찾아서 매핑해준다.
 		Vector<DBModel::ColumnRef>& columns = (*findTable)->_columns;
 		auto findColumn = std::find_if(columns.begin(), columns.end(), [columnId](DBModel::ColumnRef& column) { return column->_columnId == columnId; });
 		ASSERT_CRASH(findColumn != columns.end());
@@ -360,29 +356,17 @@ bool DBSynchronizer::GatherDBStoredProcedures()
 
 void DBSynchronizer::CompareDBModel()
 {
-<<<<<<< HEAD
-	// ??곗댄?紐⑸? 珥湲고.
-=======
-	// ?낅뜲?댄듃 紐⑸줉 珥덇린??
->>>>>>> 72bf515ecd449477261c8282b604b7db81a3a499
+	// 업데이트 목록 초기화.
 	_dependentIndexes.clear();
 	for (Vector<String>& queries : _updateQueries)
 		queries.clear();
 
-<<<<<<< HEAD
-	// XML? ?? 紐⑸?? ?곗 媛怨 ?⑤?
-=======
-	// XML???덈뒗 紐⑸줉???곗꽑 媛뽮퀬 ?⑤떎.
->>>>>>> 72bf515ecd449477261c8282b604b7db81a3a499
+	// XML에 있는 목록을 우선 갖고 온다.
 	Map<String, DBModel::TableRef> xmlTableMap;
 	for (DBModel::TableRef& xmlTable : _xmlTables)
 		xmlTableMap[xmlTable->_name] = xmlTable;
 
-<<<<<<< HEAD
-	// DB? ?ㅼ〈?? ??대??ㅼ ?硫댁 XML? ??? ??대??ㅺ낵 鍮援???
-=======
-	// DB???ㅼ〈?섎뒗 ?뚯씠釉붾뱾???뚮㈃??XML???뺤쓽???뚯씠釉붾뱾怨?鍮꾧탳?쒕떎.
->>>>>>> 72bf515ecd449477261c8282b604b7db81a3a499
+	// DB에 실존하는 테이블들을 돌면서 XML에 정의된 테이블들과 비교한다.
 	for (DBModel::TableRef& dbTable : _dbTables)
 	{
 		auto findTable = xmlTableMap.find(dbTable->_name);
@@ -402,11 +386,7 @@ void DBSynchronizer::CompareDBModel()
 		}
 	}
 
-<<<<<<< HEAD
-	// 留듭? ?嫄곕吏 ?? XML ??대? ??? ?濡 異媛.
-=======
-	// 留듭뿉???쒓굅?섏? ?딆? XML ?뚯씠釉??뺤쓽???덈줈 異붽?.
->>>>>>> 72bf515ecd449477261c8282b604b7db81a3a499
+	// 맵에서 제거되지 않은 XML 테이블 정의는 새로 추가.
 	for (auto& mapIt : xmlTableMap)
 	{
 		DBModel::TableRef& xmlTable = mapIt.second;
@@ -478,20 +458,12 @@ void DBSynchronizer::ExecuteUpdateQueries()
 
 void DBSynchronizer::CompareTables(DBModel::TableRef dbTable, DBModel::TableRef xmlTable)
 {
-<<<<<<< HEAD
-	// XML? ?? 而щ?紐⑸?? 媛怨 ?⑤?
-=======
-	// XML???덈뒗 而щ읆 紐⑸줉??媛뽮퀬 ?⑤떎.
->>>>>>> 72bf515ecd449477261c8282b604b7db81a3a499
+	// XML에 있는 컬럼 목록을 갖고 온다.
 	Map<String, DBModel::ColumnRef> xmlColumnMap;
 	for (DBModel::ColumnRef& xmlColumn : xmlTable->_columns)
 		xmlColumnMap[xmlColumn->_name] = xmlColumn;
 
-<<<<<<< HEAD
-	// DB? ?ㅼ〈?? ??대? 而щ쇰ㅼ ?硫댁 XML? ??? 而щ쇰ㅺ낵 鍮援???
-=======
-	// DB???ㅼ〈?섎뒗 ?뚯씠釉?而щ읆?ㅼ쓣 ?뚮㈃??XML???뺤쓽??而щ읆?ㅺ낵 鍮꾧탳?쒕떎.
->>>>>>> 72bf515ecd449477261c8282b604b7db81a3a499
+	// DB에 실존하는 테이블 컬럼들을 돌면서 XML에 정의된 컬럼들과 비교한다.
 	for (DBModel::ColumnRef& dbColumn : dbTable->_columns)
 	{
 		auto findColumn = xmlColumnMap.find(dbColumn->_name);
@@ -511,11 +483,7 @@ void DBSynchronizer::CompareTables(DBModel::TableRef dbTable, DBModel::TableRef 
 		}
 	}
 
-<<<<<<< HEAD
-	// 留듭? ?嫄곕吏 ?? XML 而щ???? ?濡 異媛.
-=======
-	// 留듭뿉???쒓굅?섏? ?딆? XML 而щ읆 ?뺤쓽???덈줈 異붽?.
->>>>>>> 72bf515ecd449477261c8282b604b7db81a3a499
+	// 맵에서 제거되지 않은 XML 컬럼 정의는 새로 추가.
 	for (auto& mapIt : xmlColumnMap)
 	{
 		DBModel::ColumnRef& xmlColumn = mapIt.second;
@@ -545,20 +513,12 @@ void DBSynchronizer::CompareTables(DBModel::TableRef dbTable, DBModel::TableRef 
 		}
 	}
 
-<<<<<<< HEAD
-	// XML? ?? ?몃깆?紐⑸?? 媛怨 ?⑤?
-=======
-	// XML???덈뒗 ?몃뜳??紐⑸줉??媛뽮퀬 ?⑤떎.
->>>>>>> 72bf515ecd449477261c8282b604b7db81a3a499
+	// XML에 있는 인덱스 목록을 갖고 온다.
 	Map<String, DBModel::IndexRef> xmlIndexMap;
 	for (DBModel::IndexRef& xmlIndex : xmlTable->_indexes)
 		xmlIndexMap[xmlIndex->GetUniqueName()] = xmlIndex;
 
-<<<<<<< HEAD
-	// DB? ?ㅼ〈?? ??대? ?몃깆ㅻㅼ ?硫댁 XML? ??? ?몃깆ㅻㅺ낵 鍮援???
-=======
-	// DB???ㅼ〈?섎뒗 ?뚯씠釉??몃뜳?ㅻ뱾???뚮㈃??XML???뺤쓽???몃뜳?ㅻ뱾怨?鍮꾧탳?쒕떎.
->>>>>>> 72bf515ecd449477261c8282b604b7db81a3a499
+	// DB에 실존하는 테이블 인덱스들을 돌면서 XML에 정의된 인덱스들과 비교한다.
 	for (DBModel::IndexRef& dbIndex : dbTable->_indexes)
 	{
 		auto findIndex = xmlIndexMap.find(dbIndex->GetUniqueName());
@@ -577,11 +537,7 @@ void DBSynchronizer::CompareTables(DBModel::TableRef dbTable, DBModel::TableRef 
 		}
 	}
 
-<<<<<<< HEAD
-	// 留듭? ?嫄곕吏 ?? XML ?몃깆???? ?濡 異媛.
-=======
-	// 留듭뿉???쒓굅?섏? ?딆? XML ?몃뜳???뺤쓽???덈줈 異붽?.
->>>>>>> 72bf515ecd449477261c8282b604b7db81a3a499
+	// 맵에서 제거되지 않은 XML 인덱스 정의는 새로 추가.
 	for (auto& mapIt : xmlIndexMap)
 	{
 		DBModel::IndexRef xmlIndex = mapIt.second;
@@ -619,11 +575,7 @@ void DBSynchronizer::CompareColumns(DBModel::TableRef dbTable, DBModel::ColumnRe
 		GConsoleLogger->WriteStdOut(Color::YELLOW, L"Updating Column [%s] : (%s) -> (%s)\n", dbTable->_name.c_str(), dbColumn->CreateText().c_str(), xmlColumn->CreateText().c_str());
 	}
 
-<<<<<<< HEAD
-	// ?곌?? ?몃깆ㅺ? ??쇰㈃ ?以? ???湲????湲곕????
-=======
-	// ?곌????몃뜳?ㅺ? ?덉쑝硫??섏쨷????젣?섍린 ?꾪빐 湲곕줉?쒕떎.
->>>>>>> 72bf515ecd449477261c8282b604b7db81a3a499
+	// 연관된 인덱스가 있으면 나중에 삭제하기 위해 기록한다.
 	if (flag & (ColumnFlag::Type | ColumnFlag::Length | ColumnFlag::Nullable))
 	{
 		for (DBModel::IndexRef& dbIndex : dbTable->_indexes)
@@ -694,20 +646,12 @@ void DBSynchronizer::CompareColumns(DBModel::TableRef dbTable, DBModel::ColumnRe
 
 void DBSynchronizer::CompareStoredProcedures()
 {
-<<<<<<< HEAD
-	// XML? ?? ?濡?? 紐⑸?? 媛怨 ?⑤?
-=======
-	// XML???덈뒗 ?꾨줈?쒖? 紐⑸줉??媛뽮퀬 ?⑤떎.
->>>>>>> 72bf515ecd449477261c8282b604b7db81a3a499
+	// XML에 있는 프로시저 목록을 갖고 온다.
 	Map<String, DBModel::ProcedureRef> xmlProceduresMap;
 	for (DBModel::ProcedureRef& xmlProcedure : _xmlProcedures)
 		xmlProceduresMap[xmlProcedure->_name] = xmlProcedure;
 
-<<<<<<< HEAD
-	// DB? ?ㅼ〈?? ??대? ?濡???ㅼ ?硫댁 XML? ??? ?濡???ㅺ낵 鍮援???
-=======
-	// DB???ㅼ〈?섎뒗 ?뚯씠釉??꾨줈?쒖??ㅼ쓣 ?뚮㈃??XML???뺤쓽???꾨줈?쒖??ㅺ낵 鍮꾧탳?쒕떎.
->>>>>>> 72bf515ecd449477261c8282b604b7db81a3a499
+	// DB에 실존하는 테이블 프로시저들을 돌면서 XML에 정의된 프로시저들과 비교한다.
 	for (DBModel::ProcedureRef& dbProcedure : _dbProcedures)
 	{
 		auto findProcedure = xmlProceduresMap.find(dbProcedure->_name);
@@ -724,11 +668,7 @@ void DBSynchronizer::CompareStoredProcedures()
 		}
 	}
 
-<<<<<<< HEAD
-	// 留듭? ?嫄곕吏 ?? XML ?濡?? ??? ?濡 異媛.
-=======
-	// 留듭뿉???쒓굅?섏? ?딆? XML ?꾨줈?쒖? ?뺤쓽???덈줈 異붽?.
->>>>>>> 72bf515ecd449477261c8282b604b7db81a3a499
+	// 맵에서 제거되지 않은 XML 프로시저 정의는 새로 추가.
 	for (auto& mapIt : xmlProceduresMap)
 	{
 		GConsoleLogger->WriteStdOut(Color::YELLOW, L"Updating Procedure : %s\n", mapIt.first.c_str());

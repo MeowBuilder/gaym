@@ -1,4 +1,4 @@
-ï»¿#include "pch.h"
+#include "pch.h"
 #include "MemoryPool.h"
 
 /*-----------------
@@ -30,7 +30,7 @@ MemoryHeader* MemoryPool::Pop()
 {
 	MemoryHeader* memory = static_cast<MemoryHeader*>(::InterlockedPopEntrySList(&_header));
 
-	// ì—†ìœ¼ë©´ ìƒˆë¡œ ë§Œë“¤ë‹¤
+	// ¾øÀ¸¸é »õ·Î ¸¸µé´Ù
 	if (memory == nullptr)
 	{
 		memory = reinterpret_cast<MemoryHeader*>(::_aligned_malloc(_allocSize, SLIST_ALIGNMENT));

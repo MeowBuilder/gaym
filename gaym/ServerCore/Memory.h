@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include "Types.h"
 #include "Allocator.h"
 #include <vector>
@@ -18,7 +18,7 @@ class Memory
 {
 	enum
 	{
-		// ~1024占쏙옙占쏙옙 32占쏙옙占쏙옙, ~2048占쏙옙占쏙옙 128占쏙옙占쏙옙, ~4096占쏙옙占쏙옙 256占쏙옙占쏙옙
+		// ~1024���� 32����, ~2048���� 128����, ~4096���� 256����
 		POOL_COUNT = (1024 / 32) + (1024 / 128) + (2048 / 256),
 		MAX_ALLOC_SIZE = 4096
 	};
@@ -33,8 +33,8 @@ public:
 private:
 	vector<MemoryPool*> _pools;
 
-	// 占쌨몌옙 크占쏙옙 <-> 占쌨몌옙 풀
-	// O(1) 占쏙옙占쏙옙占쏙옙 찾占쏙옙 占쏙옙占쏙옙 占쏙옙占싱븝옙
+	// �޸� ũ�� <-> �޸� Ǯ
+	// O(1) ������ ã�� ���� ���̺�
 	MemoryPool* _poolTable[MAX_ALLOC_SIZE + 1];
 };
 

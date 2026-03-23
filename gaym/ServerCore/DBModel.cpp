@@ -1,4 +1,4 @@
-﻿#include "pch.h"
+#include "pch.h"
 #include "DBModel.h"
 using namespace DBModel;
 #include <regex>

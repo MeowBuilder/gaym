@@ -1,4 +1,4 @@
-﻿#include "pch.h"
+#include "pch.h"
 #include "Service.h"
 #include "Session.h"
 #include "Listener.h"

@@ -1,4 +1,4 @@
-﻿#include "pch.h"
+#include "pch.h"
 #include "FileUtils.h"
 #include <filesystem>
 #include <fstream>

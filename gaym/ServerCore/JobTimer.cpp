@@ -1,4 +1,4 @@
-﻿#include "pch.h"
+#include "pch.h"
 #include "JobTimer.h"
 #include "JobQueue.h"
 
@@ -18,11 +18,7 @@ void JobTimer::Reserve(uint64 tickAfter, weak_ptr<JobQueue> owner, JobRef job)
 
 void JobTimer::Distribute(uint64 now)
 {
-<<<<<<< HEAD
-    // ? 踰? ? ?곕?留 ?듦낵
-=======
-    // ??踰덉뿉 ???곕젅?쒕쭔 ?듦낵
->>>>>>> 72bf515ecd449477261c8282b604b7db81a3a499
+    // 한 번에 한 쓰레드만 통과
     if (_distributing.exchange(true) == true)
         return;
 
@@ -49,11 +45,7 @@ void JobTimer::Distribute(uint64 now)
         ObjectPool<JobData>::Push(item.jobData);
     }
 
-<<<<<<< HEAD
-    // ??ъ쇰㈃ ??댁???
-=======
-    // ?앸궗?쇰㈃ ??댁???
->>>>>>> 72bf515ecd449477261c8282b604b7db81a3a499
+    // 끝났으면 풀어준다
     _distributing.store(false);
 }
 

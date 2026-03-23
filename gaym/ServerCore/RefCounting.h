@@ -1,4 +1,4 @@
-ï»¿#pragma once
+#pragma once
 
 /*---------------
    RefCountable
@@ -38,18 +38,18 @@ public:
 	TSharedPtr() { }
 	TSharedPtr(T* ptr) { Set(ptr); }
 
-	// ë³µì‚¬
+	// º¹»ç
 	TSharedPtr(const TSharedPtr& rhs) { Set(rhs._ptr); }
-	// ì´ë™
+	// ÀÌµ¿
 	TSharedPtr(TSharedPtr&& rhs) { _ptr = rhs._ptr; rhs._ptr = nullptr; }
-	// ìƒì† ê´€ê³„ ë³µì‚¬
+	// »ó¼Ó °ü°è º¹»ç
 	template<typename U>
 	TSharedPtr(const TSharedPtr<U>& rhs) { Set(static_cast<T*>(rhs._ptr)); }
 
 	~TSharedPtr() { Release(); }
 
 public:
-	// ë³µì‚¬ ì—°ì‚°ì
+	// º¹»ç ¿¬»êÀÚ
 	TSharedPtr& operator=(const TSharedPtr& rhs)
 	{
 		if (_ptr != rhs._ptr)
@@ -60,7 +60,7 @@ public:
 		return *this;
 	}
 
-	// ì´ë™ ì—°ì‚°ì
+	// ÀÌµ¿ ¿¬»êÀÚ
 	TSharedPtr& operator=(TSharedPtr&& rhs)
 	{
 		Release();

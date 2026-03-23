@@ -1,4 +1,4 @@
-ï»¿#pragma once
+#pragma once
 
 enum
 {
@@ -28,7 +28,7 @@ struct MemoryHeader : public SLIST_ENTRY
 	}
 
 	int32 allocSize;
-	// TODO : í•„ìš”í•œ ì¶”ê°€ ì •ë³´
+	// TODO : ÇÊ¿äÇÑ Ãß°¡ Á¤º¸
 };
 
 /*-----------------
