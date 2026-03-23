@@ -845,7 +845,15 @@ GameObject* Scene::CreateGameObject(ID3D12Device* pDevice, ID3D12GraphicsCommand
     bool bRecyclable = (slot >= m_nPersistentDescriptorEnd);
 
     auto cacheIt = bRecyclable ? m_vCBCache.find(slot) : m_vCBCache.end();
-    if (cacheIt != m_vCBCache.end())
+    bool bReused = (cacheIt != m_vCBCache.end());
+
+    // 슬롯 충돌 진단 로그
+    wchar_t dbgBuf[256];
+    swprintf_s(dbgBuf, L"[Scene] CreateObject: Slot=%u, Reused=%s, PersistentEnd=%u\n", 
+              slot, (bReused ? L"TRUE" : L"FALSE"), m_nPersistentDescriptorEnd);
+    OutputDebugString(dbgBuf);
+
+    if (bReused)
     {
         // 같은 슬롯 번호에 이미 생성된 리소스 재사용
         ObjectConstants* pMapped = nullptr;

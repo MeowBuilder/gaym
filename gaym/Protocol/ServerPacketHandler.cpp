@@ -72,7 +72,6 @@ bool Handle_S_CHAT(PacketSessionRef& session, Protocol::S_CHAT& pkt)
     OutputDebugStringA("\n");
     return true;
 }
-
 // 플레이어 스폰 처리
 bool Handle_S_SPAWN(PacketSessionRef& session, Protocol::S_SPAWN& pkt)
 {
@@ -87,21 +86,12 @@ bool Handle_S_SPAWN(PacketSessionRef& session, Protocol::S_SPAWN& pkt)
     uint64 myLocalId = pNetMgr ? pNetMgr->GetLocalPlayerId() : 0;
 
     wchar_t buf[256];
-    swprintf_s(buf, L"[Network] S_SPAWN received: PlayerId=%llu (MyLocalId=%llu) Name=%hs\n", 
-              playerId, myLocalId, name.c_str());
+    swprintf_s(buf, L"[Network] S_SPAWN Received: PktId=%llu, MyLocalId=%llu (IsSelf: %s) Name=%hs\n", 
+              playerId, myLocalId, (playerId == myLocalId ? L"TRUE" : L"FALSE"), name.c_str());
     OutputDebugString(buf);
 
-    // 기본 위치 (서버 Player 구조체에 좌표가 없으므로 일단 0)
+    // 기본 위치 (서버 데이터가 있으면 사용)
     float x = 0.0f, y = 0.0f, z = 0.0f;
-
-    // 만약 나 자신에 대한 스폰 패킷이 아니라면, 겹침 방지를 위해 임시 위치 부여
-    // (서버에서 S_MOVE를 보내기 전까지는 0,0,0에 겹쳐있게 되므로)
-    if (playerId != myLocalId)
-    {
-        // 0,0,0 근처 랜덤한 위치 (가려짐 방지)
-        x = (float)(rand() % 10 - 5);
-        z = (float)(rand() % 10 - 5);
-    }
 
     // NetworkManager를 통해 메인 스레드에서 처리하도록 큐에 추가
     if (pNetMgr)
