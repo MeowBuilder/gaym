@@ -108,6 +108,14 @@ void NetworkManager::Shutdown()
     // 원격 플레이어 맵 클리어 (GameObject는 Scene이 관리하므로 여기서 delete 하지 않음)
     m_mapRemotePlayers.clear();
 
+    // 큐 정리
+    {
+        std::lock_guard<std::mutex> lock(m_queueMutex);
+        m_vCommandQueue.clear();
+    }
+    m_vPendingSpawns.clear();
+    m_nLocalPlayerId = 0;
+
     OutputDebugString(L"[Network] NetworkManager shutdown complete\n");
 }
 
@@ -184,13 +192,52 @@ void NetworkManager::Update(Scene* pScene, ID3D12Device* pDevice, ID3D12Graphics
         commands.swap(m_vCommandQueue);
     }
 
+    // 1차: SetLocalPlayerId 명령을 먼저 처리 (Spawn보다 먼저 ID가 설정되어야 함)
+    bool localIdWasSet = false;
+    for (const auto& cmd : commands)
+    {
+        if (cmd.type == NetworkCommand::SetLocalPlayerId)
+        {
+            m_nLocalPlayerId = cmd.playerId;
+            localIdWasSet = true;
+            wchar_t buf[128];
+            swprintf_s(buf, L"[Network] Local player ID set to: %llu\n", cmd.playerId);
+            OutputDebugString(buf);
+        }
+    }
+
+    // LocalPlayerId가 방금 설정되었으면 pending spawn 처리
+    if (localIdWasSet && !m_vPendingSpawns.empty())
+    {
+        OutputDebugString(L"[Network] Processing pending spawns after LocalPlayerId set\n");
+        for (const auto& pending : m_vPendingSpawns)
+        {
+            ProcessSpawnPlayer(pScene, pDevice, pCommandList,
+                             pending.playerId, pending.name, pending.playerType,
+                             pending.x, pending.y, pending.z);
+        }
+        m_vPendingSpawns.clear();
+    }
+
+    // 2차: 나머지 명령 처리
     for (const auto& cmd : commands)
     {
         switch (cmd.type)
         {
         case NetworkCommand::Spawn:
-            ProcessSpawnPlayer(pScene, pDevice, pCommandList,
-                             cmd.playerId, cmd.name, cmd.playerType, cmd.x, cmd.y, cmd.z);
+            // LocalPlayerId가 아직 설정되지 않았으면 pending 큐에 보관
+            if (m_nLocalPlayerId == 0)
+            {
+                wchar_t buf[128];
+                swprintf_s(buf, L"[Network] Spawn deferred (LocalPlayerId not set): PlayerId=%llu\n", cmd.playerId);
+                OutputDebugString(buf);
+                m_vPendingSpawns.push_back(cmd);
+            }
+            else
+            {
+                ProcessSpawnPlayer(pScene, pDevice, pCommandList,
+                                 cmd.playerId, cmd.name, cmd.playerType, cmd.x, cmd.y, cmd.z);
+            }
             break;
 
         case NetworkCommand::Despawn:
@@ -202,12 +249,7 @@ void NetworkManager::Update(Scene* pScene, ID3D12Device* pDevice, ID3D12Graphics
             break;
 
         case NetworkCommand::SetLocalPlayerId:
-            m_nLocalPlayerId = cmd.playerId;
-            {
-                wchar_t buf[128];
-                swprintf_s(buf, L"[Network] Local player ID set to: %llu\n", cmd.playerId);
-                OutputDebugString(buf);
-            }
+            // 이미 1차에서 처리됨
             break;
         }
     }

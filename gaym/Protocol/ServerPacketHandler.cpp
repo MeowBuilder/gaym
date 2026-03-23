@@ -62,11 +62,12 @@ bool Handle_S_ENTER_GAME(PacketSessionRef& session, Protocol::S_ENTER_GAME& pkt)
     {
         uint64 playerId = pkt.playerid();
 
-        // 로컬 플레이어 ID 설정
+        // 로컬 플레이어 ID 설정 - 큐를 통해 메인 스레드에서 처리
+        // 이렇게 해야 Spawn 명령보다 먼저 처리됨을 보장할 수 있음
         NetworkManager* pNetMgr = NetworkManager::GetInstance();
         if (pNetMgr)
         {
-            pNetMgr->SetLocalPlayerId(playerId);
+            pNetMgr->QueueSetLocalPlayerId(playerId);
 
             wchar_t wbuf[128];
             swprintf_s(wbuf, L"[Network] ENTER_GAME Success! My LocalPlayerId = %llu\n", playerId);

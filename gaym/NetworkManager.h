@@ -128,6 +128,9 @@ private:
     std::mutex m_queueMutex;
     std::vector<NetworkCommandData> m_vCommandQueue;
 
+    // LocalPlayerId가 설정되기 전에 도착한 Spawn 명령을 보류
+    std::vector<NetworkCommandData> m_vPendingSpawns;
+
     // 메인 스레드에서 실행할 명령 처리
     void ProcessSpawnPlayer(Scene* pScene, ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList,
                            uint64 playerId, const std::string& name, int playerType, float x, float y, float z);
