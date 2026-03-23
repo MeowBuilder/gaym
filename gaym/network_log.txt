@@ -1,0 +1,108 @@
+[Network] Login success
+[Network] C_ENTER_GAME sent
+[Network] ENTER_GAME Success! My LocalPlayerId = 1
+[Network] Login success
+[Network] C_ENTER_GAME sent
+[Network] Handle Spawn: PktId=1, MyLocalId=0, Name=Knight
+[Network] Handle Spawn: PktId=3, MyLocalId=1, Name=Knight
+[Network] QueueSpawnPlayer called: PlayerId=1, IsRemote=TRUE, Pos=(-4.0, 0.0, 2.0)
+[Network] QueueSpawnPlayer called: PlayerId=3, IsRemote=TRUE, Pos=(-4.0, 0.0, 2.0)
+[Network] ENTER_GAME Success! My LocalPlayerId = 3
+[Network] S_MOVE received: PlayerId=3 Pos=(0.0, 4.9, 40.0)
+[Network] QueueMovePlayer called
+[Network] S_MOVE received: PlayerId=3 Pos=(0.0, 4.5, 40.0)
+[Network] QueueMovePlayer called
+[Network] S_MOVE received: PlayerId=3 Pos=(0.0, 3.9, 40.0)
+[Network] QueueMovePlayer called
+[Network] S_MOVE received: PlayerId=3 Pos=(0.0, 3.2, 40.0)
+[Network] QueueMovePlayer called
+[Network] S_MOVE received: PlayerId=3 Pos=(0.0, 2.3, 40.0)
+[Network] QueueMovePlayer called
+[Network] S_MOVE received: PlayerId=3 Pos=(0.0, 1.3, 40.0)
+[Network] QueueMovePlayer called
+[Network] S_MOVE received: PlayerId=3 Pos=(0.0, 0.1, 40.0)
+[Network] QueueMovePlayer called
+[Network] S_MOVE received: PlayerId=3 Pos=(0.0, 0.0, 40.0)
+[Network] QueueMovePlayer called
+[Network] S_MOVE received: PlayerId=1 Pos=(-0.8, 0.0, 39.2)
+[Network] QueueMovePlayer called
+[Network] S_MOVE received: PlayerId=1 Pos=(-1.6, 0.0, 38.4)
+[Network] QueueMovePlayer called
+[Network] S_MOVE received: PlayerId=1 Pos=(-2.5, 0.0, 37.5)
+[Network] QueueMovePlayer called
+[Network] S_MOVE received: PlayerId=1 Pos=(-3.2, 0.0, 36.8)
+[Network] QueueMovePlayer called
+[Network] S_MOVE received: PlayerId=1 Pos=(-3.9, 0.0, 36.1)
+[Network] QueueMovePlayer called
+[Network] S_MOVE received: PlayerId=1 Pos=(-4.6, 0.0, 35.4)
+[Network] QueueMovePlayer called
+[Network] S_MOVE received: PlayerId=1 Pos=(-4.8, 0.0, 34.5)
+[Network] QueueMovePlayer called
+[Network] S_MOVE received: PlayerId=1 Pos=(-4.8, 0.0, 33.5)
+[Network] QueueMovePlayer called
+[Network] S_MOVE received: PlayerId=1 Pos=(-4.8, 0.0, 32.5)
+[Network] QueueMovePlayer called
+[Network] S_MOVE received: PlayerId=1 Pos=(-4.8, 0.0, 31.5)
+[Network] QueueMovePlayer called
+[Network] S_MOVE received: PlayerId=1 Pos=(-4.8, 0.0, 30.3)
+[Network] QueueMovePlayer called
+[Network] S_MOVE received: PlayerId=1 Pos=(-4.8, 0.0, 29.2)
+[Network] QueueMovePlayer called
+[Network] S_MOVE received: PlayerId=1 Pos=(-4.8, 0.0, 28.0)
+[Network] QueueMovePlayer called
+[Network] S_MOVE received: PlayerId=1 Pos=(-4.7, 0.0, 27.1)
+[Network] QueueMovePlayer called
+[Network] S_MOVE received: PlayerId=3 Pos=(-0.3, 0.0, 40.3)
+[Network] QueueMovePlayer called
+[Network] S_MOVE received: PlayerId=3 Pos=(-1.0, 0.0, 41.0)
+[Network] QueueMovePlayer called
+[Network] S_MOVE received: PlayerId=3 Pos=(-1.7, 0.0, 41.5)
+[Network] QueueMovePlayer called
+[Network] S_MOVE received: PlayerId=3 Pos=(-2.4, 0.0, 41.5)
+[Network] QueueMovePlayer called
+[Network] S_MOVE received: PlayerId=3 Pos=(-3.1, 0.0, 41.5)
+[Network] QueueMovePlayer called
+[Network] S_MOVE received: PlayerId=3 Pos=(-3.8, 0.0, 41.5)
+[Network] QueueMovePlayer called
+[Network] S_MOVE received: PlayerId=3 Pos=(-4.5, 0.0, 41.5)
+[Network] QueueMovePlayer called
+[Network] S_MOVE received: PlayerId=3 Pos=(-5.1, 0.0, 41.5)
+[Network] QueueMovePlayer called
+[Network] S_MOVE received: PlayerId=3 Pos=(-5.1, 0.0, 41.4)
+[Network] QueueMovePlayer called
+[Network] S_MOVE received: PlayerId=3 Pos=(-5.1, 0.0, 41.1)
+[Network] QueueMovePlayer called
+[Network] S_MOVE received: PlayerId=3 Pos=(-5.1, 0.0, 40.2)
+[Network] QueueMovePlayer called
+[Network] S_MOVE received: PlayerId=3 Pos=(-5.4, 0.0, 39.4)
+[Network] QueueMovePlayer called
+[Network] S_MOVE received: PlayerId=3 Pos=(-6.2, 0.0, 38.6)
+[Network] QueueMovePlayer called
+[Network] S_MOVE received: PlayerId=3 Pos=(-6.7, 0.0, 37.6)
+[Network] QueueMovePlayer called
+[Network] S_MOVE received: PlayerId=3 Pos=(-6.7, 0.0, 36.4)
+[Network] QueueMovePlayer called
+[Network] S_MOVE received: PlayerId=3 Pos=(-6.7, 0.0, 35.3)
+[Network] QueueMovePlayer called
+[Network] S_MOVE received: PlayerId=3 Pos=(-6.7, 0.0, 34.1)
+[Network] QueueMovePlayer called
+[Network] S_MOVE received: PlayerId=3 Pos=(-6.7, 0.0, 32.9)
+[Network] QueueMovePlayer called
+[Network] S_MOVE received: PlayerId=3 Pos=(-7.2, 0.0, 32.1)
+[Network] QueueMovePlayer called
+[Network] S_MOVE received: PlayerId=3 Pos=(-7.9, 0.0, 31.4)
+[Network] QueueMovePlayer called
+[Network] S_MOVE received: PlayerId=3 Pos=(-8.6, 0.0, 30.7)
+[Network] QueueMovePlayer called
+[Network] S_MOVE received: PlayerId=3 Pos=(-9.3, 0.0, 30.0)
+[Network] QueueMovePlayer called
+[Network] S_MOVE received: PlayerId=3 Pos=(-10.1, 0.0, 29.2)
+[Network] QueueMovePlayer called
+[Network] S_MOVE received: PlayerId=3 Pos=(-10.8, 0.0, 28.5)
+[Network] QueueMovePlayer called
+[Network] S_MOVE received: PlayerId=3 Pos=(-11.7, 0.0, 27.7)
+[Network] QueueMovePlayer called
+[Network] S_MOVE received: PlayerId=3 Pos=(-12.1, 0.0, 27.2)
+[Network] QueueMovePlayer called
+[Network] S_DESPAWN received: PlayerId=3
+[Network] QueueDespawnPlayer called

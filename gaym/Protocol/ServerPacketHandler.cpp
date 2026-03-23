@@ -1,6 +1,15 @@
 #include "../ServerCore/pch.h"
 #include "ServerPacketHandler.h"
 #include "../NetworkManager.h"
+#include <fstream>
+#include <string>
+
+// 파일 로그 함수
+void WriteNetworkLog(const std::string& msg)
+{
+    std::ofstream ofs("network_log.txt", std::ios::app);
+    ofs << msg << std::endl;
+}
 
 PacketHandlerFunc GPacketHandler[UINT16_MAX];
 
@@ -8,7 +17,10 @@ PacketHandlerFunc GPacketHandler[UINT16_MAX];
 bool Handle_INVALID(PacketSessionRef& session, BYTE* buffer, int32 len)
 {
     PacketHeader* header = reinterpret_cast<PacketHeader*>(buffer);
+
     OutputDebugStringA("[Network] Invalid packet received\n");
+    WriteNetworkLog("[Network] Invalid packet received");
+
     return false;
 }
 
@@ -18,15 +30,17 @@ bool Handle_S_LOGIN(PacketSessionRef& session, Protocol::S_LOGIN& pkt)
     if (pkt.success() == false)
     {
         OutputDebugStringA("[Network] Login failed\n");
+        WriteNetworkLog("[Network] Login failed");
         return true;
     }
 
     OutputDebugStringA("[Network] Login success\n");
+    WriteNetworkLog("[Network] Login success");
 
     if (pkt.players().size() == 0)
     {
-        // 캐릭터 생성 필요 (현재는 자동으로 첫번째 캐릭터로 입장)
         OutputDebugStringA("[Network] No characters, need to create one\n");
+        WriteNetworkLog("[Network] No characters, need to create one");
     }
 
     // 자동으로 게임 입장 요청
@@ -36,6 +50,8 @@ bool Handle_S_LOGIN(PacketSessionRef& session, Protocol::S_LOGIN& pkt)
     session->Send(sendBuffer);
 
     OutputDebugStringA("[Network] C_ENTER_GAME sent\n");
+    WriteNetworkLog("[Network] C_ENTER_GAME sent");
+
     return true;
 }
 
@@ -52,15 +68,21 @@ bool Handle_S_ENTER_GAME(PacketSessionRef& session, Protocol::S_ENTER_GAME& pkt)
         {
             pNetMgr->SetLocalPlayerId(playerId);
 
-            wchar_t buf[128];
-            swprintf_s(buf, L"[Network] ENTER_GAME Success! My LocalPlayerId = %llu\n", playerId);
-            OutputDebugString(buf);
+            wchar_t wbuf[128];
+            swprintf_s(wbuf, L"[Network] ENTER_GAME Success! My LocalPlayerId = %llu\n", playerId);
+            OutputDebugString(wbuf);
+
+            char buf[128];
+            sprintf_s(buf, "[Network] ENTER_GAME Success! My LocalPlayerId = %llu", playerId);
+            WriteNetworkLog(buf);
         }
     }
     else
     {
         OutputDebugStringA("[Network] ENTER_GAME Failed by server\n");
+        WriteNetworkLog("[Network] ENTER_GAME Failed by server");
     }
+
     return true;
 }
 
@@ -70,6 +92,10 @@ bool Handle_S_CHAT(PacketSessionRef& session, Protocol::S_CHAT& pkt)
     OutputDebugStringA("[Network] Chat: ");
     OutputDebugStringA(pkt.msg().c_str());
     OutputDebugStringA("\n");
+
+    std::string log = "[Network] Chat: " + pkt.msg();
+    WriteNetworkLog(log);
+
     return true;
 }
 
@@ -86,19 +112,22 @@ bool Handle_S_SPAWN(PacketSessionRef& session, Protocol::S_SPAWN& pkt)
     NetworkManager* pNetMgr = NetworkManager::GetInstance();
     uint64 myLocalId = pNetMgr ? pNetMgr->GetLocalPlayerId() : 0;
 
-    wchar_t buf[256];
-    swprintf_s(buf, L"[Network] S_SPAWN received: PlayerId=%llu (MyLocalId=%llu) Name=%hs\n", 
-              playerId, myLocalId, name.c_str());
-    OutputDebugString(buf);
+    wchar_t wbuf[256];
+    swprintf_s(wbuf, L"[Network] S_SPAWN received: PlayerId=%llu (MyLocalId=%llu) Name=%hs\n",
+        playerId, myLocalId, name.c_str());
+    OutputDebugString(wbuf);
+
+    char buf[256];
+    sprintf_s(buf, "[Network] Handle Spawn: PktId=%llu, MyLocalId=%llu, Name=%s",
+        playerId, myLocalId, name.c_str());
+    WriteNetworkLog(buf);
 
     // 기본 위치 (서버 Player 구조체에 좌표가 없으므로 일단 0)
     float x = 0.0f, y = 0.0f, z = 0.0f;
 
-    // 만약 나 자신에 대한 스폰 패킷이 아니라면, 겹침 방지를 위해 임시 위치 부여
-    // (서버에서 S_MOVE를 보내기 전까지는 0,0,0에 겹쳐있게 되므로)
+    // 나 자신이 아닌 원격 플레이어면 임시 오프셋 부여
     if (playerId != myLocalId)
     {
-        // 0,0,0 근처 랜덤한 위치 (가려짐 방지)
         x = (float)(rand() % 10 - 5);
         z = (float)(rand() % 10 - 5);
     }
@@ -107,6 +136,11 @@ bool Handle_S_SPAWN(PacketSessionRef& session, Protocol::S_SPAWN& pkt)
     if (pNetMgr)
     {
         pNetMgr->QueueSpawnPlayer(playerId, name, playerType, x, y, z);
+
+        char buf2[256];
+        sprintf_s(buf2, "[Network] QueueSpawnPlayer called: PlayerId=%llu, IsRemote=%s, Pos=(%.1f, %.1f, %.1f)",
+            playerId, (playerId != myLocalId ? "TRUE" : "FALSE"), x, y, z);
+        WriteNetworkLog(buf2);
     }
 
     return true;
@@ -117,15 +151,20 @@ bool Handle_S_DESPAWN(PacketSessionRef& session, Protocol::S_DESPAWN& pkt)
 {
     uint64 playerId = pkt.playerid();
 
-    wchar_t buf[128];
-    swprintf_s(buf, L"[Network] S_DESPAWN received: PlayerId=%llu\n", playerId);
-    OutputDebugString(buf);
+    wchar_t wbuf[128];
+    swprintf_s(wbuf, L"[Network] S_DESPAWN received: PlayerId=%llu\n", playerId);
+    OutputDebugString(wbuf);
+
+    char buf[128];
+    sprintf_s(buf, "[Network] S_DESPAWN received: PlayerId=%llu", playerId);
+    WriteNetworkLog(buf);
 
     // NetworkManager를 통해 메인 스레드에서 처리
     NetworkManager* pNetMgr = NetworkManager::GetInstance();
     if (pNetMgr)
     {
         pNetMgr->QueueDespawnPlayer(playerId);
+        WriteNetworkLog("[Network] QueueDespawnPlayer called");
     }
 
     return true;
@@ -139,16 +178,17 @@ bool Handle_S_MOVE(PacketSessionRef& session, Protocol::S_MOVE& pkt)
     float y = pkt.y();
     float z = pkt.z();
 
-    // 디버그 로그 (너무 많이 출력되면 주석 처리)
-    // wchar_t buf[128];
-    // swprintf_s(buf, L"[Network] S_MOVE: PlayerId=%llu Pos=(%.1f, %.1f, %.1f)\n", playerId, x, y, z);
-    // OutputDebugString(buf);
+    char buf[256];
+    sprintf_s(buf, "[Network] S_MOVE received: PlayerId=%llu Pos=(%.1f, %.1f, %.1f)",
+        playerId, x, y, z);
+    WriteNetworkLog(buf);
 
     // NetworkManager를 통해 메인 스레드에서 처리
     NetworkManager* pNetMgr = NetworkManager::GetInstance();
     if (pNetMgr)
     {
         pNetMgr->QueueMovePlayer(playerId, x, y, z);
+        WriteNetworkLog("[Network] QueueMovePlayer called");
     }
 
     return true;
