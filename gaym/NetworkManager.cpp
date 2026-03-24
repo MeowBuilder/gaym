@@ -407,6 +407,9 @@ void NetworkManager::ProcessSpawnPlayer(Scene* pScene, ID3D12Device* pDevice,
         pScene->AddRenderComponentsToHierarchy(pDevice, pCommandList, pRemotePlayer, pDefaultShader, true);
     }
 
+    // 컴포넌트 초기화 (AnimationComponent::BuildBoneCache 포함)
+    pRemotePlayer->Init(pDevice, pCommandList);
+
     // 맵에 등록
     m_mapRemotePlayers[playerId] = pRemotePlayer;
 

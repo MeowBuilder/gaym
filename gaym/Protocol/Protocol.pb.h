@@ -614,9 +614,18 @@ class S_ENTER_GAME final :
   // accessors -------------------------------------------------------
 
   enum : int {
+    kPlayerIdFieldNumber = 2,
     kSuccessFieldNumber = 1,
-    kPlayeridFieldNumber = 2,
   };
+  // uint64 playerId = 2;
+  void clear_playerid();
+  ::PROTOBUF_NAMESPACE_ID::uint64 playerid() const;
+  void set_playerid(::PROTOBUF_NAMESPACE_ID::uint64 value);
+  private:
+  ::PROTOBUF_NAMESPACE_ID::uint64 _internal_playerid() const;
+  void _internal_set_playerid(::PROTOBUF_NAMESPACE_ID::uint64 value);
+  public:
+
   // bool success = 1;
   void clear_success();
   bool success() const;
@@ -624,15 +633,6 @@ class S_ENTER_GAME final :
   private:
   bool _internal_success() const;
   void _internal_set_success(bool value);
-  public:
-
-  // uint64 playerid = 2;
-  void clear_playerid();
-  ::PROTOBUF_NAMESPACE_ID::uint64 playerid() const;
-  void set_playerid(::PROTOBUF_NAMESPACE_ID::uint64 value);
-  private:
-  ::PROTOBUF_NAMESPACE_ID::uint64 _internal_playerid() const;
-  void _internal_set_playerid(::PROTOBUF_NAMESPACE_ID::uint64 value);
   public:
 
   // @@protoc_insertion_point(class_scope:Protocol.S_ENTER_GAME)
@@ -1643,7 +1643,7 @@ inline void S_ENTER_GAME::set_success(bool value) {
   // @@protoc_insertion_point(field_set:Protocol.S_ENTER_GAME.success)
 }
 
-// uint64 playerid = 2;
+// uint64 playerId = 2;
 inline void S_ENTER_GAME::clear_playerid() {
   playerid_ = uint64_t{0u};
 }
@@ -1651,16 +1651,16 @@ inline ::PROTOBUF_NAMESPACE_ID::uint64 S_ENTER_GAME::_internal_playerid() const 
   return playerid_;
 }
 inline ::PROTOBUF_NAMESPACE_ID::uint64 S_ENTER_GAME::playerid() const {
-  // @@protoc_insertion_point(field_get:Protocol.S_ENTER_GAME.playerid)
+  // @@protoc_insertion_point(field_get:Protocol.S_ENTER_GAME.playerId)
   return _internal_playerid();
 }
 inline void S_ENTER_GAME::_internal_set_playerid(::PROTOBUF_NAMESPACE_ID::uint64 value) {
-
+  
   playerid_ = value;
 }
 inline void S_ENTER_GAME::set_playerid(::PROTOBUF_NAMESPACE_ID::uint64 value) {
   _internal_set_playerid(value);
-  // @@protoc_insertion_point(field_set:Protocol.S_ENTER_GAME.playerid)
+  // @@protoc_insertion_point(field_set:Protocol.S_ENTER_GAME.playerId)
 }
 
 // -------------------------------------------------------------------

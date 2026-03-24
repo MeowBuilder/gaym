@@ -8,5 +8,8 @@ message Player
 	uint64 playerId = 1;
 	string name = 2;
 	PlayerType playerType = 3;
+	float x = 4;
+	float y = 5;
+	float z = 6;
 	// Ω∫≈» ¡§∫∏...
 }
