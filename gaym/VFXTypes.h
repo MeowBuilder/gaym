@@ -1,0 +1,76 @@
+#pragma once
+#include <vector>
+#include <optional>
+#include <DirectXMath.h>
+using namespace DirectX;
+
+// 파티클 운동 모드
+enum class ParticleMotionMode {
+    ControlPoint,  // 기존: CP 인력 기반 SPH
+    Gravity,       // 신규: 중력만 작용
+    Beam,          // 신규: 시작->끝 선형 이동, 반복
+    OrbitalCP,     // 신규: 마스터 CP + 공전 위성 CP군
+};
+
+// 중력 설정
+struct GravityDesc {
+    XMFLOAT3 gravity = { 0.f, -9.8f, 0.f };
+    float initialSpeedMin = 2.f;
+    float initialSpeedMax = 8.f;
+};
+
+// 빔 설정
+struct BeamDesc {
+    XMFLOAT3 startPos = {};
+    XMFLOAT3 endPos   = {};
+    float speedMin = 8.f;
+    float speedMax = 16.f;
+    float spreadRadius = 0.3f; // 빔 폭 (시작점 랜덤 오프셋)
+};
+
+// 박스 경계
+struct ConfinementBoxDesc {
+    XMFLOAT3 center      = {};
+    XMFLOAT3 halfExtents = { 1.f, 1.f, 1.f };
+    // 월드 공간 기준 OBB를 위한 로컬 축 (기본: 축정렬)
+    XMFLOAT3 axisX = { 1,0,0 };
+    XMFLOAT3 axisY = { 0,1,0 };
+    XMFLOAT3 axisZ = { 0,0,1 };
+    bool active = false;
+};
+
+// 위성 CP 설명자 (OrbitalCP 모드용)
+struct SatelliteCPDesc {
+    float orbitRadius;
+    float orbitSpeed;   // rad/s
+    float orbitPhase;   // 초기 위상
+    float verticalOffset; // 마스터 CP 기준 Y 오프셋
+    float attractionStrength;
+    float sphereRadius;
+};
+
+// VFX 페이즈
+struct VFXPhase {
+    float startTime = 0.f;
+    float duration  = 1.f;
+
+    ParticleMotionMode motionMode = ParticleMotionMode::ControlPoint;
+
+    // ConfinementBox (모든 모드에서 선택적 활성화 가능)
+    ConfinementBoxDesc boxDesc;
+
+    // Gravity 모드용
+    GravityDesc gravityDesc;
+
+    // Beam 모드용
+    BeamDesc beamDesc;
+};
+
+// VFX 룬 수식자
+struct VFXModifier {
+    float particleCountMult = 1.f;
+    float strengthMult      = 1.f;
+    float sizeScaleMult     = 1.f;
+    float speedMult         = 1.f;
+    std::optional<std::vector<VFXPhase>> phaseOverride;
+};

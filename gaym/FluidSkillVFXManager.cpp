@@ -1,6 +1,8 @@
 #include "stdafx.h"
 #include "FluidSkillVFXManager.h"
 #include "DescriptorHeap.h"
+#include <algorithm>
+#include <cmath>
 
 void FluidSkillVFXManager::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList,
                                  CDescriptorHeap* pDescriptorHeap, UINT nStartDescIndex)
@@ -28,6 +30,7 @@ int FluidSkillVFXManager::SpawnEffect(const XMFLOAT3& origin, const XMFLOAT3& di
             slot.prevOrigin  = origin;
             slot.direction   = direction;
             slot.def         = def;
+            slot.useSequence = false; // 기존 모드
 
             FluidParticleConfig cfg;
             cfg.element           = def.element;
@@ -53,6 +56,57 @@ int FluidSkillVFXManager::SpawnEffect(const XMFLOAT3& origin, const XMFLOAT3& di
     return -1;
 }
 
+int FluidSkillVFXManager::SpawnSequenceEffect(const XMFLOAT3& origin, const XMFLOAT3& direction,
+                                               const VFXSequenceDef& seqDef)
+{
+    for (int i = 0; i < MAX_EFFECTS; ++i)
+    {
+        if (!m_Slots[i].isActive)
+        {
+            FluidVFXSlot& slot = m_Slots[i];
+            slot.isActive         = true;
+            slot.isFadingOut      = false;
+            slot.elapsed          = 0.0f;
+            slot.origin           = origin;
+            slot.prevOrigin       = origin;
+            slot.direction        = direction;
+            slot.useSequence      = true;
+            slot.sequenceDef      = seqDef;
+            slot.currentPhaseIndex = -1; // 아직 페이즈 시작 전 (UpdatePhase에서 0으로 전환)
+
+            // 메테오용 마스터 CP 초기 위치: origin 위 높은 곳
+            slot.masterCPPos      = { origin.x, origin.y + 50.f, origin.z };
+            slot.masterCPFallSpeed = 15.f;
+
+            // FluidParticleConfig 설정
+            FluidParticleConfig cfg;
+            cfg.element           = seqDef.element;
+            cfg.particleCount     = seqDef.particleCount;
+            cfg.spawnRadius       = seqDef.spawnRadius;
+            cfg.smoothingRadius   = 1.2f;
+            cfg.restDensity       = 7.0f;
+            cfg.stiffness         = 50.0f;
+            cfg.viscosity         = 0.25f;
+            cfg.boundaryStiffness = 150.0f;
+            cfg.particleSize      = 0.25f;
+
+            // 첫 페이즈의 모드 설정
+            if (!seqDef.phases.empty()) {
+                slot.pSystem->SetMotionMode(seqDef.phases[0].motionMode);
+            }
+
+            slot.pSystem->Spawn(origin, cfg);
+
+            wchar_t buf[128];
+            swprintf_s(buf, 128, L"[FluidSkillVFXManager] SpawnSequenceEffect slot %d\n", i);
+            OutputDebugString(buf);
+            return i;
+        }
+    }
+    OutputDebugStringA("[FluidSkillVFXManager] No free slot for sequence!\n");
+    return -1;
+}
+
 void FluidSkillVFXManager::TrackEffect(int id, const XMFLOAT3& origin, const XMFLOAT3& direction)
 {
     if (id < 0 || id >= MAX_EFFECTS || !m_Slots[id].isActive) return;
@@ -63,7 +117,8 @@ void FluidSkillVFXManager::TrackEffect(int id, const XMFLOAT3& origin, const XMF
 void FluidSkillVFXManager::StopEffect(int id)
 {
     if (id < 0 || id >= MAX_EFFECTS) return;
-    m_Slots[id].isActive = false;
+    m_Slots[id].isActive    = false;
+    m_Slots[id].useSequence = false;
     m_Slots[id].pSystem->Clear();
 }
 
@@ -78,6 +133,13 @@ void FluidSkillVFXManager::ImpactEffect(int id, const XMFLOAT3& impactPos)
     cp.attractionStrength = 35.0f;   // 강한 인력으로 빠르게 집결
     cp.sphereRadius       = 0.25f;   // 매우 좁은 구체 -> 밀집
     slot.pSystem->SetControlPoints({ cp });
+
+    // 시퀀스 모드 해제 (충돌 후에는 기존 fade-out 로직)
+    slot.useSequence = false;
+    slot.pSystem->SetMotionMode(ParticleMotionMode::ControlPoint);
+    ConfinementBoxDesc emptyBox;
+    emptyBox.active = false;
+    slot.pSystem->SetConfinementBox(emptyBox);
 
     slot.isFadingOut = true;
     slot.fadeTimer   = 0.7f;  // 0.7초 후 소멸
@@ -96,13 +158,21 @@ void FluidSkillVFXManager::Update(float deltaTime)
             if (slot.fadeTimer <= 0.0f) {
                 slot.isActive    = false;
                 slot.isFadingOut = false;
+                slot.useSequence = false;
                 slot.pSystem->Clear();
             }
             continue;
         }
 
-        // 투사체 이동 델타만큼 파티클 전체를 같이 이동 (공동이동 프레임)
-        // → SPH 시뮬레이션이 투사체 기준계에서 동작하게 되어 파티클이 항상 따라붙음
+        // 시퀀스 모드: 페이즈 전환 + 박스 lerp 로직
+        if (slot.useSequence) {
+            slot.elapsed += deltaTime;
+            UpdatePhase(slot, deltaTime);
+            slot.pSystem->Update(deltaTime);
+            continue;
+        }
+
+        // 기존 모드: 투사체 이동 델타만큼 파티클 전체를 같이 이동 (공동이동 프레임)
         XMFLOAT3 delta = {
             slot.origin.x - slot.prevOrigin.x,
             slot.origin.y - slot.prevOrigin.y,
@@ -160,6 +230,154 @@ void FluidSkillVFXManager::PushControlPoints(FluidVFXSlot& slot) const
     slot.pSystem->SetControlPoints(cps);
 }
 
+// ============================================================================
+// 시퀀스 기반 페이즈 전환 로직
+// ============================================================================
+void FluidSkillVFXManager::UpdatePhase(FluidVFXSlot& slot, float dt)
+{
+    if (slot.sequenceDef.phases.empty()) return;
+
+    // 현재 페이즈 찾기
+    int targetPhase = 0;
+    for (int i = 0; i < static_cast<int>(slot.sequenceDef.phases.size()); i++) {
+        if (slot.elapsed >= slot.sequenceDef.phases[i].startTime) {
+            targetPhase = i;
+        }
+    }
+
+    // 페이즈 전환 발생
+    if (targetPhase != slot.currentPhaseIndex) {
+        slot.currentPhaseIndex = targetPhase;
+        const auto& phase = slot.sequenceDef.phases[targetPhase];
+
+        // 모드 전환
+        slot.pSystem->SetMotionMode(phase.motionMode);
+        slot.pSystem->SetConfinementBox(phase.boxDesc);
+
+        if (phase.motionMode == ParticleMotionMode::Beam) {
+            // Beam: 시작점/끝점 설정
+            BeamDesc bd = phase.beamDesc;
+            bd.startPos = slot.origin;
+            XMVECTOR endV = XMVectorAdd(
+                XMLoadFloat3(&slot.origin),
+                XMVectorScale(XMLoadFloat3(&slot.direction), 20.f)
+            );
+            XMStoreFloat3(&bd.endPos, endV);
+            slot.pSystem->SetBeamDesc(bd);
+            slot.pSystem->InitBeamParticles();
+        }
+
+        if (phase.motionMode == ParticleMotionMode::Gravity) {
+            // 메테오 폭발: 방사형 초기 velocity 부여
+            slot.pSystem->SetGravityDesc(phase.gravityDesc);
+            slot.pSystem->ApplyRadialBurst(slot.origin,
+                phase.gravityDesc.initialSpeedMin,
+                phase.gravityDesc.initialSpeedMax);
+        }
+
+        // ConfinementBox의 center를 현재 origin 기준으로 설정
+        if (phase.boxDesc.active) {
+            ConfinementBoxDesc bd = phase.boxDesc;
+            XMVECTOR centerV = XMVectorAdd(
+                XMLoadFloat3(&slot.origin),
+                XMVectorScale(XMLoadFloat3(&slot.direction), 2.5f)
+            );
+            XMStoreFloat3(&bd.center, centerV);
+
+            // 방향 기준으로 박스 축 설정
+            XMVECTOR fwd = XMVector3Normalize(XMLoadFloat3(&slot.direction));
+            XMVECTOR worldUp = XMVectorSet(0, 1, 0, 0);
+            float dotUp = XMVectorGetX(XMVector3Dot(fwd, worldUp));
+            XMVECTOR rightV = (fabsf(dotUp) > 0.99f)
+                ? XMVectorSet(1, 0, 0, 0)
+                : XMVector3Normalize(XMVector3Cross(worldUp, fwd));
+            XMVECTOR upV = XMVector3Cross(fwd, rightV);
+
+            XMStoreFloat3(&bd.axisX, rightV);
+            XMStoreFloat3(&bd.axisY, upV);
+            XMStoreFloat3(&bd.axisZ, fwd);
+
+            slot.pSystem->SetConfinementBox(bd);
+        }
+    }
+
+    // ─── 매 프레임 업데이트 ───
+
+    const auto& curPhase = slot.sequenceDef.phases[slot.currentPhaseIndex];
+
+    // OrbitalCP 매 프레임 위성 CP 갱신
+    if (curPhase.motionMode == ParticleMotionMode::OrbitalCP) {
+        UpdateOrbitalCPs(slot, dt);
+    }
+
+    // Phase 내 진행률 계산 (박스 halfExtents lerp용)
+    float phaseProgress = (slot.elapsed - curPhase.startTime) / curPhase.duration;
+    phaseProgress = std::clamp(phaseProgress, 0.f, 1.f);
+
+    // 박스 halfExtents lerp (이전 페이즈와 현재 페이즈 간)
+    if (curPhase.boxDesc.active) {
+        XMFLOAT3 prev = (slot.currentPhaseIndex > 0)
+            ? slot.sequenceDef.phases[slot.currentPhaseIndex - 1].boxDesc.halfExtents
+            : XMFLOAT3{ 0.5f, 0.5f, 0.5f };
+        XMFLOAT3 curr = curPhase.boxDesc.halfExtents;
+
+        ConfinementBoxDesc bd = curPhase.boxDesc;
+        bd.halfExtents.x = prev.x + (curr.x - prev.x) * phaseProgress;
+        bd.halfExtents.y = prev.y + (curr.y - prev.y) * phaseProgress;
+        bd.halfExtents.z = prev.z + (curr.z - prev.z) * phaseProgress;
+
+        // center: 박스가 앞으로 이동하는 경우 direction 기준으로 offset
+        XMVECTOR centerV = XMVectorAdd(
+            XMLoadFloat3(&slot.origin),
+            XMVectorScale(XMLoadFloat3(&slot.direction), bd.halfExtents.z)
+        );
+        XMStoreFloat3(&bd.center, centerV);
+
+        // 방향 기준으로 박스 축 설정
+        XMVECTOR fwd = XMVector3Normalize(XMLoadFloat3(&slot.direction));
+        XMVECTOR worldUp = XMVectorSet(0, 1, 0, 0);
+        float dotUp = XMVectorGetX(XMVector3Dot(fwd, worldUp));
+        XMVECTOR rightV = (fabsf(dotUp) > 0.99f)
+            ? XMVectorSet(1, 0, 0, 0)
+            : XMVector3Normalize(XMVector3Cross(worldUp, fwd));
+        XMVECTOR upV = XMVector3Cross(fwd, rightV);
+
+        XMStoreFloat3(&bd.axisX, rightV);
+        XMStoreFloat3(&bd.axisY, upV);
+        XMStoreFloat3(&bd.axisZ, fwd);
+
+        slot.pSystem->SetConfinementBox(bd);
+    }
+}
+
+void FluidSkillVFXManager::UpdateOrbitalCPs(FluidVFXSlot& slot, float dt)
+{
+    // 마스터 CP: 낙하 처리
+    slot.masterCPPos.y -= slot.masterCPFallSpeed * dt;
+
+    std::vector<FluidControlPoint> cps;
+    // 마스터 CP 추가
+    FluidControlPoint masterCP;
+    masterCP.position           = slot.masterCPPos;
+    masterCP.attractionStrength = 25.f;
+    masterCP.sphereRadius       = 5.f;
+    cps.push_back(masterCP);
+
+    // 위성 CP들 공전
+    for (const auto& sat : slot.sequenceDef.satelliteCPs) {
+        float angle = sat.orbitPhase + slot.elapsed * sat.orbitSpeed;
+        FluidControlPoint satCP;
+        satCP.position.x           = slot.masterCPPos.x + cosf(angle) * sat.orbitRadius;
+        satCP.position.y           = slot.masterCPPos.y + sat.verticalOffset;
+        satCP.position.z           = slot.masterCPPos.z + sinf(angle) * sat.orbitRadius;
+        satCP.attractionStrength   = sat.attractionStrength;
+        satCP.sphereRadius         = sat.sphereRadius;
+        cps.push_back(satCP);
+    }
+
+    slot.pSystem->SetControlPoints(cps);
+}
+
 FluidSkillVFXDef FluidSkillVFXManager::GetVFXDef(ElementType element, const RuneCombo& combo, float chargeRatio)
 {
     FluidSkillVFXDef def;
@@ -171,17 +389,18 @@ FluidSkillVFXDef FluidSkillVFXManager::GetVFXDef(ElementType element, const Rune
     {
     case ElementType::Fire:
     {
-        // 2개 CP, 빠른 궤도 - 혜성형
-        FluidCPDesc cp0;
-        cp0.orbitRadius = 0.65f; cp0.orbitSpeed = 5.0f;
-        cp0.orbitPhase = 0.0f;   cp0.forwardBias = 0.3f;
-        cp0.attractionStrength = 18.0f; cp0.sphereRadius = 1.8f;
-
-        FluidCPDesc cp1 = cp0;
-        cp1.orbitPhase = XM_PI;  cp1.forwardBias = -0.2f;
-        cp1.attractionStrength = 14.0f;
-
-        def.cpDescs = { cp0, cp1 };
+        // 혜성 꼬리: CP 3개를 투사체 뒤쪽에 배치, 뒤로 갈수록 퍼짐
+        for (int i = 0; i < 3; ++i)
+        {
+            FluidCPDesc cp;
+            cp.orbitRadius        = 0.12f + i * 0.08f;      // 뒤로 갈수록 약간 넓어짐
+            cp.orbitSpeed         = 4.5f;
+            cp.orbitPhase         = (float)i * (2.0f * XM_PI / 3.0f);
+            cp.forwardBias        = -0.35f - i * 0.75f;     // -0.35, -1.1, -1.85 (모두 뒤쪽)
+            cp.attractionStrength = 22.0f - i * 2.5f;       // 뒤로 갈수록 약해짐
+            cp.sphereRadius       = 0.75f + i * 0.3f;       // 뒤로 갈수록 넓게
+            def.cpDescs.push_back(cp);
+        }
         break;
     }
     case ElementType::Water:
@@ -238,7 +457,7 @@ FluidSkillVFXDef FluidSkillVFXManager::GetVFXDef(ElementType element, const Rune
 
     // Shape override: Place > Channel > Charge (mutually exclusive)
     if (combo.hasPlace) {
-        // Mine: single CP at center, no orbit — dense ball
+        // Mine: single CP at center, no orbit -- dense ball
         def.cpDescs.clear();
         FluidCPDesc cp;
         cp.orbitRadius        = 0.0f;

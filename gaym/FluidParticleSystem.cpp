@@ -3,6 +3,7 @@
 #include "DescriptorHeap.h"
 #include <cmath>
 #include <cstring>
+#include <algorithm>
 
 // Static member definitions
 ComPtr<ID3D12RootSignature> FluidParticleSystem::s_pRootSignature;
@@ -563,43 +564,86 @@ void FluidParticleSystem::ComputeForces()
             fz += (m_Particles[j].velocity.z - m_Particles[i].velocity.z) * vScale;
         }
 
-        // Attraction toward control points + boundary force
-        for (const auto& cp : m_ControlPoints)
-        {
-            float dx = cp.position.x - m_Particles[i].position.x;
-            float dy = cp.position.y - m_Particles[i].position.y;
-            float dz = cp.position.z - m_Particles[i].position.z;
-            float dist = sqrtf(dx * dx + dy * dy + dz * dz);
-
-            if (dist < 0.001f) continue;
-
-            float invDist = 1.0f / dist;
-            float ndx = dx * invDist;
-            float ndy = dy * invDist;
-            float ndz = dz * invDist;
-
-            // Soft attraction (attenuated by distance)
-            float attraction = cp.attractionStrength / (1.0f + dist * 0.5f);
-            fx += ndx * attraction;
-            fy += ndy * attraction;
-            fz += ndz * attraction;
-
-            // Gentle swirl: tangential force = cross(Y_up, toward_cp)
-            // Creates horizontal rotation around the control point
-            float swirlStrength = cp.attractionStrength * 0.35f;
-            // tangent = cross((0,1,0), (ndx,ndy,ndz)) = (ndz, 0, -ndx)
-            fx += ndz * swirlStrength;
-            fz += -ndx * swirlStrength;
-
-            // Boundary: strong inward force if outside sphere radius
-            if (dist > cp.sphereRadius)
+        // Gravity 모드: CP 인력 대신 중력 적용
+        if (m_MotionMode == ParticleMotionMode::Gravity) {
+            fx += m_GravityDesc.gravity.x * m_Particles[i].mass;
+            fy += m_GravityDesc.gravity.y * m_Particles[i].mass;
+            fz += m_GravityDesc.gravity.z * m_Particles[i].mass;
+        }
+        else {
+            // ControlPoint / OrbitalCP 모드: 기존 CP 인력 + swirl
+            for (const auto& cp : m_ControlPoints)
             {
-                float overshoot = dist - cp.sphereRadius;
-                float boundaryForce = m_Config.boundaryStiffness * overshoot;
-                fx += ndx * boundaryForce;
-                fy += ndy * boundaryForce;
-                fz += ndz * boundaryForce;
+                float dx = cp.position.x - m_Particles[i].position.x;
+                float dy = cp.position.y - m_Particles[i].position.y;
+                float dz = cp.position.z - m_Particles[i].position.z;
+                float dist = sqrtf(dx * dx + dy * dy + dz * dz);
+
+                if (dist < 0.001f) continue;
+
+                float invDist = 1.0f / dist;
+                float ndx = dx * invDist;
+                float ndy = dy * invDist;
+                float ndz = dz * invDist;
+
+                // Soft attraction (attenuated by distance)
+                float attraction = cp.attractionStrength / (1.0f + dist * 0.5f);
+                fx += ndx * attraction;
+                fy += ndy * attraction;
+                fz += ndz * attraction;
+
+                // Gentle swirl: tangential force = cross(Y_up, toward_cp)
+                // Creates horizontal rotation around the control point
+                float swirlStrength = cp.attractionStrength * 0.35f;
+                // tangent = cross((0,1,0), (ndx,ndy,ndz)) = (ndz, 0, -ndx)
+                fx += ndz * swirlStrength;
+                fz += -ndx * swirlStrength;
+
+                // Boundary: strong inward force if outside sphere radius
+                if (dist > cp.sphereRadius)
+                {
+                    float overshoot = dist - cp.sphereRadius;
+                    float boundaryForce = m_Config.boundaryStiffness * overshoot;
+                    fx += ndx * boundaryForce;
+                    fy += ndy * boundaryForce;
+                    fz += ndz * boundaryForce;
+                }
             }
+        }
+
+        // ConfinementBox 경계력 (모든 모드에서 선택적 적용)
+        if (m_ConfinementBox.active) {
+            XMVECTOR toParticle = XMVectorSubtract(
+                XMLoadFloat3(&m_Particles[i].position),
+                XMLoadFloat3(&m_ConfinementBox.center));
+            float localX = XMVectorGetX(XMVector3Dot(toParticle, XMLoadFloat3(&m_ConfinementBox.axisX)));
+            float localY = XMVectorGetX(XMVector3Dot(toParticle, XMLoadFloat3(&m_ConfinementBox.axisY)));
+            float localZ = XMVectorGetX(XMVector3Dot(toParticle, XMLoadFloat3(&m_ConfinementBox.axisZ)));
+
+            XMVECTOR forceVec = XMVectorZero();
+            float bStiff = m_Config.boundaryStiffness;
+
+            auto applyAxisForce = [&](float localCoord, float halfExt, const XMFLOAT3& axis) {
+                if (localCoord > halfExt) {
+                    float excess = localCoord - halfExt;
+                    XMVECTOR axisVec = XMLoadFloat3(&axis);
+                    forceVec = XMVectorSubtract(forceVec, XMVectorScale(axisVec, bStiff * excess));
+                } else if (localCoord < -halfExt) {
+                    float excess = -halfExt - localCoord;
+                    XMVECTOR axisVec = XMLoadFloat3(&axis);
+                    forceVec = XMVectorAdd(forceVec, XMVectorScale(axisVec, bStiff * excess));
+                }
+            };
+
+            applyAxisForce(localX, m_ConfinementBox.halfExtents.x, m_ConfinementBox.axisX);
+            applyAxisForce(localY, m_ConfinementBox.halfExtents.y, m_ConfinementBox.axisY);
+            applyAxisForce(localZ, m_ConfinementBox.halfExtents.z, m_ConfinementBox.axisZ);
+
+            XMFLOAT3 boxForce;
+            XMStoreFloat3(&boxForce, forceVec);
+            fx += boxForce.x;
+            fy += boxForce.y;
+            fz += boxForce.z;
         }
 
         m_Particles[i].force = { fx, fy, fz };
@@ -671,7 +715,40 @@ void FluidParticleSystem::Update(float deltaTime)
     // Clamp dt for stability with large timesteps
     float dt = (std::min)(deltaTime, 0.016f);
 
-    // Run SPH phases
+    // Beam 모드: SPH 단계 스킵, 직접 위치 제어
+    if (m_MotionMode == ParticleMotionMode::Beam) {
+        XMVECTOR start = XMLoadFloat3(&m_BeamDesc.startPos);
+        XMVECTOR end   = XMLoadFloat3(&m_BeamDesc.endPos);
+        XMVECTOR dir   = XMVector3Normalize(XMVectorSubtract(end, start));
+        float totalDist = XMVectorGetX(XMVector3Length(XMVectorSubtract(end, start)));
+
+        for (auto& p : m_Particles) {
+            if (!p.active) continue;
+            // 끝점 도달 판정
+            XMVECTOR pos = XMLoadFloat3(&p.position);
+            float proj = XMVectorGetX(XMVector3Dot(XMVectorSubtract(pos, start), dir));
+            if (proj >= totalDist) {
+                // 시작점으로 리셋 + spread
+                float rx = (Rand01() - 0.5f) * 2.f * m_BeamDesc.spreadRadius;
+                float ry = (Rand01() - 0.5f) * 2.f * m_BeamDesc.spreadRadius;
+                XMVECTOR perpX = XMVector3Normalize(XMVectorSet(-XMVectorGetZ(dir), 0, XMVectorGetX(dir), 0));
+                XMVECTOR perpY = XMVector3Cross(dir, perpX);
+                XMVECTOR newPos = XMVectorAdd(start, XMVectorAdd(XMVectorScale(perpX, rx), XMVectorScale(perpY, ry)));
+                XMStoreFloat3(&p.position, newPos);
+                float speed = m_BeamDesc.speedMin + Rand01() * (m_BeamDesc.speedMax - m_BeamDesc.speedMin);
+                XMFLOAT3 d; XMStoreFloat3(&d, dir);
+                p.velocity = { d.x * speed, d.y * speed, d.z * speed };
+            }
+            // Beam은 velocity만으로 이동 (SPH force 무시)
+            p.position.x += p.velocity.x * dt;
+            p.position.y += p.velocity.y * dt;
+            p.position.z += p.velocity.z * dt;
+        }
+        // SPH 단계 스킵 (Beam은 직접 위치 제어)
+        return;
+    }
+
+    // 일반 SPH 시뮬레이션 (ControlPoint, Gravity, OrbitalCP 모드)
     BuildSpatialHash();
     ComputeDensityPressure();
     ComputeForces();
@@ -756,4 +833,76 @@ void FluidParticleSystem::Render(ID3D12GraphicsCommandList* pCommandList,
 
     // Instanced draw (4 vertices per quad, one instance per active particle)
     pCommandList->DrawInstanced(4, (UINT)m_nActiveCount, 0, 0);
+}
+
+// ============================================================================
+// 운동 모드 관련 메서드
+// ============================================================================
+void FluidParticleSystem::SetMotionMode(ParticleMotionMode mode)
+{
+    m_MotionMode = mode;
+}
+
+void FluidParticleSystem::SetConfinementBox(const ConfinementBoxDesc& box)
+{
+    m_ConfinementBox = box;
+}
+
+void FluidParticleSystem::SetBeamDesc(const BeamDesc& beam)
+{
+    m_BeamDesc = beam;
+}
+
+void FluidParticleSystem::SetGravityDesc(const GravityDesc& grav)
+{
+    m_GravityDesc = grav;
+}
+
+void FluidParticleSystem::InitBeamParticles()
+{
+    // Beam 모드용 파티클 초기화: startPos 주변에서 endPos 방향으로 분산 배치
+    XMVECTOR start = XMLoadFloat3(&m_BeamDesc.startPos);
+    XMVECTOR end   = XMLoadFloat3(&m_BeamDesc.endPos);
+    XMVECTOR dir   = XMVector3Normalize(XMVectorSubtract(end, start));
+    float totalDist = XMVectorGetX(XMVector3Length(XMVectorSubtract(end, start)));
+
+    XMVECTOR perpX = XMVector3Normalize(XMVectorSet(-XMVectorGetZ(dir), 0, XMVectorGetX(dir), 0));
+    XMVECTOR perpY = XMVector3Cross(dir, perpX);
+
+    for (auto& p : m_Particles) {
+        if (!p.active) continue;
+        // 빔 경로 위 랜덤 위치에 배치
+        float t = Rand01();
+        float rx = (Rand01() - 0.5f) * 2.f * m_BeamDesc.spreadRadius;
+        float ry = (Rand01() - 0.5f) * 2.f * m_BeamDesc.spreadRadius;
+        XMVECTOR pos = XMVectorAdd(
+            XMVectorAdd(start, XMVectorScale(dir, t * totalDist)),
+            XMVectorAdd(XMVectorScale(perpX, rx), XMVectorScale(perpY, ry))
+        );
+        XMStoreFloat3(&p.position, pos);
+
+        float speed = m_BeamDesc.speedMin + Rand01() * (m_BeamDesc.speedMax - m_BeamDesc.speedMin);
+        XMFLOAT3 d; XMStoreFloat3(&d, dir);
+        p.velocity = { d.x * speed, d.y * speed, d.z * speed };
+    }
+}
+
+void FluidParticleSystem::ApplyRadialBurst(XMFLOAT3 center, float minSpeed, float maxSpeed)
+{
+    for (auto& p : m_Particles) {
+        if (!p.active) continue;
+        XMVECTOR pDir = XMVector3Normalize(
+            XMVectorSubtract(XMLoadFloat3(&p.position), XMLoadFloat3(&center))
+        );
+        // 방향이 영벡터인 경우 랜덤 방향
+        if (XMVectorGetX(XMVector3Length(pDir)) < 0.001f) {
+            pDir = XMVector3Normalize(XMVectorSet(
+                Rand01() - 0.5f, Rand01() - 0.5f, Rand01() - 0.5f, 0));
+        }
+        float speed = minSpeed + Rand01() * (maxSpeed - minSpeed);
+        XMFLOAT3 v; XMStoreFloat3(&v, XMVectorScale(pDir, speed));
+        p.velocity.x += v.x;
+        p.velocity.y += v.y;
+        p.velocity.z += v.z;
+    }
 }

@@ -2,6 +2,7 @@
 
 #include "stdafx.h"
 #include "FluidParticle.h"
+#include "VFXTypes.h"
 #include <vector>
 #include <array>
 
@@ -41,6 +42,14 @@ public:
     // Shift all particle positions by delta (used to co-move with a projectile)
     void OffsetParticles(const XMFLOAT3& delta);
 
+    // 운동 모드 설정
+    void SetMotionMode(ParticleMotionMode mode);
+    void SetConfinementBox(const ConfinementBoxDesc& box);
+    void SetBeamDesc(const BeamDesc& beam);
+    void SetGravityDesc(const GravityDesc& grav);
+    void InitBeamParticles();  // Beam 모드 전용 초기화
+    void ApplyRadialBurst(XMFLOAT3 center, float minSpeed, float maxSpeed);
+
 private:
     // SPH phases
     void BuildSpatialHash();
@@ -68,6 +77,13 @@ private:
     std::vector<FluidControlPoint> m_ControlPoints;
     FluidParticleConfig            m_Config;
     FluidElementColor              m_Colors;
+
+    // 확장: 운동 모드 관련 멤버
+    ParticleMotionMode             m_MotionMode = ParticleMotionMode::ControlPoint;
+    ConfinementBoxDesc             m_ConfinementBox;
+    BeamDesc                       m_BeamDesc;
+    GravityDesc                    m_GravityDesc;
+    std::vector<FluidControlPoint> m_OrbitalCPs; // OrbitalCP 모드 위성 CP 포함
 
     // Spatial hash (power-of-2 table, direct-mapped cells)
     static constexpr int HASH_TABLE_SIZE      = 4096;

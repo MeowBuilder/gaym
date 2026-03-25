@@ -2,6 +2,8 @@
 #include "stdafx.h"
 #include "FluidParticle.h"
 #include "FluidParticleSystem.h"
+#include "VFXTypes.h"
+#include "VFXLibrary.h"
 #include <array>
 #include <memory>
 
@@ -18,6 +20,14 @@ struct FluidVFXSlot {
     XMFLOAT3         prevOrigin  = {0, 0, 0};  // 이전 프레임 origin (파티클 공동이동용)
     XMFLOAT3         direction   = {0, 0, 1};
     FluidSkillVFXDef def;
+
+    // 시퀀스 기반 VFX 확장 멤버
+    VFXSequenceDef   sequenceDef;           // 현재 재생 중인 시퀀스 정의
+    int              currentPhaseIndex = 0; // 현재 페이즈 인덱스
+    bool             useSequence = false;   // 시퀀스 모드 활성 여부
+    float            masterCPFallY = 0.f;   // 메테오용 마스터 CP Y 위치 (낙하 추적)
+    XMFLOAT3         masterCPPos = {};      // 메테오 마스터 CP 현재 위치
+    float            masterCPFallSpeed = 15.f; // 낙하 속도 (units/s)
 };
 
 class FluidSkillVFXManager
@@ -31,6 +41,10 @@ public:
     // 새 이펙트 생성, 슬롯 ID 반환 (-1: 실패)
     int SpawnEffect(const XMFLOAT3& origin, const XMFLOAT3& direction,
                     const FluidSkillVFXDef& def);
+
+    // 시퀀스 기반 이펙트 생성 (VFXLibrary 연동)
+    int SpawnSequenceEffect(const XMFLOAT3& origin, const XMFLOAT3& direction,
+                            const VFXSequenceDef& seqDef);
 
     // 매 프레임 투사체 위치/방향 추적
     void TrackEffect(int id, const XMFLOAT3& origin, const XMFLOAT3& direction);
@@ -50,6 +64,10 @@ public:
 
 private:
     void PushControlPoints(FluidVFXSlot& slot) const;
+
+    // 시퀀스 기반 페이즈 전환 로직
+    void UpdatePhase(FluidVFXSlot& slot, float dt);
+    void UpdateOrbitalCPs(FluidVFXSlot& slot, float dt);
 
     std::array<FluidVFXSlot, MAX_EFFECTS> m_Slots;
 };

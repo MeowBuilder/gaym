@@ -211,6 +211,8 @@ xcopy /Y "$(ProjectDir)Libraries\Libs\libprotobuf.dll" "$(OutDir)"</Command>
     <ClInclude Include="FluidParticleSystem.h" />
     <ClInclude Include="FluidSkillEffect.h" />
     <ClInclude Include="FluidSkillVFXManager.h" />
+    <ClInclude Include="VFXTypes.h" />
+    <ClInclude Include="VFXLibrary.h" />
     <ClInclude Include="LavaGeyserComponent.h" />
     <ClInclude Include="LavaGeyserManager.h" />
     <ClInclude Include="RenderComponent.h" />
@@ -299,6 +301,7 @@ xcopy /Y "$(ProjectDir)Libraries\Libs\libprotobuf.dll" "$(OutDir)"</Command>
     <ClCompile Include="FluidParticleSystem.cpp" />
     <ClCompile Include="FluidSkillEffect.cpp" />
     <ClCompile Include="FluidSkillVFXManager.cpp" />
+    <ClCompile Include="VFXLibrary.cpp" />
     <ClCompile Include="LavaGeyserComponent.cpp" />
     <ClCompile Include="LavaGeyserManager.cpp" />
     <ClCompile Include="RenderComponent.cpp" />

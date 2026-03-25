@@ -18,6 +18,7 @@
 #include "EnemyComponent.h"
 #include "MathUtils.h"
 #include "LavaGeyserManager.h"
+#include "VFXLibrary.h"
 #include <functional> // Added for std::function
 #include "MapLoader.h"
 
@@ -169,6 +170,10 @@ void Scene::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList)
     m_nNextDescriptorIndex += FluidSkillVFXManager::MAX_EFFECTS;
     m_pFluidVFXManager->Init(pDevice, pCommandList, m_pDescriptorHeap.get(), nFluidVFXDescStart);
     OutputDebugString(L"[Scene] FluidSkillVFXManager initialized\n");
+
+    // VFXLibrary 초기화 (모든 스킬 VFX 정의 등록)
+    VFXLibrary::Get().Initialize();
+    OutputDebugString(L"[Scene] VFXLibrary initialized\n");
 
     // FluidSkillEffect: SkillComponent 연결 (플레이어 설정 후)
     if (m_pPlayerGameObject)
