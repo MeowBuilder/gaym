@@ -12,6 +12,9 @@
 #include "CollisionLayer.h"
 #include "SkillComponent.h"
 #include "FireballBehavior.h"
+#include "WaveSlashBehavior.h"
+#include "FireBeamBehavior.h"
+#include "MeteorBehavior.h"
 #include "ProjectileManager.h"
 #include "DropItemComponent.h"
 #include "InteractableComponent.h"
@@ -108,17 +111,27 @@ void Scene::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList)
         // Add Skill Component
         auto* pSkillComponent = pPlayer->AddComponent<SkillComponent>();
 
-        // Equip Fireball to Q slot
-        auto fireballQ = std::make_unique<FireballBehavior>();
-        fireballQ->SetProjectileManager(m_pProjectileManager.get());
-        pSkillComponent->EquipSkill(SkillSlot::Q, std::move(fireballQ));
+        // Q - WaveSlash (웨이브 슬래시)
+        auto waveSlash = std::make_unique<WaveSlashBehavior>();
+        waveSlash->SetVFXManager(m_pFluidVFXManager.get());
+        pSkillComponent->EquipSkill(SkillSlot::Q, std::move(waveSlash));
 
-        // Also equip Fireball to RightClick slot for testing
+        // E - FireBeam (화염 빔)
+        auto fireBeam = std::make_unique<FireBeamBehavior>();
+        fireBeam->SetVFXManager(m_pFluidVFXManager.get());
+        pSkillComponent->EquipSkill(SkillSlot::E, std::move(fireBeam));
+
+        // R - Meteor (메테오)
+        auto meteor = std::make_unique<MeteorBehavior>();
+        meteor->SetVFXManager(m_pFluidVFXManager.get());
+        pSkillComponent->EquipSkill(SkillSlot::R, std::move(meteor));
+
+        // RightClick - Fireball (기존 투사체 유지)
         auto fireballRClick = std::make_unique<FireballBehavior>();
         fireballRClick->SetProjectileManager(m_pProjectileManager.get());
         pSkillComponent->EquipSkill(SkillSlot::RightClick, std::move(fireballRClick));
 
-        OutputDebugString(L"[Scene] Skill system initialized - Fireball equipped to Q and RightClick\n");
+        OutputDebugString(L"[Scene] Skill system initialized - Q:WaveSlash, E:FireBeam, R:Meteor, RClick:Fireball\n");
 
         AddRenderComponentsToHierarchy(pDevice, pCommandList, pPlayer, pShader.get(), true);  // Player casts shadow
     }

@@ -74,8 +74,9 @@ int FluidSkillVFXManager::SpawnSequenceEffect(const XMFLOAT3& origin, const XMFL
             slot.sequenceDef      = seqDef;
             slot.currentPhaseIndex = -1; // 아직 페이즈 시작 전 (UpdatePhase에서 0으로 전환)
 
-            // 메테오용 마스터 CP 초기 위치: origin 위 높은 곳
-            slot.masterCPPos      = { origin.x, origin.y + 50.f, origin.z };
+            // 메테오용 마스터 CP 초기 위치: origin 그대로 사용
+            // (MeteorBehavior에서 이미 상공 위치를 origin으로 전달)
+            slot.masterCPPos       = origin;
             slot.masterCPFallSpeed = 15.f;
 
             // FluidParticleConfig 설정
@@ -167,6 +168,22 @@ void FluidSkillVFXManager::Update(float deltaTime)
         // 시퀀스 모드: 페이즈 전환 + 박스 lerp 로직
         if (slot.useSequence) {
             slot.elapsed += deltaTime;
+
+            // 시퀀스 자동 종료: 모든 페이즈의 (startTime + duration) 중 최대값을 넘으면 종료
+            if (!slot.sequenceDef.phases.empty()) {
+                float maxEnd = 0.f;
+                for (const auto& phase : slot.sequenceDef.phases) {
+                    float phaseEnd = phase.startTime + phase.duration;
+                    if (phaseEnd > maxEnd) maxEnd = phaseEnd;
+                }
+                if (slot.elapsed >= maxEnd) {
+                    slot.isActive    = false;
+                    slot.useSequence = false;
+                    slot.pSystem->Clear();
+                    continue;
+                }
+            }
+
             UpdatePhase(slot, deltaTime);
             slot.pSystem->Update(deltaTime);
             continue;

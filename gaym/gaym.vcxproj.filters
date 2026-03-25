@@ -150,6 +150,15 @@
     <ClInclude Include="FireballBehavior.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
+    <ClInclude Include="WaveSlashBehavior.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="FireBeamBehavior.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="MeteorBehavior.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
     <ClInclude Include="Projectile.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
@@ -288,6 +297,15 @@
       <Filter>소스 파일</Filter>
     </ClCompile>
     <ClCompile Include="FireballBehavior.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="WaveSlashBehavior.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="FireBeamBehavior.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="MeteorBehavior.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
     <ClCompile Include="ProjectileManager.cpp">

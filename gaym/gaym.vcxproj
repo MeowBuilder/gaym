@@ -203,6 +203,9 @@ xcopy /Y "$(ProjectDir)Libraries\Libs\libprotobuf.dll" "$(OutDir)"</Command>
     <ClInclude Include="ISkillBehavior.h" />
     <ClInclude Include="SkillComponent.h" />
     <ClInclude Include="FireballBehavior.h" />
+    <ClInclude Include="WaveSlashBehavior.h" />
+    <ClInclude Include="FireBeamBehavior.h" />
+    <ClInclude Include="MeteorBehavior.h" />
     <ClInclude Include="Projectile.h" />
     <ClInclude Include="ProjectileManager.h" />
     <ClInclude Include="Particle.h" />
@@ -296,6 +299,9 @@ xcopy /Y "$(ProjectDir)Libraries\Libs\libprotobuf.dll" "$(OutDir)"</Command>
     <ClCompile Include="PlayerComponent.cpp" />
     <ClCompile Include="SkillComponent.cpp" />
     <ClCompile Include="FireballBehavior.cpp" />
+    <ClCompile Include="WaveSlashBehavior.cpp" />
+    <ClCompile Include="FireBeamBehavior.cpp" />
+    <ClCompile Include="MeteorBehavior.cpp" />
     <ClCompile Include="ProjectileManager.cpp" />
     <ClCompile Include="ParticleSystem.cpp" />
     <ClCompile Include="FluidParticleSystem.cpp" />

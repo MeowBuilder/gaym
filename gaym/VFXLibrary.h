@@ -17,6 +17,18 @@ enum RuneFlag : uint32_t {
     RUNE_SPLIT   = 1 << 5,
 };
 
+// RuneCombo -> RuneFlag 비트마스크 변환 유틸리티
+inline uint32_t ToRuneFlags(const RuneCombo& combo) {
+    uint32_t flags = 0;
+    if (combo.hasInstant) flags |= RUNE_INSTANT;
+    if (combo.hasCharge)  flags |= RUNE_CHARGE;
+    if (combo.hasChannel) flags |= RUNE_CHANNEL;
+    if (combo.hasPlace)   flags |= RUNE_PLACE;
+    if (combo.hasEnhance) flags |= RUNE_ENHANCE;
+    if (combo.hasSplit)   flags |= RUNE_SPLIT;
+    return flags;
+}
+
 struct VFXSequenceDef {
     std::string name;
     std::vector<VFXPhase> phases;
