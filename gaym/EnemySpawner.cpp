@@ -374,6 +374,11 @@ void EnemySpawner::SetupEnemyComponents(GameObject* pEnemy, const EnemySpawnData
     {
         pEnemyComp->SetAnimationComponent(pAnimComp);
         pEnemyComp->SetAnimationConfig(data.m_AnimConfig);
+
+        // Apply random time offset to desync animations between enemies
+        float fRandomOffset = (float)(rand() % 1000) / 100.0f;  // 0.0 ~ 10.0 seconds
+        pAnimComp->SetTimeOffset(fRandomOffset);
+
         pAnimComp->Play(data.m_AnimConfig.m_strIdleClip, data.m_AnimConfig.m_bLoopIdle);
     }
 

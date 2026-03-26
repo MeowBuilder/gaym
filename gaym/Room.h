@@ -54,6 +54,7 @@ public:
     void OnEnemyDeath(EnemyComponent* pEnemy);
     int GetAliveEnemyCount() const { return m_nTotalEnemies - m_nDeadEnemies; }
     int GetTotalEnemyCount() const { return m_nTotalEnemies; }
+    const std::vector<EnemyComponent*>& GetEnemies() const { return m_vEnemies; }
 
     // Spawn enemies when room becomes active
     void SpawnEnemies();

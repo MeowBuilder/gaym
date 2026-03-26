@@ -109,8 +109,12 @@ public:
 
     // AI utility
     float GetDistanceToTarget() const;
-    void FaceTarget();
+    void FaceTarget(float dt = 0.0f, bool bInstant = false);  // Smooth rotation towards target (dt=0 means instant)
     void MoveTowardsTarget(float dt);
+
+    // Separation (avoid stacking with other enemies)
+    void SetSeparationRadius(float fRadius) { m_fSeparationRadius = fRadius; }
+    void SetSeparationStrength(float fStrength) { m_fSeparationStrength = fStrength; }
 
     // Animation
     void SetAnimationComponent(AnimationComponent* pAnimComp) { m_pAnimationComp = pAnimComp; }
@@ -165,6 +169,13 @@ private:
     // Constants
     static constexpr float STAGGER_DURATION = 0.5f;
     static constexpr float DEAD_LINGER_TIME = 2.0f;
+
+    // Separation (avoid stacking)
+    float m_fSeparationRadius = 5.0f;    // Distance to start avoiding other enemies
+    float m_fSeparationStrength = 10.0f; // Strength of the separation force
+
+    // Smooth rotation
+    float m_fRotationSpeed = 180.0f;     // Degrees per second
 
     // Callbacks
     DeathCallback m_OnDeathCallback;

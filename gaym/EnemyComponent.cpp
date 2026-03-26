@@ -192,7 +192,7 @@ float EnemyComponent::GetDistanceToTarget() const
     return MathUtils::Distance2D(pMyTransform->GetPosition(), pTargetTransform->GetPosition());
 }
 
-void EnemyComponent::FaceTarget()
+void EnemyComponent::FaceTarget(float dt, bool bInstant)
 {
     if (!m_pTarget || !m_pOwner) return;
 
@@ -208,13 +208,43 @@ void EnemyComponent::FaceTarget()
     XMFLOAT2 dir = MathUtils::Direction2D(myPos, targetPos);
     if (dir.x == 0.0f && dir.y == 0.0f) return;
 
-    // Calculate yaw angle
-    float yawRad = atan2f(dir.x, dir.y);
-    float yawDeg = XMConvertToDegrees(yawRad);
+    // Calculate target yaw angle
+    float targetYawRad = atan2f(dir.x, dir.y);
+    float targetYawDeg = XMConvertToDegrees(targetYawRad);
 
-    // Set rotation (only yaw)
     const XMFLOAT3& currentRot = pMyTransform->GetRotation();
-    pMyTransform->SetRotation(currentRot.x, yawDeg, currentRot.z);
+
+    if (bInstant || dt <= 0.0f)
+    {
+        // Instant rotation (for attack start, etc.)
+        pMyTransform->SetRotation(currentRot.x, targetYawDeg, currentRot.z);
+    }
+    else
+    {
+        // Smooth rotation
+        float currentYaw = currentRot.y;
+
+        // Calculate shortest angle difference (-180 to 180)
+        float angleDiff = targetYawDeg - currentYaw;
+        while (angleDiff > 180.0f) angleDiff -= 360.0f;
+        while (angleDiff < -180.0f) angleDiff += 360.0f;
+
+        // Rotate towards target at rotation speed
+        float maxRotation = m_fRotationSpeed * dt;
+        float rotation = 0.0f;
+
+        if (fabsf(angleDiff) <= maxRotation)
+        {
+            rotation = angleDiff;
+        }
+        else
+        {
+            rotation = (angleDiff > 0.0f) ? maxRotation : -maxRotation;
+        }
+
+        float newYaw = currentYaw + rotation;
+        pMyTransform->SetRotation(currentRot.x, newYaw, currentRot.z);
+    }
 }
 
 void EnemyComponent::MoveTowardsTarget(float dt)
@@ -231,12 +261,49 @@ void EnemyComponent::MoveTowardsTarget(float dt)
 
     // Get normalized direction to target on XZ plane
     XMFLOAT2 dir = MathUtils::Direction2D(myPos, targetPos);
-    if (dir.x == 0.0f && dir.y == 0.0f) return;
 
-    // Move towards target (keep current Y from gravity system)
-    float moveAmount = m_Stats.m_fMoveSpeed * dt;
-    myPos.x += dir.x * moveAmount;
-    myPos.z += dir.y * moveAmount;
+    // Calculate separation force from other enemies in the room
+    XMFLOAT2 separationForce = { 0.0f, 0.0f };
+    if (m_pRoom)
+    {
+        const auto& enemies = m_pRoom->GetEnemies();
+        for (EnemyComponent* pOther : enemies)
+        {
+            if (pOther == this || !pOther || pOther->IsDead()) continue;
+
+            GameObject* pOtherOwner = pOther->GetOwner();
+            if (!pOtherOwner) continue;
+
+            TransformComponent* pOtherTransform = pOtherOwner->GetTransform();
+            if (!pOtherTransform) continue;
+
+            XMFLOAT3 otherPos = pOtherTransform->GetPosition();
+            float dist = MathUtils::Distance2D(myPos, otherPos);
+
+            // Apply separation if too close
+            if (dist > 0.001f && dist < m_fSeparationRadius)
+            {
+                // Direction away from other enemy
+                XMFLOAT2 awayDir = MathUtils::Direction2D(otherPos, myPos);
+                // Stronger force when closer (inverse proportional)
+                float strength = (m_fSeparationRadius - dist) / m_fSeparationRadius;
+                separationForce.x += awayDir.x * strength;
+                separationForce.y += awayDir.y * strength;
+            }
+        }
+    }
+
+    // Combine movement direction with separation force
+    float moveX = dir.x * m_Stats.m_fMoveSpeed;
+    float moveZ = dir.y * m_Stats.m_fMoveSpeed;
+
+    // Add separation force
+    moveX += separationForce.x * m_fSeparationStrength;
+    moveZ += separationForce.y * m_fSeparationStrength;
+
+    // Apply movement
+    myPos.x += moveX * dt;
+    myPos.z += moveZ * dt;
     // Y is controlled by gravity in Update()
 
     pMyTransform->SetPosition(myPos);
@@ -267,18 +334,20 @@ void EnemyComponent::UpdateChase(float dt)
         // Check if can attack (cooldown)
         if (m_fAttackCooldownTimer <= 0.0f)
         {
+            // Face target instantly when starting attack
+            FaceTarget(dt, true);
             ChangeState(EnemyState::Attack);
         }
         else
         {
-            // Wait for cooldown, face target
-            FaceTarget();
+            // Wait for cooldown, face target smoothly
+            FaceTarget(dt);
         }
     }
     else
     {
-        // Move towards target
-        FaceTarget();
+        // Move towards target with smooth rotation
+        FaceTarget(dt);
         MoveTowardsTarget(dt);
     }
 }
@@ -504,10 +573,10 @@ void EnemyComponent::UpdateBossIntro(float dt)
         float fDescendSpeed = 8.0f;
         pos.y -= fDescendSpeed * dt;
 
-        // Face the player while descending
+        // Face the player while descending (smooth rotation)
         if (m_pTarget)
         {
-            FaceTarget();
+            FaceTarget(dt);
         }
 
         if (pos.y <= m_fIntroTargetHeight + 0.5f)

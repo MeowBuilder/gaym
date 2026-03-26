@@ -46,7 +46,8 @@ void AnimationComponent::Play(std::string strClipName, bool bLoop)
     {
         m_pCurrentClip = pClip;
         m_bLoop = bLoop;
-        m_fCurrentTime = 0.0f;
+        // Apply time offset to desync animations between instances
+        m_fCurrentTime = fmod(m_fTimeOffset, pClip->m_fDuration);
         m_bIsPlaying = true;
     }
 }
@@ -77,7 +78,8 @@ void AnimationComponent::CrossFade(const std::string& strClipName, float fBlendD
 
     // Set new clip
     m_pCurrentClip = pNewClip;
-    m_fCurrentTime = 0.0f;
+    // Apply time offset for looping animations to desync between instances
+    m_fCurrentTime = bLoop ? fmod(m_fTimeOffset, pNewClip->m_fDuration) : 0.0f;
     m_bLoop = bLoop;
     m_bIsPlaying = true;
 

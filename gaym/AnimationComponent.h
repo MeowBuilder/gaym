@@ -24,11 +24,16 @@ public:
     bool IsBlending() const { return m_bIsBlending; }
     bool IsPlaying() const { return m_bIsPlaying; }
 
+    // Animation time offset (for desynchronizing multiple instances)
+    void SetTimeOffset(float fOffset) { m_fTimeOffset = fOffset; }
+    float GetTimeOffset() const { return m_fTimeOffset; }
+
 private:
     std::shared_ptr<AnimationSet> m_pAnimationSet;
     AnimationClip* m_pCurrentClip = nullptr;
 
     float m_fCurrentTime = 0.0f;
+    float m_fTimeOffset = 0.0f;  // Random offset to desync animations
     bool m_bLoop = true;
     bool m_bIsPlaying = false;
 
