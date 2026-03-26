@@ -72,6 +72,9 @@ struct VFXPhase {
     // 박스 확장 방향 힘 (OBB 로컬 좌표계: x=right, y=up, z=forward)
     XMFLOAT3 expansionForce = { 0.f, 0.f, 0.f };
     float expansionForceStrength = 0.f;
+
+    // 전역 중력 강도 (모든 모드에서 적용 가능, 0이면 비활성)
+    float globalGravityStrength = 0.f;
 };
 
 // VFX 룬 수식자

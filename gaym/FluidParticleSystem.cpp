@@ -329,6 +329,14 @@ void FluidParticleSystem::BuildSharedPipeline(ID3D12Device* pDevice)
 // ============================================================================
 void FluidParticleSystem::Spawn(const XMFLOAT3& center, const FluidParticleConfig& config)
 {
+    // 슬롯 재사용 시 이전 시퀀스 상태 완전 초기화
+    m_MotionMode          = ParticleMotionMode::ControlPoint;
+    m_ConfinementBox      = ConfinementBoxDesc{};   // active=false
+    m_BeamDesc            = BeamDesc{};
+    m_GravityDesc         = GravityDesc{};
+    m_GlobalGravityStrength = 0.f;
+    m_ControlPoints.clear();
+
     m_Config = config;
     m_Colors = FluidElementColors::Get(config.element);
 
@@ -611,6 +619,11 @@ void FluidParticleSystem::ComputeForces()
             }
         }
 
+        // 전역 중력 (모든 모드에서 선택적 적용)
+        if (m_GlobalGravityStrength > 0.f) {
+            fy -= m_GlobalGravityStrength * m_Particles[i].mass;
+        }
+
         // ConfinementBox 경계력 (모든 모드에서 선택적 적용)
         if (m_ConfinementBox.active) {
             XMVECTOR toParticle = XMVectorSubtract(
@@ -856,6 +869,11 @@ void FluidParticleSystem::SetBeamDesc(const BeamDesc& beam)
 void FluidParticleSystem::SetGravityDesc(const GravityDesc& grav)
 {
     m_GravityDesc = grav;
+}
+
+void FluidParticleSystem::SetGlobalGravity(float strength)
+{
+    m_GlobalGravityStrength = strength;
 }
 
 void FluidParticleSystem::InitBeamParticles()

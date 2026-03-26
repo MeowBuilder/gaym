@@ -50,6 +50,7 @@ public:
     void InitBeamParticles();  // Beam 모드 전용 초기화
     void ApplyRadialBurst(XMFLOAT3 center, float minSpeed, float maxSpeed);
     void ApplyDirectionalForce(const XMFLOAT3& direction, float impulse);
+    void SetGlobalGravity(float strength);
 
 private:
     // SPH phases
@@ -84,6 +85,7 @@ private:
     ConfinementBoxDesc             m_ConfinementBox;
     BeamDesc                       m_BeamDesc;
     GravityDesc                    m_GravityDesc;
+    float                          m_GlobalGravityStrength = 0.f;
     std::vector<FluidControlPoint> m_OrbitalCPs; // OrbitalCP 모드 위성 CP 포함
 
     // Spatial hash (power-of-2 table, direct-mapped cells)

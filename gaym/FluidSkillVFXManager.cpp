@@ -345,6 +345,9 @@ void FluidSkillVFXManager::UpdatePhase(FluidVFXSlot& slot, float dt)
 
             slot.pSystem->SetConfinementBox(bd);
         }
+
+        // 전역 중력 설정
+        slot.pSystem->SetGlobalGravity(phase.globalGravityStrength);
     }
 
     // ─── 매 프레임 업데이트 ───
