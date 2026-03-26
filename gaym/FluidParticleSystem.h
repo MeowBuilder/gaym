@@ -49,6 +49,7 @@ public:
     void SetGravityDesc(const GravityDesc& grav);
     void InitBeamParticles();  // Beam 모드 전용 초기화
     void ApplyRadialBurst(XMFLOAT3 center, float minSpeed, float maxSpeed);
+    void ApplyDirectionalForce(const XMFLOAT3& direction, float impulse);
 
 private:
     // SPH phases

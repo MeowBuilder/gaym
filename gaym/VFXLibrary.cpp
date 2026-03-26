@@ -23,19 +23,32 @@ void VFXLibrary::Initialize() {
         p0.startTime  = 0.f;
         p0.duration   = 0.3f;
         p0.motionMode = ParticleMotionMode::ControlPoint;
-        // CP 1개 (박스 중심 고정)
-        // cpDescs는 VFXManager가 플레이어 로컬 프레임에서 배치
         p0.boxDesc.active      = true;
         p0.boxDesc.halfExtents = { 0.5f, 0.5f, 0.5f };
+        // Phase 0: CP 1개 (박스 center에 파티클 집결)
+        {
+            FluidCPDesc cp0;
+            cp0.orbitRadius        = 0.0f;
+            cp0.orbitSpeed         = 0.0f;
+            cp0.orbitPhase         = 0.0f;
+            cp0.forwardBias        = 0.5f;  // 플레이어 앞 0.5 (박스 center)
+            cp0.attractionStrength = 30.f;
+            cp0.sphereRadius       = 0.8f;
+            p0.cpDescs = { cp0 };
+        }
         def.phases.push_back(p0);
 
         // Phase 1: 앞으로 박스 확장 (0.3~0.8s)
         VFXPhase p1;
         p1.startTime  = 0.3f;
         p1.duration   = 0.5f;
-        p1.motionMode = ParticleMotionMode::ControlPoint; // CP 없이 박스만
+        p1.motionMode = ParticleMotionMode::ControlPoint;
         p1.boxDesc.active      = true;
         p1.boxDesc.halfExtents = { 0.5f, 0.5f, 4.0f }; // Z 앞으로 확장
+        // Phase 1: CP 없음 + 앞(Z)방향 힘
+        p1.cpDescs = {};
+        p1.expansionForce = { 0.f, 0.f, 1.f };  // 로컬 forward(Z) 방향
+        p1.expansionForceStrength = 15.f;
         def.phases.push_back(p1);
 
         // Phase 2: 옆으로 박스 확장 (0.8~1.5s)
@@ -45,6 +58,10 @@ void VFXLibrary::Initialize() {
         p2.motionMode = ParticleMotionMode::ControlPoint;
         p2.boxDesc.active      = true;
         p2.boxDesc.halfExtents = { 7.0f, 0.5f, 5.0f }; // X 좌우 확장
+        // Phase 2: CP 없음 + 좌우(X)방향 힘
+        p2.cpDescs = {};
+        p2.expansionForce = { 1.f, 0.f, 0.f };  // 로컬 right(X) 방향
+        p2.expansionForceStrength = 20.f;
         def.phases.push_back(p2);
 
         RegisterBase(SkillSlot::Q, def);

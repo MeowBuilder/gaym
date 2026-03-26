@@ -31,4 +31,5 @@ private:
     FluidSkillVFXManager* m_pVFXManager = nullptr;
     int m_vfxId = -1;
     GameObject* m_pCaster = nullptr;  // 빔 추적용 caster 캐시
+    XMFLOAT3 m_lastTargetPos = { 0.f, 0.f, 0.f }; // 마지막 타겟 위치 캐시
 };

@@ -2,6 +2,7 @@
 #include <vector>
 #include <optional>
 #include <DirectXMath.h>
+#include "FluidParticle.h"  // FluidCPDesc
 using namespace DirectX;
 
 // 파티클 운동 모드
@@ -64,6 +65,13 @@ struct VFXPhase {
 
     // Beam 모드용
     BeamDesc beamDesc;
+
+    // ControlPoint 모드용 CP 목록 (비어있으면 CP 없음)
+    std::vector<FluidCPDesc> cpDescs;
+
+    // 박스 확장 방향 힘 (OBB 로컬 좌표계: x=right, y=up, z=forward)
+    XMFLOAT3 expansionForce = { 0.f, 0.f, 0.f };
+    float expansionForceStrength = 0.f;
 };
 
 // VFX 룬 수식자

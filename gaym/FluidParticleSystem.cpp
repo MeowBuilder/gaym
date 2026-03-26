@@ -887,6 +887,16 @@ void FluidParticleSystem::InitBeamParticles()
     }
 }
 
+void FluidParticleSystem::ApplyDirectionalForce(const XMFLOAT3& direction, float impulse)
+{
+    for (auto& p : m_Particles) {
+        if (!p.active) continue;
+        p.velocity.x += direction.x * impulse;
+        p.velocity.y += direction.y * impulse;
+        p.velocity.z += direction.z * impulse;
+    }
+}
+
 void FluidParticleSystem::ApplyRadialBurst(XMFLOAT3 center, float minSpeed, float maxSpeed)
 {
     for (auto& p : m_Particles) {

@@ -292,6 +292,35 @@ void FluidSkillVFXManager::UpdatePhase(FluidVFXSlot& slot, float dt)
                 phase.gravityDesc.initialSpeedMax);
         }
 
+        // ControlPoint 모드: 페이즈 cpDescs가 있으면 CP 설정
+        if (phase.motionMode == ParticleMotionMode::ControlPoint && !phase.cpDescs.empty()) {
+            // cpDescs -> 월드 공간 FluidControlPoint 변환
+            XMVECTOR fwd = XMVector3Normalize(XMLoadFloat3(&slot.direction));
+            XMVECTOR worldUp = XMVectorSet(0, 1, 0, 0);
+            float dotV = XMVectorGetX(XMVector3Dot(fwd, worldUp));
+            XMVECTOR rightV = (fabsf(dotV) > 0.99f)
+                ? XMVectorSet(1, 0, 0, 0)
+                : XMVector3Normalize(XMVector3Cross(worldUp, fwd));
+            XMVECTOR upV = XMVector3Cross(fwd, rightV);
+            XMVECTOR originV = XMLoadFloat3(&slot.origin);
+
+            std::vector<FluidControlPoint> cps;
+            for (const auto& cpd : phase.cpDescs) {
+                FluidControlPoint cp;
+                XMVECTOR worldPos = originV
+                    + rightV * cpd.orbitRadius
+                    + fwd * cpd.forwardBias;
+                XMStoreFloat3(&cp.position, worldPos);
+                cp.attractionStrength = cpd.attractionStrength;
+                cp.sphereRadius       = cpd.sphereRadius;
+                cps.push_back(cp);
+            }
+            slot.pSystem->SetControlPoints(cps);
+        } else if (phase.motionMode == ParticleMotionMode::ControlPoint && phase.cpDescs.empty()) {
+            // CP 없음: 빈 CP 리스트 설정 (박스 경계력만으로 동작)
+            slot.pSystem->SetControlPoints({});
+        }
+
         // ConfinementBox의 center를 현재 origin 기준으로 설정
         if (phase.boxDesc.active) {
             ConfinementBoxDesc bd = phase.boxDesc;
@@ -325,6 +354,21 @@ void FluidSkillVFXManager::UpdatePhase(FluidVFXSlot& slot, float dt)
     // OrbitalCP 매 프레임 위성 CP 갱신
     if (curPhase.motionMode == ParticleMotionMode::OrbitalCP) {
         UpdateOrbitalCPs(slot, dt);
+    }
+
+    // Beam 모드: 매 프레임 startPos/endPos 갱신 (플레이어 방향 추적)
+    if (curPhase.motionMode == ParticleMotionMode::Beam) {
+        BeamDesc bd = curPhase.beamDesc;
+        bd.spreadRadius = curPhase.beamDesc.spreadRadius;
+        bd.speedMin     = curPhase.beamDesc.speedMin;
+        bd.speedMax     = curPhase.beamDesc.speedMax;
+        bd.startPos     = slot.origin;
+        XMVECTOR endV = XMVectorAdd(
+            XMLoadFloat3(&slot.origin),
+            XMVectorScale(XMLoadFloat3(&slot.direction), 20.f)
+        );
+        XMStoreFloat3(&bd.endPos, endV);
+        slot.pSystem->SetBeamDesc(bd);
     }
 
     // Phase 내 진행률 계산 (박스 halfExtents lerp용)
@@ -364,6 +408,28 @@ void FluidSkillVFXManager::UpdatePhase(FluidVFXSlot& slot, float dt)
         XMStoreFloat3(&bd.axisZ, fwd);
 
         slot.pSystem->SetConfinementBox(bd);
+    }
+
+    // expansion force: 박스 확장 방향으로 파티클 밀어줌
+    if (curPhase.expansionForceStrength > 0.f && curPhase.boxDesc.active) {
+        // 로컬 방향 -> 월드 방향 변환
+        XMVECTOR fwd = XMVector3Normalize(XMLoadFloat3(&slot.direction));
+        XMVECTOR worldUp = XMVectorSet(0, 1, 0, 0);
+        float dotV = XMVectorGetX(XMVector3Dot(fwd, worldUp));
+        XMVECTOR rightV = (fabsf(dotV) > 0.99f)
+            ? XMVectorSet(1, 0, 0, 0)
+            : XMVector3Normalize(XMVector3Cross(worldUp, fwd));
+
+        // 로컬 (x, y, z) -> 월드 벡터
+        XMVECTOR localForce = XMLoadFloat3(&curPhase.expansionForce);
+        XMVECTOR worldForce = XMVectorGetX(localForce) * rightV
+                            + XMVectorGetY(localForce) * XMVectorSet(0,1,0,0)
+                            + XMVectorGetZ(localForce) * fwd;
+        worldForce = XMVector3Normalize(worldForce);
+
+        XMFLOAT3 forceDir;
+        XMStoreFloat3(&forceDir, worldForce);
+        slot.pSystem->ApplyDirectionalForce(forceDir, curPhase.expansionForceStrength * dt);
     }
 }
 

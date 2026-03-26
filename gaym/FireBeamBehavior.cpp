@@ -34,6 +34,7 @@ void FireBeamBehavior::Execute(GameObject* caster, const DirectX::XMFLOAT3& targ
     }
 
     m_pCaster = caster;
+    m_lastTargetPos = targetPosition;
 
     // 첫 실행 시 VFX 생성 (아직 활성 빔이 없을 때만)
     if (!m_bIsActive)
@@ -111,9 +112,28 @@ void FireBeamBehavior::Execute(GameObject* caster, const DirectX::XMFLOAT3& targ
 
 void FireBeamBehavior::Update(float deltaTime)
 {
-    // 빔 방향 추적은 SkillComponent가 채널링 중 Execute()를 매 틱마다 호출하므로
-    // 거기서 TrackEffect가 처리됨.
-    // VFX 자체 업데이트는 FluidSkillVFXManager::Update()에서 자동 처리.
+    if (!m_bIsActive || m_vfxId < 0 || !m_pVFXManager || !m_pCaster) return;
+    if (!m_pCaster->GetTransform()) return;
+
+    XMFLOAT3 origin = m_pCaster->GetTransform()->GetPosition();
+    origin.y += 1.5f;
+
+    // 방향 계산 (lastTargetPos 기준)
+    XMVECTOR originV = XMLoadFloat3(&origin);
+    XMVECTOR targetV = XMLoadFloat3(&m_lastTargetPos);
+    XMVECTOR dirV = XMVectorSubtract(targetV, originV);
+    dirV = XMVectorSetY(dirV, 0.f);
+    if (XMVectorGetX(XMVector3LengthSq(dirV)) > 0.001f)
+        dirV = XMVector3Normalize(dirV);
+    else {
+        dirV = m_pCaster->GetTransform()->GetLook();
+        dirV = XMVectorSetY(dirV, 0.f);
+        dirV = XMVector3Normalize(dirV);
+    }
+
+    XMFLOAT3 dir;
+    XMStoreFloat3(&dir, dirV);
+    m_pVFXManager->TrackEffect(m_vfxId, origin, dir);
 }
 
 bool FireBeamBehavior::IsFinished() const
