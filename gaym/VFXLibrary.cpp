@@ -51,18 +51,21 @@ void VFXLibrary::Initialize() {
         p1.expansionForceStrength = 15.f;
         def.phases.push_back(p1);
 
-        // Phase 2: 장판 (0.8~4.8s) - SPH 압력으로 좌우 확산 + 중력으로 바닥에 깔림
+        // Phase 2: 장판 (0.8~4.8s) - 좌우 양방향 확산 + 중력으로 바닥에 깔림
         VFXPhase p2;
         p2.startTime  = 0.8f;
         p2.duration   = 4.0f;          // 장판 유지
         p2.motionMode = ParticleMotionMode::ControlPoint;
-        p2.cpDescs    = {};             // CP 없음 (SPH 압력만으로 퍼짐)
+        p2.cpDescs    = {};             // CP 없음
         // ConfinementBox: X 넓게, Y 낮게(바닥에 깔리는 효과), Z 유지
         p2.boxDesc.active      = true;
         p2.boxDesc.halfExtents = { 8.0f, 0.25f, 5.0f };  // Y를 0.25로 매우 낮게
-        // expansion force 제거: SPH 압력만으로 좌우 확산
-        p2.expansionForce         = { 0.f, 0.f, 0.f };
-        p2.expansionForceStrength = 0.f;
+        // Phase 2 진입 시 앞쪽(forward) 속도 제거 - Phase 1에서 남은 Z 관성 해소
+        p2.cancelForwardVelocityOnEnter = true;
+        // X 방향 양방향 분산: 중심 기준으로 좌우로 밀기
+        p2.useAxisSpreadForce     = true;
+        p2.expansionForce         = { 1.f, 0.f, 0.f };   // right 방향 (양방향으로 적용됨)
+        p2.expansionForceStrength = 18.f;                 // Phase 1보다 강하게
         // 중력 추가: 파티클이 바닥으로 내려가게
         p2.globalGravityStrength  = 12.f;
         def.phases.push_back(p2);

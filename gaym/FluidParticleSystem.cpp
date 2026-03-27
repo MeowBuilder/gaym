@@ -730,8 +730,46 @@ void FluidParticleSystem::Update(float deltaTime)
 
     // Beam 모드: SPH 단계 스킵, 직접 위치 제어
     if (m_MotionMode == ParticleMotionMode::Beam) {
-        XMVECTOR start = XMLoadFloat3(&m_BeamDesc.startPos);
-        XMVECTOR end   = XMLoadFloat3(&m_BeamDesc.endPos);
+        // ── 빔 방향 변화에 따른 파티클 전체 회전 ──
+        XMVECTOR start  = XMLoadFloat3(&m_BeamDesc.startPos);
+        XMVECTOR end    = XMLoadFloat3(&m_BeamDesc.endPos);
+        XMVECTOR newDir = XMVector3Normalize(XMVectorSubtract(end, start));
+        XMVECTOR oldDir = XMVector3Normalize(XMLoadFloat3(&m_BeamDesc.prevDir));
+
+        float cosAngle = XMVectorGetX(XMVector3Dot(oldDir, newDir));
+        cosAngle = std::clamp(cosAngle, -1.f, 1.f);
+        float angle = acosf(cosAngle);
+
+        if (angle > 0.001f)  // 방향 변화가 있을 때만
+        {
+            XMVECTOR axis = XMVector3Cross(oldDir, newDir);
+            float axisLen = XMVectorGetX(XMVector3Length(axis));
+            if (axisLen > 0.0001f)
+            {
+                axis = XMVectorScale(axis, 1.f / axisLen);
+                XMMATRIX rot = XMMatrixRotationAxis(axis, angle);
+
+                for (auto& p : m_Particles)
+                {
+                    if (!p.active) continue;
+
+                    // 위치: startPos 기준으로 회전
+                    XMVECTOR relPos = XMVectorSubtract(XMLoadFloat3(&p.position), start);
+                    relPos = XMVector3Transform(relPos, rot);
+                    XMStoreFloat3(&p.position, XMVectorAdd(start, relPos));
+
+                    // 속도: 같은 회전 적용
+                    XMVECTOR vel = XMLoadFloat3(&p.velocity);
+                    vel = XMVector3Transform(vel, rot);
+                    XMStoreFloat3(&p.velocity, vel);
+                }
+            }
+        }
+
+        // prevDir 업데이트
+        XMStoreFloat3(&m_BeamDesc.prevDir, newDir);
+
+        // ── 기존 Beam 이동 처리 ──
         XMVECTOR dir   = XMVector3Normalize(XMVectorSubtract(end, start));
         float totalDist = XMVectorGetX(XMVector3Length(XMVectorSubtract(end, start)));
 
@@ -882,6 +920,9 @@ void FluidParticleSystem::InitBeamParticles()
     XMVECTOR start = XMLoadFloat3(&m_BeamDesc.startPos);
     XMVECTOR end   = XMLoadFloat3(&m_BeamDesc.endPos);
     XMVECTOR dir   = XMVector3Normalize(XMVectorSubtract(end, start));
+
+    // prevDir을 현재 방향으로 초기화 (첫 프레임에 불필요한 회전 방지)
+    XMStoreFloat3(&m_BeamDesc.prevDir, dir);
     float totalDist = XMVectorGetX(XMVector3Length(XMVectorSubtract(end, start)));
 
     XMVECTOR perpX = XMVector3Normalize(XMVectorSet(-XMVectorGetZ(dir), 0, XMVectorGetX(dir), 0));
@@ -932,5 +973,38 @@ void FluidParticleSystem::ApplyRadialBurst(XMFLOAT3 center, float minSpeed, floa
         p.velocity.x += v.x;
         p.velocity.y += v.y;
         p.velocity.z += v.z;
+    }
+}
+
+void FluidParticleSystem::ZeroAxisVelocity(const XMFLOAT3& worldAxis)
+{
+    XMVECTOR axis = XMVector3Normalize(XMLoadFloat3(&worldAxis));
+    for (auto& p : m_Particles)
+    {
+        if (!p.active) continue;
+        XMVECTOR vel    = XMLoadFloat3(&p.velocity);
+        float    proj   = XMVectorGetX(XMVector3Dot(vel, axis));
+        // 축 방향 성분 제거: vel -= proj * axis
+        vel = XMVectorSubtract(vel, XMVectorScale(axis, proj));
+        XMStoreFloat3(&p.velocity, vel);
+    }
+}
+
+void FluidParticleSystem::ApplyAxisSpreadForce(const XMFLOAT3& axisDir,
+                                                const XMFLOAT3& originPoint,
+                                                float           impulse)
+{
+    XMVECTOR axis   = XMVector3Normalize(XMLoadFloat3(&axisDir));
+    XMVECTOR origin = XMLoadFloat3(&originPoint);
+    for (auto& p : m_Particles)
+    {
+        if (!p.active) continue;
+        XMVECTOR toP  = XMVectorSubtract(XMLoadFloat3(&p.position), origin);
+        float    side = XMVectorGetX(XMVector3Dot(toP, axis));
+        // 중심보다 오른쪽이면 +axis, 왼쪽이면 -axis
+        float    sign = (side >= 0.f) ? 1.f : -1.f;
+        p.velocity.x += XMVectorGetX(axis) * sign * impulse;
+        p.velocity.y += XMVectorGetY(axis) * sign * impulse;
+        p.velocity.z += XMVectorGetZ(axis) * sign * impulse;
     }
 }

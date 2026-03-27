@@ -27,6 +27,7 @@ struct BeamDesc {
     float speedMin = 8.f;
     float speedMax = 16.f;
     float spreadRadius = 0.3f; // 빔 폭 (시작점 랜덤 오프셋)
+    XMFLOAT3 prevDir = { 0.f, 0.f, 1.f }; // 이전 프레임 방향 (빔 전체 회전 계산용)
 };
 
 // 박스 경계
@@ -75,6 +76,13 @@ struct VFXPhase {
 
     // 전역 중력 강도 (모든 모드에서 적용 가능, 0이면 비활성)
     float globalGravityStrength = 0.f;
+
+    // Phase 진입 시 forward(Z축) 방향 속도 제거
+    bool cancelForwardVelocityOnEnter = false;
+
+    // expansionForce를 양방향 분산으로 적용 (중심 기준으로 양쪽으로 밀기)
+    // false: 모든 파티클에 동일 방향 (기존), true: 중심 기준 양방향
+    bool useAxisSpreadForce = false;
 };
 
 // VFX 룬 수식자

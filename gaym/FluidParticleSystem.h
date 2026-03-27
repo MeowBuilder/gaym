@@ -46,11 +46,18 @@ public:
     void SetMotionMode(ParticleMotionMode mode);
     void SetConfinementBox(const ConfinementBoxDesc& box);
     void SetBeamDesc(const BeamDesc& beam);
+    const BeamDesc& GetBeamDesc() const { return m_BeamDesc; }
     void SetGravityDesc(const GravityDesc& grav);
     void InitBeamParticles();  // Beam 모드 전용 초기화
     void ApplyRadialBurst(XMFLOAT3 center, float minSpeed, float maxSpeed);
     void ApplyDirectionalForce(const XMFLOAT3& direction, float impulse);
     void SetGlobalGravity(float strength);
+
+    // 특정 축 방향 속도 성분 제거 (예: forward 방향 속도만 0으로)
+    void ZeroAxisVelocity(const XMFLOAT3& worldAxis);
+
+    // 양방향 분산 힘: 중심점(originPoint) 기준으로 각 파티클이 axisDir의 양쪽으로 밀림
+    void ApplyAxisSpreadForce(const XMFLOAT3& axisDir, const XMFLOAT3& originPoint, float impulse);
 
 private:
     // SPH phases

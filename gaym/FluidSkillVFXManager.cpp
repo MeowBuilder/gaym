@@ -346,6 +346,14 @@ void FluidSkillVFXManager::UpdatePhase(FluidVFXSlot& slot, float dt)
             slot.pSystem->SetConfinementBox(bd);
         }
 
+        // Phase 진입 시 forward 방향 속도 제거
+        if (phase.cancelForwardVelocityOnEnter)
+        {
+            XMFLOAT3 fwd;
+            XMStoreFloat3(&fwd, XMVector3Normalize(XMLoadFloat3(&slot.direction)));
+            slot.pSystem->ZeroAxisVelocity(fwd);
+        }
+
         // 전역 중력 설정
         slot.pSystem->SetGlobalGravity(phase.globalGravityStrength);
     }
@@ -360,11 +368,12 @@ void FluidSkillVFXManager::UpdatePhase(FluidVFXSlot& slot, float dt)
     }
 
     // Beam 모드: 매 프레임 startPos/endPos 갱신 (플레이어 방향 추적)
+    // prevDir 보존하면서 startPos/endPos만 업데이트
     if (curPhase.motionMode == ParticleMotionMode::Beam) {
-        BeamDesc bd = curPhase.beamDesc;
-        bd.spreadRadius = curPhase.beamDesc.spreadRadius;
+        BeamDesc bd = slot.pSystem->GetBeamDesc();  // 현재 빔 상태 (prevDir 포함)
         bd.speedMin     = curPhase.beamDesc.speedMin;
         bd.speedMax     = curPhase.beamDesc.speedMax;
+        bd.spreadRadius = curPhase.beamDesc.spreadRadius;
         bd.startPos     = slot.origin;
         XMVECTOR endV = XMVectorAdd(
             XMLoadFloat3(&slot.origin),
@@ -432,7 +441,23 @@ void FluidSkillVFXManager::UpdatePhase(FluidVFXSlot& slot, float dt)
 
         XMFLOAT3 forceDir;
         XMStoreFloat3(&forceDir, worldForce);
-        slot.pSystem->ApplyDirectionalForce(forceDir, curPhase.expansionForceStrength * dt);
+
+        if (curPhase.useAxisSpreadForce)
+        {
+            // 양방향 분산: 박스 center 기준으로 좌우로 밀기
+            XMFLOAT3 boxCenter;
+            XMStoreFloat3(&boxCenter, XMVectorAdd(
+                XMLoadFloat3(&slot.origin),
+                XMVectorScale(XMLoadFloat3(&slot.direction),
+                              curPhase.boxDesc.halfExtents.z)
+            ));
+            slot.pSystem->ApplyAxisSpreadForce(forceDir, boxCenter,
+                                                curPhase.expansionForceStrength * dt);
+        }
+        else
+        {
+            slot.pSystem->ApplyDirectionalForce(forceDir, curPhase.expansionForceStrength * dt);
+        }
     }
 }
 
