@@ -59,6 +59,9 @@ public:
     // 양방향 분산 힘: 중심점(originPoint) 기준으로 각 파티클이 axisDir의 양쪽으로 밀림
     void ApplyAxisSpreadForce(const XMFLOAT3& axisDir, const XMFLOAT3& originPoint, float impulse);
 
+    // 각 파티클에 worldAxis 방향 랜덤 속도 부여 (-maxImpulse ~ +maxImpulse)
+    void ApplyRandomSidewaysImpulse(const XMFLOAT3& worldAxis, float maxImpulse);
+
 private:
     // SPH phases
     void BuildSpatialHash();

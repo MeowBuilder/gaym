@@ -38,10 +38,10 @@ void VFXLibrary::Initialize() {
         }
         def.phases.push_back(p0);
 
-        // Phase 1: 앞으로 박스 확장 (0.3~0.8s)
+        // Phase 1: 앞으로 박스 확장 (0.3~1.1s)
         VFXPhase p1;
         p1.startTime  = 0.3f;
-        p1.duration   = 0.5f;
+        p1.duration   = 0.8f;           // 0.5 -> 0.8 (앞으로 완전히 퍼지는 시간 늘림)
         p1.motionMode = ParticleMotionMode::ControlPoint;
         p1.boxDesc.active      = true;
         p1.boxDesc.halfExtents = { 0.5f, 0.5f, 4.0f }; // Z 앞으로 확장
@@ -51,21 +51,23 @@ void VFXLibrary::Initialize() {
         p1.expansionForceStrength = 15.f;
         def.phases.push_back(p1);
 
-        // Phase 2: 장판 (0.8~4.8s) - 좌우 양방향 확산 + 중력으로 바닥에 깔림
+        // Phase 2: 장판 (1.1~5.1s) - 랜덤 좌우 확산 + 중력으로 바닥에 깔림
         VFXPhase p2;
-        p2.startTime  = 0.8f;
-        p2.duration   = 4.0f;          // 장판 유지
+        p2.startTime  = 1.1f;           // Phase1 끝 (0.3 + 0.8 = 1.1)
+        p2.duration   = 4.0f;           // 장판 유지
         p2.motionMode = ParticleMotionMode::ControlPoint;
-        p2.cpDescs    = {};             // CP 없음
+        p2.cpDescs    = {};              // CP 없음
         // ConfinementBox: X 넓게, Y 낮게(바닥에 깔리는 효과), Z 유지
         p2.boxDesc.active      = true;
         p2.boxDesc.halfExtents = { 8.0f, 0.25f, 5.0f };  // Y를 0.25로 매우 낮게
         // Phase 2 진입 시 앞쪽(forward) 속도 제거 - Phase 1에서 남은 Z 관성 해소
         p2.cancelForwardVelocityOnEnter = true;
-        // X 방향 양방향 분산: 중심 기준으로 좌우로 밀기
-        p2.useAxisSpreadForce     = true;
-        p2.expansionForce         = { 1.f, 0.f, 0.f };   // right 방향 (양방향으로 적용됨)
-        p2.expansionForceStrength = 18.f;                 // Phase 1보다 강하게
+        // 랜덤 좌우 확산 (일회성 impulse) - 각 파티클에 랜덤 X 속도 부여
+        p2.randomSidewaysImpulse  = 14.f;
+        // 지속 expansion force 제거 (일회성 impulse로 대체)
+        p2.expansionForce         = { 0.f, 0.f, 0.f };
+        p2.expansionForceStrength = 0.f;
+        p2.useAxisSpreadForce     = false;
         // 중력 추가: 파티클이 바닥으로 내려가게
         p2.globalGravityStrength  = 12.f;
         def.phases.push_back(p2);

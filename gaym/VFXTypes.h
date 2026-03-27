@@ -83,6 +83,10 @@ struct VFXPhase {
     // expansionForce를 양방향 분산으로 적용 (중심 기준으로 양쪽으로 밀기)
     // false: 모든 파티클에 동일 방향 (기존), true: 중심 기준 양방향
     bool useAxisSpreadForce = false;
+
+    // Phase 진입 시 right 축 방향으로 랜덤 속도 부여 (양방향, 파도 확산용)
+    // 0이면 비활성, 양수면 이 값 범위에서 랜덤 (-randomSidewaysImpulse ~ +randomSidewaysImpulse)
+    float randomSidewaysImpulse = 0.f;
 };
 
 // VFX 룬 수식자

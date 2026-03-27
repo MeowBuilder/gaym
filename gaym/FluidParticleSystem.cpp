@@ -740,6 +740,11 @@ void FluidParticleSystem::Update(float deltaTime)
         cosAngle = std::clamp(cosAngle, -1.f, 1.f);
         float angle = acosf(cosAngle);
 
+        // 최대 각속도 제한 (540도/초 = 3π rad/s) - 빠른 마우스 회전 시 끊김 방지
+        const float kMaxRotPerSec = 3.0f * XM_PI;
+        float maxAngle = kMaxRotPerSec * dt;
+        angle = (std::min)(angle, maxAngle);
+
         if (angle > 0.001f)  // 방향 변화가 있을 때만
         {
             XMVECTOR axis = XMVector3Cross(oldDir, newDir);
@@ -766,8 +771,26 @@ void FluidParticleSystem::Update(float deltaTime)
             }
         }
 
-        // prevDir 업데이트
-        XMStoreFloat3(&m_BeamDesc.prevDir, newDir);
+        // prevDir 업데이트: 각속도 제한이 적용된 경우 실제 회전된 방향으로 갱신
+        // (angle이 제한되었을 수 있으므로, oldDir에서 angle만큼 회전한 결과를 저장)
+        {
+            float rawAngle = acosf(cosAngle);
+            if (rawAngle > maxAngle && rawAngle > 0.001f) {
+                // 제한 적용됨: oldDir에서 제한된 angle만큼 회전한 방향 계산
+                XMVECTOR crossV = XMVector3Cross(oldDir, newDir);
+                float crossLen = XMVectorGetX(XMVector3Length(crossV));
+                if (crossLen > 0.0001f) {
+                    XMVECTOR rotAxis = XMVectorScale(crossV, 1.f / crossLen);
+                    XMMATRIX rotM = XMMatrixRotationAxis(rotAxis, maxAngle);
+                    XMVECTOR clampedDir = XMVector3Normalize(XMVector3Transform(oldDir, rotM));
+                    XMStoreFloat3(&m_BeamDesc.prevDir, clampedDir);
+                } else {
+                    XMStoreFloat3(&m_BeamDesc.prevDir, newDir);
+                }
+            } else {
+                XMStoreFloat3(&m_BeamDesc.prevDir, newDir);
+            }
+        }
 
         // ── 기존 Beam 이동 처리 ──
         XMVECTOR dir   = XMVector3Normalize(XMVectorSubtract(end, start));
@@ -1006,5 +1029,19 @@ void FluidParticleSystem::ApplyAxisSpreadForce(const XMFLOAT3& axisDir,
         p.velocity.x += XMVectorGetX(axis) * sign * impulse;
         p.velocity.y += XMVectorGetY(axis) * sign * impulse;
         p.velocity.z += XMVectorGetZ(axis) * sign * impulse;
+    }
+}
+
+void FluidParticleSystem::ApplyRandomSidewaysImpulse(const XMFLOAT3& worldAxis, float maxImpulse)
+{
+    XMVECTOR axis = XMVector3Normalize(XMLoadFloat3(&worldAxis));
+    for (auto& p : m_Particles)
+    {
+        if (!p.active) continue;
+        // -maxImpulse ~ +maxImpulse 균등 랜덤
+        float impulse = (Rand01() * 2.f - 1.f) * maxImpulse;
+        p.velocity.x += XMVectorGetX(axis) * impulse;
+        p.velocity.y += XMVectorGetY(axis) * impulse;
+        p.velocity.z += XMVectorGetZ(axis) * impulse;
     }
 }

@@ -280,6 +280,9 @@ void FluidSkillVFXManager::UpdatePhase(FluidVFXSlot& slot, float dt)
                 XMVectorScale(XMLoadFloat3(&slot.direction), 20.f)
             );
             XMStoreFloat3(&bd.endPos, endV);
+            // prevDir을 현재 방향으로 초기화 (첫 프레임 점프 방지)
+            XMStoreFloat3(&bd.prevDir, XMVector3Normalize(
+                XMVectorSubtract(endV, XMLoadFloat3(&slot.origin))));
             slot.pSystem->SetBeamDesc(bd);
             slot.pSystem->InitBeamParticles();
         }
@@ -352,6 +355,21 @@ void FluidSkillVFXManager::UpdatePhase(FluidVFXSlot& slot, float dt)
             XMFLOAT3 fwd;
             XMStoreFloat3(&fwd, XMVector3Normalize(XMLoadFloat3(&slot.direction)));
             slot.pSystem->ZeroAxisVelocity(fwd);
+        }
+
+        // Phase 진입 시 랜덤 좌우 속도 부여 (파도 확산)
+        if (phase.randomSidewaysImpulse > 0.f)
+        {
+            // slot.direction 기준 right 축 계산
+            XMVECTOR fwdV    = XMVector3Normalize(XMLoadFloat3(&slot.direction));
+            XMVECTOR worldUp = XMVectorSet(0, 1, 0, 0);
+            float    dotV    = XMVectorGetX(XMVector3Dot(fwdV, worldUp));
+            XMVECTOR rightV  = (fabsf(dotV) > 0.99f)
+                ? XMVectorSet(1, 0, 0, 0)
+                : XMVector3Normalize(XMVector3Cross(worldUp, fwdV));
+            XMFLOAT3 rightDir;
+            XMStoreFloat3(&rightDir, rightV);
+            slot.pSystem->ApplyRandomSidewaysImpulse(rightDir, phase.randomSidewaysImpulse);
         }
 
         // 전역 중력 설정
