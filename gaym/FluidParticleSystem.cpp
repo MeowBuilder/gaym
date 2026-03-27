@@ -730,96 +730,47 @@ void FluidParticleSystem::Update(float deltaTime)
 
     // Beam 모드: SPH 단계 스킵, 직접 위치 제어
     if (m_MotionMode == ParticleMotionMode::Beam) {
-        // ── 빔 방향 변화에 따른 파티클 전체 회전 ──
-        XMVECTOR start  = XMLoadFloat3(&m_BeamDesc.startPos);
-        XMVECTOR end    = XMLoadFloat3(&m_BeamDesc.endPos);
-        XMVECTOR newDir = XMVector3Normalize(XMVectorSubtract(end, start));
-        XMVECTOR oldDir = XMVector3Normalize(XMLoadFloat3(&m_BeamDesc.prevDir));
+        XMVECTOR start    = XMLoadFloat3(&m_BeamDesc.startPos);
+        XMVECTOR end      = XMLoadFloat3(&m_BeamDesc.endPos);
+        XMVECTOR dir      = XMVector3Normalize(XMVectorSubtract(end, start));
+        float    totalDist = XMVectorGetX(XMVector3Length(XMVectorSubtract(end, start)));
 
-        float cosAngle = XMVectorGetX(XMVector3Dot(oldDir, newDir));
-        cosAngle = std::clamp(cosAngle, -1.f, 1.f);
-        float angle = acosf(cosAngle);
+        // prevDir 갱신 (이 방식에서는 항상 현재 방향)
+        XMStoreFloat3(&m_BeamDesc.prevDir, dir);
 
-        // 최대 각속도 제한 (540도/초 = 3π rad/s) - 빠른 마우스 회전 시 끊김 방지
-        const float kMaxRotPerSec = 3.0f * XM_PI;
-        float maxAngle = kMaxRotPerSec * dt;
-        angle = (std::min)(angle, maxAngle);
-
-        if (angle > 0.001f)  // 방향 변화가 있을 때만
-        {
-            XMVECTOR axis = XMVector3Cross(oldDir, newDir);
-            float axisLen = XMVectorGetX(XMVector3Length(axis));
-            if (axisLen > 0.0001f)
-            {
-                axis = XMVectorScale(axis, 1.f / axisLen);
-                XMMATRIX rot = XMMatrixRotationAxis(axis, angle);
-
-                for (auto& p : m_Particles)
-                {
-                    if (!p.active) continue;
-
-                    // 위치: startPos 기준으로 회전
-                    XMVECTOR relPos = XMVectorSubtract(XMLoadFloat3(&p.position), start);
-                    relPos = XMVector3Transform(relPos, rot);
-                    XMStoreFloat3(&p.position, XMVectorAdd(start, relPos));
-
-                    // 속도: 같은 회전 적용
-                    XMVECTOR vel = XMLoadFloat3(&p.velocity);
-                    vel = XMVector3Transform(vel, rot);
-                    XMStoreFloat3(&p.velocity, vel);
-                }
-            }
-        }
-
-        // prevDir 업데이트: 각속도 제한이 적용된 경우 실제 회전된 방향으로 갱신
-        // (angle이 제한되었을 수 있으므로, oldDir에서 angle만큼 회전한 결과를 저장)
-        {
-            float rawAngle = acosf(cosAngle);
-            if (rawAngle > maxAngle && rawAngle > 0.001f) {
-                // 제한 적용됨: oldDir에서 제한된 angle만큼 회전한 방향 계산
-                XMVECTOR crossV = XMVector3Cross(oldDir, newDir);
-                float crossLen = XMVectorGetX(XMVector3Length(crossV));
-                if (crossLen > 0.0001f) {
-                    XMVECTOR rotAxis = XMVectorScale(crossV, 1.f / crossLen);
-                    XMMATRIX rotM = XMMatrixRotationAxis(rotAxis, maxAngle);
-                    XMVECTOR clampedDir = XMVector3Normalize(XMVector3Transform(oldDir, rotM));
-                    XMStoreFloat3(&m_BeamDesc.prevDir, clampedDir);
-                } else {
-                    XMStoreFloat3(&m_BeamDesc.prevDir, newDir);
-                }
-            } else {
-                XMStoreFloat3(&m_BeamDesc.prevDir, newDir);
-            }
-        }
-
-        // ── 기존 Beam 이동 처리 ──
-        XMVECTOR dir   = XMVector3Normalize(XMVectorSubtract(end, start));
-        float totalDist = XMVectorGetX(XMVector3Length(XMVectorSubtract(end, start)));
+        XMVECTOR perpX = XMVector3Normalize(XMVectorSet(-XMVectorGetZ(dir), 0.f, XMVectorGetX(dir), 0.f));
+        XMVECTOR perpY = XMVector3Cross(dir, perpX);
 
         for (auto& p : m_Particles) {
             if (!p.active) continue;
-            // 끝점 도달 판정
-            XMVECTOR pos = XMLoadFloat3(&p.position);
-            float proj = XMVectorGetX(XMVector3Dot(XMVectorSubtract(pos, start), dir));
-            if (proj >= totalDist) {
-                // 시작점으로 리셋 + spread
+
+            XMVECTOR pos  = XMLoadFloat3(&p.position);
+            float    proj = XMVectorGetX(XMVector3Dot(XMVectorSubtract(pos, start), dir));
+
+            if (proj >= totalDist || proj < 0.f) {
+                // 끝점 도달 또는 뒤로 빠져나감 → 시작점으로 리셋
                 float rx = (Rand01() - 0.5f) * 2.f * m_BeamDesc.spreadRadius;
                 float ry = (Rand01() - 0.5f) * 2.f * m_BeamDesc.spreadRadius;
-                XMVECTOR perpX = XMVector3Normalize(XMVectorSet(-XMVectorGetZ(dir), 0, XMVectorGetX(dir), 0));
-                XMVECTOR perpY = XMVector3Cross(dir, perpX);
-                XMVECTOR newPos = XMVectorAdd(start, XMVectorAdd(XMVectorScale(perpX, rx), XMVectorScale(perpY, ry)));
+                XMVECTOR newPos = XMVectorAdd(start,
+                    XMVectorAdd(XMVectorScale(perpX, rx), XMVectorScale(perpY, ry)));
                 XMStoreFloat3(&p.position, newPos);
                 float speed = m_BeamDesc.speedMin + Rand01() * (m_BeamDesc.speedMax - m_BeamDesc.speedMin);
                 XMFLOAT3 d; XMStoreFloat3(&d, dir);
                 p.velocity = { d.x * speed, d.y * speed, d.z * speed };
+            } else {
+                // 속도 방향을 새 빔 방향으로 즉시 전환 (크기 보존)
+                // → 위치는 건드리지 않아 늘어남 없음, 파티클이 자연스럽게 새 방향으로 흘러감
+                float speed = XMVectorGetX(XMVector3Length(XMLoadFloat3(&p.velocity)));
+                if (speed < m_BeamDesc.speedMin) speed = m_BeamDesc.speedMin;
+                XMFLOAT3 d; XMStoreFloat3(&d, dir);
+                p.velocity = { d.x * speed, d.y * speed, d.z * speed };
             }
-            // Beam은 velocity만으로 이동 (SPH force 무시)
+
             p.position.x += p.velocity.x * dt;
             p.position.y += p.velocity.y * dt;
             p.position.z += p.velocity.z * dt;
         }
-        // SPH 단계 스킵 (Beam은 직접 위치 제어)
-        return;
+        return; // SPH 단계 스킵
     }
 
     // 일반 SPH 시뮬레이션 (ControlPoint, Gravity, OrbitalCP 모드)
