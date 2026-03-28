@@ -84,12 +84,19 @@ int FluidSkillVFXManager::SpawnSequenceEffect(const XMFLOAT3& origin, const XMFL
             cfg.element           = seqDef.element;
             cfg.particleCount     = seqDef.particleCount;
             cfg.spawnRadius       = seqDef.spawnRadius;
-            cfg.smoothingRadius   = 1.2f;
-            cfg.restDensity       = 7.0f;
-            cfg.stiffness         = 50.0f;
-            cfg.viscosity         = 0.25f;
             cfg.boundaryStiffness = 150.0f;
             cfg.particleSize      = 0.25f;
+            if (seqDef.overridePhysics) {
+                cfg.stiffness       = seqDef.sphStiffness;
+                cfg.restDensity     = seqDef.sphRestDensity;
+                cfg.viscosity       = seqDef.sphViscosity;
+                cfg.smoothingRadius = seqDef.sphSmoothingRadius;
+            } else {
+                cfg.smoothingRadius = 1.2f;
+                cfg.restDensity     = 7.0f;
+                cfg.stiffness       = 50.0f;
+                cfg.viscosity       = 0.25f;
+            }
 
             // 첫 페이즈의 모드 설정
             if (!seqDef.phases.empty()) {

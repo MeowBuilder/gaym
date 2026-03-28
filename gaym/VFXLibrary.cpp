@@ -69,8 +69,15 @@ void VFXLibrary::Initialize() {
         p2.expansionForceStrength = 0.f;
         p2.useAxisSpreadForce     = false;
         // 중력 추가: 파티클이 바닥으로 내려가게
-        p2.globalGravityStrength  = 12.f;
+        p2.globalGravityStrength  = 20.f;
         def.phases.push_back(p2);
+
+        // SPH 물리 오버라이드: 강한 반발력 + 낮은 목표밀도 → 바닥에 넓게 깔림
+        def.overridePhysics    = true;
+        def.sphStiffness       = 150.f;   // 기본 50 → 3배 (강한 반발)
+        def.sphRestDensity     = 2.5f;    // 기본 7 → 낮게 (입자가 퍼지고 싶어함)
+        def.sphViscosity       = 0.08f;   // 기본 0.25 → 낮게 (잘 미끄러짐)
+        def.sphSmoothingRadius = 1.8f;    // 기본 1.2 → 크게 (더 넓은 상호작용)
 
         RegisterBase(SkillSlot::Q, def);
 

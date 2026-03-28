@@ -37,6 +37,13 @@ struct VFXSequenceDef {
     int particleCount  = 200;
     float spawnRadius  = 1.5f;
     ElementType element = ElementType::Fire;
+
+    // SPH 물리 오버라이드 (true 시 기본값 대신 적용)
+    bool  overridePhysics    = false;
+    float sphStiffness       = 50.f;
+    float sphRestDensity     = 7.f;
+    float sphViscosity       = 0.25f;
+    float sphSmoothingRadius = 1.2f;
 };
 
 class VFXLibrary {
