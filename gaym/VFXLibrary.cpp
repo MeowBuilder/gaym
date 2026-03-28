@@ -24,7 +24,7 @@ void VFXLibrary::Initialize() {
         p0.duration   = 0.3f;
         p0.motionMode = ParticleMotionMode::ControlPoint;
         p0.boxDesc.active      = true;
-        p0.boxDesc.halfExtents = { 0.5f, 0.5f, 0.5f };
+        p0.boxDesc.halfExtents = { 0.8f, 0.8f, 0.8f };
         // Phase 0: CP 1개 (박스 center에 파티클 집결)
         {
             FluidCPDesc cp0;
@@ -44,7 +44,7 @@ void VFXLibrary::Initialize() {
         p1.duration   = 0.8f;           // 0.5 -> 0.8 (앞으로 완전히 퍼지는 시간 늘림)
         p1.motionMode = ParticleMotionMode::ControlPoint;
         p1.boxDesc.active      = true;
-        p1.boxDesc.halfExtents = { 0.5f, 0.5f, 4.0f }; // Z 앞으로 확장
+        p1.boxDesc.halfExtents = { 1.2f, 0.8f, 9.0f }; // Z 앞으로 확장 (더 길게), X 옆도 약간 넓게
         // Phase 1: CP 없음 + 앞(Z)방향 힘
         p1.cpDescs = {};
         p1.expansionForce = { 0.f, 0.f, 1.f };  // 로컬 forward(Z) 방향
@@ -59,7 +59,7 @@ void VFXLibrary::Initialize() {
         p2.cpDescs    = {};              // CP 없음
         // ConfinementBox: X 넓게, Y 낮게(바닥에 깔리는 효과), Z 유지
         p2.boxDesc.active      = true;
-        p2.boxDesc.halfExtents = { 8.0f, 0.25f, 5.0f };  // Y를 0.25로 매우 낮게
+        p2.boxDesc.halfExtents = { 15.0f, 0.3f, 9.0f };  // Y 낮게(장판), X/Z 크게 확대
         // Phase 2 진입 시 앞쪽(forward) 속도 제거 - Phase 1에서 남은 Z 관성 해소
         p2.cancelForwardVelocityOnEnter = true;
         // 랜덤 좌우 확산 (일회성 impulse) - 각 파티클에 랜덤 X 속도 부여

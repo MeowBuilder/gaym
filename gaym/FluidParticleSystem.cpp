@@ -728,47 +728,38 @@ void FluidParticleSystem::Update(float deltaTime)
     // Clamp dt for stability with large timesteps
     float dt = (std::min)(deltaTime, 0.016f);
 
-    // Beam 모드: SPH 단계 스킵, 직접 위치 제어
+    // Beam 모드: 빔-로컬 좌표 방식 (방향 변경 시 모든 파티클 즉시 스냅)
     if (m_MotionMode == ParticleMotionMode::Beam) {
-        XMVECTOR start    = XMLoadFloat3(&m_BeamDesc.startPos);
-        XMVECTOR end      = XMLoadFloat3(&m_BeamDesc.endPos);
-        XMVECTOR dir      = XMVector3Normalize(XMVectorSubtract(end, start));
+        XMVECTOR start     = XMLoadFloat3(&m_BeamDesc.startPos);
+        XMVECTOR end       = XMLoadFloat3(&m_BeamDesc.endPos);
+        XMVECTOR dir       = XMVector3Normalize(XMVectorSubtract(end, start));
         float    totalDist = XMVectorGetX(XMVector3Length(XMVectorSubtract(end, start)));
-
-        // prevDir 갱신 (이 방식에서는 항상 현재 방향)
         XMStoreFloat3(&m_BeamDesc.prevDir, dir);
 
+        // 수직 기저 벡터 (빔 축에 수직인 평면)
         XMVECTOR perpX = XMVector3Normalize(XMVectorSet(-XMVectorGetZ(dir), 0.f, XMVectorGetX(dir), 0.f));
         XMVECTOR perpY = XMVector3Cross(dir, perpX);
 
         for (auto& p : m_Particles) {
             if (!p.active) continue;
 
-            XMVECTOR pos  = XMLoadFloat3(&p.position);
-            float    proj = XMVectorGetX(XMVector3Dot(XMVectorSubtract(pos, start), dir));
+            // 빔 축 방향으로 전진
+            p.beamT += p.beamSpeed * dt;
 
-            if (proj >= totalDist || proj < 0.f) {
-                // 끝점 도달 또는 뒤로 빠져나감 → 시작점으로 리셋
-                float rx = (Rand01() - 0.5f) * 2.f * m_BeamDesc.spreadRadius;
-                float ry = (Rand01() - 0.5f) * 2.f * m_BeamDesc.spreadRadius;
-                XMVECTOR newPos = XMVectorAdd(start,
-                    XMVectorAdd(XMVectorScale(perpX, rx), XMVectorScale(perpY, ry)));
-                XMStoreFloat3(&p.position, newPos);
-                float speed = m_BeamDesc.speedMin + Rand01() * (m_BeamDesc.speedMax - m_BeamDesc.speedMin);
-                XMFLOAT3 d; XMStoreFloat3(&d, dir);
-                p.velocity = { d.x * speed, d.y * speed, d.z * speed };
-            } else {
-                // 속도 방향을 새 빔 방향으로 즉시 전환 (크기 보존)
-                // → 위치는 건드리지 않아 늘어남 없음, 파티클이 자연스럽게 새 방향으로 흘러감
-                float speed = XMVectorGetX(XMVector3Length(XMLoadFloat3(&p.velocity)));
-                if (speed < m_BeamDesc.speedMin) speed = m_BeamDesc.speedMin;
-                XMFLOAT3 d; XMStoreFloat3(&d, dir);
-                p.velocity = { d.x * speed, d.y * speed, d.z * speed };
+            // 끝 도달 또는 범위 이탈 → 시작으로 리셋 (새 퍼짐 오프셋 할당)
+            if (p.beamT >= totalDist || p.beamT < 0.f) {
+                p.beamT     = 0.f;
+                p.beamRx    = (Rand01() - 0.5f) * 2.f * m_BeamDesc.spreadRadius;
+                p.beamRy    = (Rand01() - 0.5f) * 2.f * m_BeamDesc.spreadRadius;
+                p.beamSpeed = m_BeamDesc.speedMin + Rand01() * (m_BeamDesc.speedMax - m_BeamDesc.speedMin);
             }
 
-            p.position.x += p.velocity.x * dt;
-            p.position.y += p.velocity.y * dt;
-            p.position.z += p.velocity.z * dt;
+            // 빔-로컬 → 월드 좌표 변환: 방향이 바뀌면 즉시 반영, 늘어남 없음
+            XMVECTOR pos = XMVectorAdd(
+                XMVectorAdd(start, XMVectorScale(dir, p.beamT)),
+                XMVectorAdd(XMVectorScale(perpX, p.beamRx), XMVectorScale(perpY, p.beamRy))
+            );
+            XMStoreFloat3(&p.position, pos);
         }
         return; // SPH 단계 스킵
     }
@@ -904,19 +895,19 @@ void FluidParticleSystem::InitBeamParticles()
 
     for (auto& p : m_Particles) {
         if (!p.active) continue;
-        // 빔 경로 위 랜덤 위치에 배치
-        float t = Rand01();
-        float rx = (Rand01() - 0.5f) * 2.f * m_BeamDesc.spreadRadius;
-        float ry = (Rand01() - 0.5f) * 2.f * m_BeamDesc.spreadRadius;
+        // 빔-로컬 좌표 초기화: 빔 전체 길이에 균등 분포
+        p.beamT     = Rand01() * totalDist;
+        p.beamRx    = (Rand01() - 0.5f) * 2.f * m_BeamDesc.spreadRadius;
+        p.beamRy    = (Rand01() - 0.5f) * 2.f * m_BeamDesc.spreadRadius;
+        p.beamSpeed = m_BeamDesc.speedMin + Rand01() * (m_BeamDesc.speedMax - m_BeamDesc.speedMin);
+
+        // 초기 월드 좌표 설정
         XMVECTOR pos = XMVectorAdd(
-            XMVectorAdd(start, XMVectorScale(dir, t * totalDist)),
-            XMVectorAdd(XMVectorScale(perpX, rx), XMVectorScale(perpY, ry))
+            XMVectorAdd(start, XMVectorScale(dir, p.beamT)),
+            XMVectorAdd(XMVectorScale(perpX, p.beamRx), XMVectorScale(perpY, p.beamRy))
         );
         XMStoreFloat3(&p.position, pos);
-
-        float speed = m_BeamDesc.speedMin + Rand01() * (m_BeamDesc.speedMax - m_BeamDesc.speedMin);
-        XMFLOAT3 d; XMStoreFloat3(&d, dir);
-        p.velocity = { d.x * speed, d.y * speed, d.z * speed };
+        p.velocity = { 0, 0, 0 };
     }
 }
 
