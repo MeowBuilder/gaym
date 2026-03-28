@@ -21,6 +21,9 @@ struct EnemySpawnData
     // Attack behavior factory
     std::function<std::unique_ptr<IAttackBehavior>()> m_fnCreateAttack;
 
+    // Special attack behavior factory (for bosses)
+    std::function<std::unique_ptr<IAttackBehavior>()> m_fnCreateSpecialAttack;
+
     // Animation config
     EnemyAnimationConfig m_AnimConfig;
 
@@ -30,6 +33,11 @@ struct EnemySpawnData
     // Flying mode
     bool m_bIsFlying = false;
     float m_fFlyHeight = 15.0f;
+
+    // Boss settings
+    bool m_bIsBoss = false;
+    float m_fSpecialAttackCooldown = 10.0f;
+    int m_nSpecialAttackChance = 30;  // Percentage (0-100)
 
     // Constructor with defaults for test enemy
     EnemySpawnData()

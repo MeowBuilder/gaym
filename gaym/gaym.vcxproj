@@ -194,6 +194,7 @@ xcopy /Y "$(ProjectDir)Libraries\Libs\libprotobuf.dll" "$(OutDir)"</Command>
     <ClInclude Include="RushFrontAttackBehavior.h" />
     <ClInclude Include="RangedAttackBehavior.h" />
     <ClInclude Include="BreathAttackBehavior.h" />
+    <ClInclude Include="FlyingBarrageAttackBehavior.h" />
     <ClInclude Include="Mesh.h" />
     <ClInclude Include="MeshLoader.h" />
     <ClInclude Include="MapLoader.h" />
@@ -288,6 +289,7 @@ xcopy /Y "$(ProjectDir)Libraries\Libs\libprotobuf.dll" "$(OutDir)"</Command>
     <ClCompile Include="RushFrontAttackBehavior.cpp" />
     <ClCompile Include="RangedAttackBehavior.cpp" />
     <ClCompile Include="BreathAttackBehavior.cpp" />
+    <ClCompile Include="FlyingBarrageAttackBehavior.cpp" />
     <ClCompile Include="Mesh.cpp" />
     <ClCompile Include="MeshLoader.cpp" />
     <ClCompile Include="MapLoader.cpp" />

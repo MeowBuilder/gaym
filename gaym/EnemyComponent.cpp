@@ -60,10 +60,14 @@ void EnemyComponent::Update(float deltaTime)
         }
     }
 
-    // Update cooldown timer
+    // Update cooldown timers
     if (m_fAttackCooldownTimer > 0.0f)
     {
         m_fAttackCooldownTimer -= deltaTime;
+    }
+    if (m_fSpecialCooldownTimer > 0.0f)
+    {
+        m_fSpecialCooldownTimer -= deltaTime;
     }
 
     // State machine
@@ -143,11 +147,15 @@ void EnemyComponent::ChangeState(EnemyState newState)
         Die();
         break;
     case EnemyState::Attack:
-        if (m_pAttackBehavior)
         {
-            m_pAttackBehavior->Execute(this);
+            // Execute the appropriate attack behavior
+            IAttackBehavior* pBehavior = m_bUsingSpecialAttack ? m_pSpecialAttackBehavior.get() : m_pAttackBehavior.get();
+            if (pBehavior)
+            {
+                pBehavior->Execute(this);
+            }
+            ShowIndicators();
         }
-        ShowIndicators();
         break;
     }
 }
@@ -155,6 +163,13 @@ void EnemyComponent::ChangeState(EnemyState newState)
 void EnemyComponent::TakeDamage(float fDamage)
 {
     if (m_eCurrentState == EnemyState::Dead) return;
+
+    // Invincible enemies ignore all damage (during special attacks like flying)
+    if (m_bInvincible)
+    {
+        OutputDebugString(L"[Enemy] Damage blocked - Invincible!\n");
+        return;
+    }
 
     m_Stats.m_fCurrentHP -= fDamage;
 
@@ -168,16 +183,22 @@ void EnemyComponent::TakeDamage(float fDamage)
         m_Stats.m_fCurrentHP = 0.0f;
         ChangeState(EnemyState::Dead);
     }
-    else
+    else if (!m_bIsBoss)
     {
-        // Enter stagger state on damage
+        // Only non-boss enemies get staggered
         ChangeState(EnemyState::Stagger);
     }
+    // Bosses take damage but don't get staggered - pattern continues
 }
 
 void EnemyComponent::SetAttackBehavior(std::unique_ptr<IAttackBehavior> pBehavior)
 {
     m_pAttackBehavior = std::move(pBehavior);
+}
+
+void EnemyComponent::SetSpecialAttackBehavior(std::unique_ptr<IAttackBehavior> pBehavior)
+{
+    m_pSpecialAttackBehavior = std::move(pBehavior);
 }
 
 float EnemyComponent::GetDistanceToTarget() const
@@ -336,6 +357,19 @@ void EnemyComponent::UpdateChase(float dt)
         {
             // Face target instantly when starting attack
             FaceTarget(dt, true);
+
+            // Boss special attack selection
+            m_bUsingSpecialAttack = false;
+            if (m_bIsBoss && m_pSpecialAttackBehavior && m_fSpecialCooldownTimer <= 0.0f)
+            {
+                // Roll for special attack chance
+                if ((rand() % 100) < m_nSpecialAttackChance)
+                {
+                    m_bUsingSpecialAttack = true;
+                    OutputDebugString(L"[Boss] Using SPECIAL attack pattern!\n");
+                }
+            }
+
             ChangeState(EnemyState::Attack);
         }
         else
@@ -354,14 +388,25 @@ void EnemyComponent::UpdateChase(float dt)
 
 void EnemyComponent::UpdateAttack(float dt)
 {
-    if (m_pAttackBehavior)
-    {
-        m_pAttackBehavior->Update(dt, this);
+    // Select which behavior to use
+    IAttackBehavior* pCurrentBehavior = m_bUsingSpecialAttack ? m_pSpecialAttackBehavior.get() : m_pAttackBehavior.get();
 
-        if (m_pAttackBehavior->IsFinished())
+    if (pCurrentBehavior)
+    {
+        pCurrentBehavior->Update(dt, this);
+
+        if (pCurrentBehavior->IsFinished())
         {
-            // Reset cooldown
+            // Reset cooldowns
             m_fAttackCooldownTimer = m_Stats.m_fAttackCooldown;
+
+            if (m_bUsingSpecialAttack)
+            {
+                // Special attack has longer cooldown
+                m_fSpecialCooldownTimer = m_fSpecialAttackCooldown;
+                m_bUsingSpecialAttack = false;
+                OutputDebugString(L"[Boss] Special attack finished, cooldown started\n");
+            }
 
             // Return to chase
             ChangeState(EnemyState::Chase);

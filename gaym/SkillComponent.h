@@ -75,6 +75,9 @@ public:
     bool IsEnhanced() const { return m_bIsEnhanced; }
     float GetEnhanceTimeRemaining() const { return m_fEnhanceTimer; }
 
+    // Check if any skill is currently active (casting)
+    bool IsSkillActive() const { return m_ActiveSkillSlot != SkillSlot::Count; }
+
 private:
     // Try to use a skill in the given slot
     bool TryUseSkill(SkillSlot slot, const DirectX::XMFLOAT3& targetPosition);

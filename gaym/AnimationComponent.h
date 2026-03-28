@@ -20,9 +20,12 @@ public:
     void Stop();
 
     // Blending
-    void CrossFade(const std::string& strClipName, float fBlendDuration, bool bLoop = true);
+    void CrossFade(const std::string& strClipName, float fBlendDuration, bool bLoop = true, bool bForceRestart = false);
     bool IsBlending() const { return m_bIsBlending; }
     bool IsPlaying() const { return m_bIsPlaying; }
+
+    // Restart current animation from beginning
+    void Restart();
 
     // Animation time offset (for desynchronizing multiple instances)
     void SetTimeOffset(float fOffset) { m_fTimeOffset = fOffset; }

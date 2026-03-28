@@ -173,14 +173,18 @@ void PlayerComponent::UpdateAnimation(float deltaTime, bool bMoving, bool bAttac
     if (m_fAttackTimer > 0.0f)
         m_fAttackTimer -= deltaTime;
 
-    // Determine desired state (Attack > Walk > Idle)
-    PlayerAnimState desiredState;
+    // If attack triggered, always restart attack animation
     if (bAttackTriggered)
     {
         m_fAttackTimer = kAttackAnimDuration;
-        desiredState = PlayerAnimState::Attack;
+        m_eAnimState = PlayerAnimState::Attack;
+        pAnim->CrossFade("Attack1", 0.1f, false, true);  // forceRestart = true
+        return;
     }
-    else if (m_fAttackTimer > 0.0f)
+
+    // Determine desired state (Attack > Walk > Idle)
+    PlayerAnimState desiredState;
+    if (m_fAttackTimer > 0.0f)
     {
         desiredState = PlayerAnimState::Attack;
     }

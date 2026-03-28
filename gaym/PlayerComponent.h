@@ -3,6 +3,7 @@
 
 class InputSystem; // Forward declaration for InputSystem
 class CCamera;     // Forward declaration for CCamera
+class SkillComponent; // Forward declaration for SkillComponent
 
 enum class PlayerAnimState { Idle, Walk, Attack };
 

@@ -57,7 +57,7 @@ void AnimationComponent::Stop()
     m_bIsPlaying = false;
 }
 
-void AnimationComponent::CrossFade(const std::string& strClipName, float fBlendDuration, bool bLoop)
+void AnimationComponent::CrossFade(const std::string& strClipName, float fBlendDuration, bool bLoop, bool bForceRestart)
 {
     AnimationClip* pNewClip = m_pAnimationSet->GetClip(strClipName);
     if (!pNewClip)
@@ -68,8 +68,8 @@ void AnimationComponent::CrossFade(const std::string& strClipName, float fBlendD
         return;
     }
 
-    // If same clip, just continue
-    if (pNewClip == m_pCurrentClip) return;
+    // If same clip and not forcing restart, just continue
+    if (pNewClip == m_pCurrentClip && !bForceRestart) return;
 
     // Store previous clip state for blending
     m_pPreviousClip = m_pCurrentClip;
@@ -91,6 +91,15 @@ void AnimationComponent::CrossFade(const std::string& strClipName, float fBlendD
     char buffer[256];
     sprintf_s(buffer, "CrossFade: %s (Duration: %.2f)\n", strClipName.c_str(), fBlendDuration);
     OutputDebugStringA(buffer);
+}
+
+void AnimationComponent::Restart()
+{
+    if (m_pCurrentClip)
+    {
+        m_fCurrentTime = 0.0f;
+        m_bIsPlaying = true;
+    }
 }
 
 void AnimationComponent::Update(float deltaTime)

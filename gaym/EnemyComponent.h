@@ -100,6 +100,23 @@ public:
     void SetAttackBehavior(std::unique_ptr<IAttackBehavior> pBehavior);
     IAttackBehavior* GetAttackBehavior() const { return m_pAttackBehavior.get(); }
 
+    // Special attack behavior (for bosses)
+    void SetSpecialAttackBehavior(std::unique_ptr<IAttackBehavior> pBehavior);
+    IAttackBehavior* GetSpecialAttackBehavior() const { return m_pSpecialAttackBehavior.get(); }
+    bool IsUsingSpecialAttack() const { return m_bUsingSpecialAttack; }
+
+    // Boss settings
+    void SetBoss(bool bIsBoss) { m_bIsBoss = bIsBoss; }
+    bool IsBoss() const { return m_bIsBoss; }
+
+    // Invincibility (used during special attacks)
+    void SetInvincible(bool bInvincible) { m_bInvincible = bInvincible; }
+    bool IsInvincible() const { return m_bInvincible; }
+
+    // Special attack cooldown
+    void SetSpecialAttackCooldown(float fCooldown) { m_fSpecialAttackCooldown = fCooldown; }
+    void SetSpecialAttackChance(int nChance) { m_nSpecialAttackChance = nChance; }  // 0-100
+
     // Room reference for death callback
     void SetRoom(CRoom* pRoom) { m_pRoom = pRoom; }
 
@@ -118,6 +135,7 @@ public:
 
     // Animation
     void SetAnimationComponent(AnimationComponent* pAnimComp) { m_pAnimationComp = pAnimComp; }
+    AnimationComponent* GetAnimationComponent() const { return m_pAnimationComp; }
     void SetAnimationConfig(const EnemyAnimationConfig& config) { m_AnimConfig = config; }
 
     // Flying mode
@@ -149,8 +167,19 @@ private:
     EnemyState m_eCurrentState = EnemyState::Idle;
     EnemyStats m_Stats;
     std::unique_ptr<IAttackBehavior> m_pAttackBehavior;
+    std::unique_ptr<IAttackBehavior> m_pSpecialAttackBehavior;  // Special pattern for bosses
     GameObject* m_pTarget = nullptr;
     CRoom* m_pRoom = nullptr;
+
+    // Boss flags
+    bool m_bIsBoss = false;
+    bool m_bInvincible = false;
+    bool m_bUsingSpecialAttack = false;
+
+    // Special attack parameters
+    float m_fSpecialAttackCooldown = 10.0f;
+    float m_fSpecialCooldownTimer = 0.0f;
+    int m_nSpecialAttackChance = 30;  // 30% chance when cooldown ready
 
     // Animation
     AnimationComponent* m_pAnimationComp = nullptr;

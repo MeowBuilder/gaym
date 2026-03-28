@@ -12,6 +12,7 @@
 #include "RushFrontAttackBehavior.h"
 #include "RangedAttackBehavior.h"
 #include "BreathAttackBehavior.h"
+#include "FlyingBarrageAttackBehavior.h"
 #include "Room.h"
 #include "Scene.h"
 #include "ProjectileManager.h"
@@ -176,6 +177,11 @@ void EnemySpawner::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pComma
     dragon.m_bIsFlying = false;
     dragon.m_fFlyHeight = 0.0f;
 
+    // Boss settings - immune to stagger, has special attack
+    dragon.m_bIsBoss = true;
+    dragon.m_fSpecialAttackCooldown = 12.0f;  // Longer cooldown for special attack
+    dragon.m_nSpecialAttackChance = 30;        // 30% chance when cooldown ready
+
     // Ground combat animations (intro handles flying entrance)
     dragon.m_AnimConfig.m_strIdleClip = "Idle01";
     dragon.m_AnimConfig.m_strChaseClip = "Walk";
@@ -186,11 +192,28 @@ void EnemySpawner::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pComma
     dragon.m_IndicatorConfig.m_eType = IndicatorType::Circle;
     dragon.m_IndicatorConfig.m_fHitRadius = 15.0f;
 
-    // Breath attack for flying dragon
+    // Normal attack: Breath attack
     dragon.m_fnCreateAttack = [pProjMgr]() {
         // damage, speed, count, spread, windup, duration, recovery
         return std::make_unique<BreathAttackBehavior>(pProjMgr, 20.0f, 30.0f, 7, 45.0f, 0.6f, 1.2f, 0.4f);
     };
+
+    // Special attack: Flying barrage - boss flies up and fires circular waves (invincible)
+    dragon.m_fnCreateSpecialAttack = [pProjMgr]() {
+        // damage, speed, projectiles/wave, waves, interval, flyHeight, takeoff, landing
+        return std::make_unique<FlyingBarrageAttackBehavior>(
+            pProjMgr,
+            15.0f,   // damage per hit
+            12.0f,   // projectile speed (slower for easier dodging)
+            16,      // projectiles per ring (360/16 = 22.5 degree spacing, less lag)
+            6,       // total rings (one at a time with delay)
+            0.4f,    // ring interval (visible time gap between rings)
+            18.0f,   // fly height
+            1.0f,    // takeoff duration
+            1.0f     // landing duration
+        );
+    };
+
     RegisterEnemyPreset("Dragon", dragon);
 
     // Create shared meshes for attack indicators
@@ -352,6 +375,21 @@ void EnemySpawner::SetupEnemyComponents(GameObject* pEnemy, const EnemySpawnData
     {
         // Default melee attack
         pEnemyComp->SetAttackBehavior(std::make_unique<MeleeAttackBehavior>());
+    }
+
+    // Boss settings
+    if (data.m_bIsBoss)
+    {
+        pEnemyComp->SetBoss(true);
+        pEnemyComp->SetSpecialAttackCooldown(data.m_fSpecialAttackCooldown);
+        pEnemyComp->SetSpecialAttackChance(data.m_nSpecialAttackChance);
+
+        // Create special attack behavior if provided
+        if (data.m_fnCreateSpecialAttack)
+        {
+            pEnemyComp->SetSpecialAttackBehavior(data.m_fnCreateSpecialAttack());
+            OutputDebugString(L"[EnemySpawner] Boss special attack behavior set\n");
+        }
     }
 
     // Set death callback to notify room
