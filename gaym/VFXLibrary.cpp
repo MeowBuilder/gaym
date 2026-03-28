@@ -48,7 +48,7 @@ void VFXLibrary::Initialize() {
         // Phase 1: CP 없음 + 앞(Z)방향 힘
         p1.cpDescs = {};
         p1.expansionForce = { 0.f, 0.f, 1.f };  // 로컬 forward(Z) 방향
-        p1.expansionForceStrength = 15.f;
+        p1.expansionForceStrength = 22.5f;
         def.phases.push_back(p1);
 
         // Phase 2: 장판 (1.1~5.1s) - 랜덤 좌우 확산 + 중력으로 바닥에 깔림
@@ -63,7 +63,7 @@ void VFXLibrary::Initialize() {
         // Phase 2 진입 시 앞쪽(forward) 속도 제거 - Phase 1에서 남은 Z 관성 해소
         p2.cancelForwardVelocityOnEnter = true;
         // 랜덤 좌우 확산 (일회성 impulse) - 각 파티클에 랜덤 X 속도 부여
-        p2.randomSidewaysImpulse  = 14.f;
+        p2.randomSidewaysImpulse  = 21.f;
         // 지속 expansion force 제거 (일회성 impulse로 대체)
         p2.expansionForce         = { 0.f, 0.f, 0.f };
         p2.expansionForceStrength = 0.f;

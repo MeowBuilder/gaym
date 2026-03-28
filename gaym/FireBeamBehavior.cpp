@@ -118,18 +118,10 @@ void FireBeamBehavior::Update(float deltaTime)
     XMFLOAT3 origin = m_pCaster->GetTransform()->GetPosition();
     origin.y += 1.5f;
 
-    // 방향 계산 (lastTargetPos 기준)
-    XMVECTOR originV = XMLoadFloat3(&origin);
-    XMVECTOR targetV = XMLoadFloat3(&m_lastTargetPos);
-    XMVECTOR dirV = XMVectorSubtract(targetV, originV);
+    // 플레이어 look 방향을 직접 사용 (매 프레임 갱신, tick 간격 지연 없음)
+    XMVECTOR dirV = m_pCaster->GetTransform()->GetLook();
     dirV = XMVectorSetY(dirV, 0.f);
-    if (XMVectorGetX(XMVector3LengthSq(dirV)) > 0.001f)
-        dirV = XMVector3Normalize(dirV);
-    else {
-        dirV = m_pCaster->GetTransform()->GetLook();
-        dirV = XMVectorSetY(dirV, 0.f);
-        dirV = XMVector3Normalize(dirV);
-    }
+    dirV = XMVector3Normalize(dirV);
 
     XMFLOAT3 dir;
     XMStoreFloat3(&dir, dirV);
