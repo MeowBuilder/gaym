@@ -1574,3 +1574,37 @@ void Scene::ProcessPendingDeletions()
 
     m_vPendingDeletions.clear();
 }
+
+// 모든 플레이어 목록 반환 (로컬 + 원격)
+std::vector<GameObject*> Scene::GetAllPlayers() const
+{
+    std::vector<GameObject*> players;
+
+    // 로컬 플레이어 추가
+    if (m_pPlayerGameObject)
+    {
+        players.push_back(m_pPlayerGameObject);
+    }
+
+    // 원격 플레이어 추가 (NetworkManager에서 가져옴)
+    // TODO: 멀티플레이어 구현 시 NetworkManager::GetRemotePlayers() 연동
+    // NetworkManager* pNetMgr = NetworkManager::GetInstance();
+    // if (pNetMgr)
+    // {
+    //     for (const auto& pair : pNetMgr->GetRemotePlayers())
+    //     {
+    //         if (pair.second) players.push_back(pair.second);
+    //     }
+    // }
+
+    return players;
+}
+
+// 적에게 모든 플레이어 등록 (어그로 시스템용)
+void Scene::RegisterPlayersToEnemy(EnemyComponent* pEnemy)
+{
+    if (!pEnemy) return;
+
+    std::vector<GameObject*> players = GetAllPlayers();
+    pEnemy->RegisterAllPlayers(players);
+}

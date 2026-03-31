@@ -4,12 +4,16 @@
 #include <memory>
 #include <functional>
 #include <string>
+#include <vector>
+#include "ThreatSystem.h"
 
 using namespace DirectX;
 
 class IAttackBehavior;
 class CRoom;
 class AnimationComponent;
+class BossPhaseController;
+class BossPhaseConfig;
 
 struct EnemyAnimationConfig
 {
@@ -87,6 +91,12 @@ public:
     void SetTarget(GameObject* pTarget) { m_pTarget = pTarget; }
     GameObject* GetTarget() const { return m_pTarget; }
 
+    // Threat (Aggro) System
+    void RegisterAllPlayers(const std::vector<GameObject*>& players);
+    void AddThreat(GameObject* pPlayer, float fAmount);
+    void ReduceThreat(GameObject* pPlayer, float fAmount);
+    ThreatTable& GetThreatTable() { return m_ThreatTable; }
+
     // Stats
     void SetStats(const EnemyStats& stats) { m_Stats = stats; }
     EnemyStats& GetStats() { return m_Stats; }
@@ -108,6 +118,13 @@ public:
     // Boss settings
     void SetBoss(bool bIsBoss) { m_bIsBoss = bIsBoss; }
     bool IsBoss() const { return m_bIsBoss; }
+
+    // Boss Phase System
+    void SetBossPhaseController(std::unique_ptr<BossPhaseController> pController);
+    BossPhaseController* GetPhaseController() const { return m_pPhaseController.get(); }
+    void SetSpeedMultiplier(float fMultiplier) { m_fSpeedMultiplier = fMultiplier; }
+    float GetSpeedMultiplier() const { return m_fSpeedMultiplier; }
+    bool CanUseFlyingAttack() const;  // 현재 페이즈에서 비행 공격 가능 여부
 
     // Invincibility (used during special attacks)
     void SetInvincible(bool bInvincible) { m_bInvincible = bInvincible; }
@@ -164,6 +181,11 @@ private:
     void HideIndicators();
 
 private:
+    // Threat System
+    ThreatTable m_ThreatTable;
+    float m_fTargetReevaluationTimer = 0.0f;
+    void ReevaluateTarget();
+
     EnemyState m_eCurrentState = EnemyState::Idle;
     EnemyStats m_Stats;
     std::unique_ptr<IAttackBehavior> m_pAttackBehavior;
@@ -175,6 +197,10 @@ private:
     bool m_bIsBoss = false;
     bool m_bInvincible = false;
     bool m_bUsingSpecialAttack = false;
+
+    // Boss Phase System
+    std::unique_ptr<BossPhaseController> m_pPhaseController;
+    float m_fSpeedMultiplier = 1.0f;
 
     // Special attack parameters
     float m_fSpecialAttackCooldown = 10.0f;

@@ -48,7 +48,7 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>v145</PlatformToolset>
+    <PlatformToolset>v143</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
@@ -183,6 +183,10 @@ xcopy /Y "$(ProjectDir)Libraries\Libs\libprotobuf.dll" "$(OutDir)"</Command>
     <ClInclude Include="DescriptorHeap.h" />
     <ClInclude Include="Dx12App.h" />
     <ClInclude Include="EnemyComponent.h" />
+    <ClInclude Include="ThreatConstants.h" />
+    <ClInclude Include="ThreatSystem.h" />
+    <ClInclude Include="BossPhaseConfig.h" />
+    <ClInclude Include="BossPhaseController.h" />
     <ClInclude Include="EnemySpawnData.h" />
     <ClInclude Include="EnemySpawner.h" />
     <ClInclude Include="GameObject.h" />
@@ -290,6 +294,9 @@ xcopy /Y "$(ProjectDir)Libraries\Libs\libprotobuf.dll" "$(OutDir)"</Command>
     <ClCompile Include="RangedAttackBehavior.cpp" />
     <ClCompile Include="BreathAttackBehavior.cpp" />
     <ClCompile Include="FlyingBarrageAttackBehavior.cpp" />
+    <ClCompile Include="ThreatSystem.cpp" />
+    <ClCompile Include="BossPhaseConfig.cpp" />
+    <ClCompile Include="BossPhaseController.cpp" />
     <ClCompile Include="Mesh.cpp" />
     <ClCompile Include="MeshLoader.cpp" />
     <ClCompile Include="MapLoader.cpp" />

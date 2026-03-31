@@ -8,6 +8,7 @@
 #include "Scene.h"
 #include "Dx12App.h"
 #include "MathUtils.h"
+#include "BossPhaseController.h"
 
 EnemyComponent::EnemyComponent(GameObject* pOwner)
     : Component(pOwner)
@@ -25,6 +26,13 @@ void EnemyComponent::Update(float deltaTime)
     {
         UpdateBossIntro(deltaTime);
         return;
+    }
+
+    // Boss phase transition takes priority
+    if (m_pPhaseController && m_pPhaseController->IsInTransition())
+    {
+        m_pPhaseController->Update(deltaTime);
+        return;  // 페이즈 전환 중에는 일반 AI 스킵
     }
 
     // Flying enemies maintain altitude, ground enemies use gravity
@@ -68,6 +76,21 @@ void EnemyComponent::Update(float deltaTime)
     if (m_fSpecialCooldownTimer > 0.0f)
     {
         m_fSpecialCooldownTimer -= deltaTime;
+    }
+
+    // Threat table update (distance-based threat decay/gain)
+    auto* pTransform = m_pOwner ? m_pOwner->GetTransform() : nullptr;
+    if (pTransform)
+    {
+        m_ThreatTable.Update(deltaTime, pTransform->GetPosition());
+    }
+
+    // Target reevaluation (every 0.5 seconds)
+    m_fTargetReevaluationTimer += deltaTime;
+    if (m_fTargetReevaluationTimer >= ThreatConstants::TARGET_REEVALUATION_INTERVAL)
+    {
+        m_fTargetReevaluationTimer = 0.0f;
+        ReevaluateTarget();
     }
 
     // State machine
@@ -177,6 +200,12 @@ void EnemyComponent::TakeDamage(float fDamage)
     swprintf_s(buffer, L"[Enemy] Took %.1f damage, HP: %.1f/%.1f\n",
         fDamage, m_Stats.m_fCurrentHP, m_Stats.m_fMaxHP);
     OutputDebugString(buffer);
+
+    // Boss Phase System: HP 변화 알림
+    if (m_pPhaseController)
+    {
+        m_pPhaseController->OnHealthChanged(m_Stats.m_fCurrentHP, m_Stats.m_fMaxHP);
+    }
 
     if (m_Stats.m_fCurrentHP <= 0.0f)
     {
@@ -690,4 +719,77 @@ void EnemyComponent::UpdateBossIntro(float dt)
     default:
         break;
     }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Threat (Aggro) System
+// ─────────────────────────────────────────────────────────────────────────────
+
+void EnemyComponent::RegisterAllPlayers(const std::vector<GameObject*>& players)
+{
+    m_ThreatTable.Clear();
+    for (GameObject* pPlayer : players)
+    {
+        if (pPlayer)
+        {
+            m_ThreatTable.RegisterPlayer(pPlayer, ThreatConstants::INITIAL_THREAT);
+        }
+    }
+
+    // 첫 번째 타겟 설정
+    if (!m_pTarget && !players.empty())
+    {
+        m_pTarget = m_ThreatTable.GetHighestThreatTarget();
+    }
+
+#ifdef _DEBUG
+    wchar_t buf[128];
+    swprintf_s(buf, L"[Enemy] Registered %zu players to threat table\n", players.size());
+    OutputDebugString(buf);
+#endif
+}
+
+void EnemyComponent::AddThreat(GameObject* pPlayer, float fAmount)
+{
+    m_ThreatTable.AddThreat(pPlayer, fAmount);
+}
+
+void EnemyComponent::ReduceThreat(GameObject* pPlayer, float fAmount)
+{
+    m_ThreatTable.ReduceThreat(pPlayer, fAmount);
+}
+
+void EnemyComponent::ReevaluateTarget()
+{
+    // 죽은 플레이어 정리
+    m_ThreatTable.CleanupDeadPlayers();
+
+    // 가장 높은 위협도의 플레이어를 타겟으로 설정
+    GameObject* pNewTarget = m_ThreatTable.GetHighestThreatTarget(m_pTarget);
+    if (pNewTarget && pNewTarget != m_pTarget)
+    {
+        m_pTarget = pNewTarget;
+
+#ifdef _DEBUG
+        OutputDebugString(L"[Enemy] Target changed due to threat!\n");
+#endif
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Boss Phase System
+// ─────────────────────────────────────────────────────────────────────────────
+
+void EnemyComponent::SetBossPhaseController(std::unique_ptr<BossPhaseController> pController)
+{
+    m_pPhaseController = std::move(pController);
+}
+
+bool EnemyComponent::CanUseFlyingAttack() const
+{
+    // 보스가 아니거나 페이즈 컨트롤러가 없으면 항상 false
+    if (!m_bIsBoss || !m_pPhaseController) return false;
+
+    // 현재 페이즈에서 비행이 허용되는지 확인
+    return m_pPhaseController->CanFly();
 }

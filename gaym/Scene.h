@@ -75,6 +75,8 @@ public:
     FluidParticleSystem* GetFluidParticleSystem() { return m_pFluidParticleSystem.get(); }
     FluidSkillVFXManager* GetFluidVFXManager() { return m_pFluidVFXManager.get(); }
     GameObject* GetPlayer() const { return m_pPlayerGameObject; }
+    std::vector<GameObject*> GetAllPlayers() const;  // 로컬 + 원격 플레이어 목록 반환
+    void RegisterPlayersToEnemy(class EnemyComponent* pEnemy);  // 적에게 플레이어 등록
     Shader* GetDefaultShader() const { return m_vShaders.empty() ? nullptr : m_vShaders[0].get(); }
 
     // Interaction system
