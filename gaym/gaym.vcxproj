@@ -199,6 +199,13 @@ xcopy /Y "$(ProjectDir)Libraries\Libs\libprotobuf.dll" "$(OutDir)"</Command>
     <ClInclude Include="RangedAttackBehavior.h" />
     <ClInclude Include="BreathAttackBehavior.h" />
     <ClInclude Include="FlyingBarrageAttackBehavior.h" />
+    <ClInclude Include="FlyingStrafeAttackBehavior.h" />
+    <ClInclude Include="DiveBombAttackBehavior.h" />
+    <ClInclude Include="FlyingCircleAttackBehavior.h" />
+    <ClInclude Include="FlyingSweepAttackBehavior.h" />
+    <ClInclude Include="TailSweepAttackBehavior.h" />
+    <ClInclude Include="JumpSlamAttackBehavior.h" />
+    <ClInclude Include="ComboAttackBehavior.h" />
     <ClInclude Include="Mesh.h" />
     <ClInclude Include="MeshLoader.h" />
     <ClInclude Include="MapLoader.h" />
@@ -294,6 +301,13 @@ xcopy /Y "$(ProjectDir)Libraries\Libs\libprotobuf.dll" "$(OutDir)"</Command>
     <ClCompile Include="RangedAttackBehavior.cpp" />
     <ClCompile Include="BreathAttackBehavior.cpp" />
     <ClCompile Include="FlyingBarrageAttackBehavior.cpp" />
+    <ClCompile Include="FlyingStrafeAttackBehavior.cpp" />
+    <ClCompile Include="DiveBombAttackBehavior.cpp" />
+    <ClCompile Include="FlyingCircleAttackBehavior.cpp" />
+    <ClCompile Include="FlyingSweepAttackBehavior.cpp" />
+    <ClCompile Include="TailSweepAttackBehavior.cpp" />
+    <ClCompile Include="JumpSlamAttackBehavior.cpp" />
+    <ClCompile Include="ComboAttackBehavior.cpp" />
     <ClCompile Include="ThreatSystem.cpp" />
     <ClCompile Include="BossPhaseConfig.cpp" />
     <ClCompile Include="BossPhaseController.cpp" />

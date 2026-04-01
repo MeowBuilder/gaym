@@ -6,6 +6,8 @@
 #include <functional>
 #include <memory>
 
+class BossPhaseConfig;
+
 struct EnemySpawnData
 {
     // Visual
@@ -38,6 +40,9 @@ struct EnemySpawnData
     bool m_bIsBoss = false;
     float m_fSpecialAttackCooldown = 10.0f;
     int m_nSpecialAttackChance = 30;  // Percentage (0-100)
+
+    // Boss phase config factory (for multi-phase bosses)
+    std::function<std::unique_ptr<BossPhaseConfig>()> m_fnCreateBossPhaseConfig;
 
     // Constructor with defaults for test enemy
     EnemySpawnData()

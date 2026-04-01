@@ -115,6 +115,12 @@ public:
     IAttackBehavior* GetSpecialAttackBehavior() const { return m_pSpecialAttackBehavior.get(); }
     bool IsUsingSpecialAttack() const { return m_bUsingSpecialAttack; }
 
+    // Flying attack behavior (for bosses with flight capability)
+    void SetFlyingAttackBehavior(std::unique_ptr<IAttackBehavior> pBehavior);
+    IAttackBehavior* GetFlyingAttackBehavior() const { return m_pFlyingAttackBehavior.get(); }
+    bool IsUsingFlyingAttack() const { return m_bUsingFlyingAttack; }
+    void SetFlyingAttackChance(int nChance) { m_nFlyingAttackChance = nChance; }
+
     // Boss settings
     void SetBoss(bool bIsBoss) { m_bIsBoss = bIsBoss; }
     bool IsBoss() const { return m_bIsBoss; }
@@ -190,6 +196,7 @@ private:
     EnemyStats m_Stats;
     std::unique_ptr<IAttackBehavior> m_pAttackBehavior;
     std::unique_ptr<IAttackBehavior> m_pSpecialAttackBehavior;  // Special pattern for bosses
+    std::unique_ptr<IAttackBehavior> m_pFlyingAttackBehavior;   // Flying pattern for bosses
     GameObject* m_pTarget = nullptr;
     CRoom* m_pRoom = nullptr;
 
@@ -197,6 +204,7 @@ private:
     bool m_bIsBoss = false;
     bool m_bInvincible = false;
     bool m_bUsingSpecialAttack = false;
+    bool m_bUsingFlyingAttack = false;
 
     // Boss Phase System
     std::unique_ptr<BossPhaseController> m_pPhaseController;
@@ -206,6 +214,11 @@ private:
     float m_fSpecialAttackCooldown = 10.0f;
     float m_fSpecialCooldownTimer = 0.0f;
     int m_nSpecialAttackChance = 30;  // 30% chance when cooldown ready
+
+    // Flying attack parameters
+    float m_fFlyingAttackCooldown = 15.0f;
+    float m_fFlyingCooldownTimer = 0.0f;
+    int m_nFlyingAttackChance = 30;
 
     // Animation
     AnimationComponent* m_pAnimationComp = nullptr;

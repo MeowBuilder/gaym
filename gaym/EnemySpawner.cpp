@@ -13,6 +13,15 @@
 #include "RangedAttackBehavior.h"
 #include "BreathAttackBehavior.h"
 #include "FlyingBarrageAttackBehavior.h"
+#include "FlyingStrafeAttackBehavior.h"
+#include "DiveBombAttackBehavior.h"
+#include "FlyingCircleAttackBehavior.h"
+#include "FlyingSweepAttackBehavior.h"
+#include "TailSweepAttackBehavior.h"
+#include "JumpSlamAttackBehavior.h"
+#include "ComboAttackBehavior.h"
+#include "BossPhaseConfig.h"
+#include "BossPhaseController.h"
 #include "Room.h"
 #include "Scene.h"
 #include "ProjectileManager.h"
@@ -179,10 +188,10 @@ void EnemySpawner::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pComma
 
     // Boss settings - immune to stagger, has special attack
     dragon.m_bIsBoss = true;
-    dragon.m_fSpecialAttackCooldown = 12.0f;  // Longer cooldown for special attack
-    dragon.m_nSpecialAttackChance = 30;        // 30% chance when cooldown ready
+    dragon.m_fSpecialAttackCooldown = 8.0f;
+    dragon.m_nSpecialAttackChance = 35;
 
-    // Ground combat animations (intro handles flying entrance)
+    // Ground combat animations
     dragon.m_AnimConfig.m_strIdleClip = "Idle01";
     dragon.m_AnimConfig.m_strChaseClip = "Walk";
     dragon.m_AnimConfig.m_strAttackClip = "Flame Attack";
@@ -194,24 +203,149 @@ void EnemySpawner::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pComma
 
     // Normal attack: Breath attack
     dragon.m_fnCreateAttack = [pProjMgr]() {
-        // damage, speed, count, spread, windup, duration, recovery
         return std::make_unique<BreathAttackBehavior>(pProjMgr, 20.0f, 30.0f, 7, 45.0f, 0.6f, 1.2f, 0.4f);
     };
 
-    // Special attack: Flying barrage - boss flies up and fires circular waves (invincible)
+    // Special attack (fallback if no phase controller)
     dragon.m_fnCreateSpecialAttack = [pProjMgr]() {
-        // damage, speed, projectiles/wave, waves, interval, flyHeight, takeoff, landing
         return std::make_unique<FlyingBarrageAttackBehavior>(
-            pProjMgr,
-            15.0f,   // damage per hit
-            12.0f,   // projectile speed (slower for easier dodging)
-            16,      // projectiles per ring (360/16 = 22.5 degree spacing, less lag)
-            6,       // total rings (one at a time with delay)
-            0.4f,    // ring interval (visible time gap between rings)
-            18.0f,   // fly height
-            1.0f,    // takeoff duration
-            1.0f     // landing duration
-        );
+            pProjMgr, 15.0f, 12.0f, 16, 6, 0.4f, 18.0f, 1.0f, 1.0f);
+    };
+
+    // Boss Phase Configuration - 3 phases with varied attack patterns
+    dragon.m_fnCreateBossPhaseConfig = [pProjMgr]() {
+        auto pConfig = std::make_unique<BossPhaseConfig>();
+
+        // ============ Phase 1 (100% - 70% HP): Ground Combat ============
+        BossPhaseData phase1;
+        phase1.m_fHealthThreshold = 1.0f;
+        phase1.m_fSpeedMultiplier = 1.0f;
+        phase1.m_fAttackSpeedMultiplier = 1.0f;
+        phase1.m_nSpecialAttackChance = 25;
+        phase1.m_bCanFly = false;
+
+        // Primary: Breath attack
+        phase1.m_fnPrimaryAttack = [pProjMgr]() {
+            return std::make_unique<BreathAttackBehavior>(pProjMgr, 18.0f, 28.0f, 5, 40.0f, 0.5f, 1.0f, 0.4f);
+        };
+
+        // Special: Randomly choose between tail sweep and claw combo
+        phase1.m_fnSpecialAttack = []() -> std::unique_ptr<IAttackBehavior> {
+            int choice = rand() % 3;
+            if (choice == 0) {
+                // Tail sweep - wide arc behind
+                return std::make_unique<TailSweepAttackBehavior>(22.0f, 0.4f, 0.3f, 0.4f, 7.0f, 180.0f, true);
+            } else if (choice == 1) {
+                // Jump slam
+                return std::make_unique<JumpSlamAttackBehavior>(28.0f, 8.0f, 0.5f, 6.0f, 0.3f, 0.5f, true);
+            } else {
+                // Light combo (3-hit)
+                return std::unique_ptr<IAttackBehavior>(ComboAttackBehavior::CreateLightCombo());
+            }
+        };
+
+        pConfig->AddPhase(phase1);
+
+        // ============ Phase 2 (70% - 35% HP): Aerial Assault ============
+        BossPhaseData phase2;
+        phase2.m_fHealthThreshold = 0.7f;
+        phase2.m_fSpeedMultiplier = 1.2f;
+        phase2.m_fAttackSpeedMultiplier = 0.9f;
+        phase2.m_nSpecialAttackChance = 35;
+        phase2.m_nFlyingAttackChance = 40;
+        phase2.m_bCanFly = true;
+
+        // Primary: Faster breath
+        phase2.m_fnPrimaryAttack = [pProjMgr]() {
+            return std::make_unique<BreathAttackBehavior>(pProjMgr, 22.0f, 32.0f, 8, 50.0f, 0.4f, 1.0f, 0.3f);
+        };
+
+        // Special: Ground attacks
+        phase2.m_fnSpecialAttack = []() -> std::unique_ptr<IAttackBehavior> {
+            int choice = rand() % 2;
+            if (choice == 0) {
+                return std::make_unique<JumpSlamAttackBehavior>(30.0f, 10.0f, 0.5f, 7.0f, 0.25f, 0.4f, true);
+            } else {
+                return std::unique_ptr<IAttackBehavior>(ComboAttackBehavior::CreateHeavyCombo());
+            }
+        };
+
+        // Flying: Strafe or Circle attack
+        phase2.m_fnFlyingAttack = [pProjMgr]() -> std::unique_ptr<IAttackBehavior> {
+            int choice = rand() % 2;
+            if (choice == 0) {
+                // Strafe - side movement while shooting at player
+                return std::make_unique<FlyingStrafeAttackBehavior>(
+                    pProjMgr, 14.0f, 18.0f, 16.0f, 20.0f, 0.12f, 3, 10.0f, 0.5f, 0.5f);
+            } else {
+                // Circle - orbit around player (shorter, faster)
+                return std::make_unique<FlyingCircleAttackBehavior>(
+                    pProjMgr, 12.0f, 18.0f, 16.0f, 90.0f, 270.0f, 0.15f, 3, 10.0f, 0.5f, 0.5f);
+            }
+        };
+
+        // No transition effect for now - will add Mega Breath later
+        // phase2.m_fnTransitionAttack = [pProjMgr]() { return MegaBreathAttack(...); };
+        phase2.m_bHasTransitionAttack = false;
+        phase2.m_fTransitionDuration = 0.0f;  // Instant transition
+
+        pConfig->AddPhase(phase2);
+
+        // ============ Phase 3 (35% - 0% HP): Fury Mode ============
+        BossPhaseData phase3;
+        phase3.m_fHealthThreshold = 0.35f;
+        phase3.m_fSpeedMultiplier = 1.4f;
+        phase3.m_fAttackSpeedMultiplier = 0.75f;
+        phase3.m_nSpecialAttackChance = 45;
+        phase3.m_nFlyingAttackChance = 50;
+        phase3.m_bCanFly = true;
+
+        // Primary: Rapid breath
+        phase3.m_fnPrimaryAttack = [pProjMgr]() {
+            return std::make_unique<BreathAttackBehavior>(pProjMgr, 25.0f, 35.0f, 10, 60.0f, 0.3f, 0.8f, 0.25f);
+        };
+
+        // Special: Fury combo or double jump slam
+        phase3.m_fnSpecialAttack = []() -> std::unique_ptr<IAttackBehavior> {
+            int choice = rand() % 2;
+            if (choice == 0) {
+                return std::unique_ptr<IAttackBehavior>(ComboAttackBehavior::CreateFuryCombo());
+            } else {
+                return std::make_unique<JumpSlamAttackBehavior>(35.0f, 12.0f, 0.45f, 8.0f, 0.2f, 0.35f, true);
+            }
+        };
+
+        // Flying: All aerial attacks available (faster versions)
+        phase3.m_fnFlyingAttack = [pProjMgr]() -> std::unique_ptr<IAttackBehavior> {
+            int choice = rand() % 4;
+            switch (choice) {
+            case 0:
+                // Dive bomb - dive at player while shooting
+                return std::make_unique<DiveBombAttackBehavior>(
+                    pProjMgr, 18.0f, 28.0f, 32.0f, 35.0f, 6.0f, 5, 0.08f, 15.0f, 0.5f, 0.3f);
+            case 1:
+                // Sweep - side-to-side fire while moving (shorter distance)
+                return std::make_unique<FlyingSweepAttackBehavior>(
+                    pProjMgr, 15.0f, 24.0f, 16.0f, 25.0f, 90.0f, 200.0f, 0.06f, 2, 8.0f, 0.4f, 0.4f);
+            case 2:
+                // Barrage - fewer but faster waves
+                return std::make_unique<FlyingBarrageAttackBehavior>(
+                    pProjMgr, 18.0f, 16.0f, 16, 5, 0.3f, 14.0f, 0.6f, 0.6f);
+            default:
+                // Fast strafe
+                return std::make_unique<FlyingStrafeAttackBehavior>(
+                    pProjMgr, 16.0f, 22.0f, 20.0f, 22.0f, 0.1f, 4, 10.0f, 0.4f, 0.4f);
+            }
+        };
+
+        // No transition effect for now - will add Mega Breath later
+        // phase3.m_fnTransitionAttack = [pProjMgr]() { return MegaBreathAttack(...); };
+        phase3.m_bHasTransitionAttack = false;
+        phase3.m_fTransitionDuration = 0.0f;  // Instant transition
+
+        pConfig->AddPhase(phase3);
+
+        return pConfig;
     };
 
     RegisterEnemyPreset("Dragon", dragon);
@@ -389,6 +523,19 @@ void EnemySpawner::SetupEnemyComponents(GameObject* pEnemy, const EnemySpawnData
         {
             pEnemyComp->SetSpecialAttackBehavior(data.m_fnCreateSpecialAttack());
             OutputDebugString(L"[EnemySpawner] Boss special attack behavior set\n");
+        }
+
+        // Setup boss phase controller if config factory is provided
+        if (data.m_fnCreateBossPhaseConfig)
+        {
+            auto pPhaseConfig = data.m_fnCreateBossPhaseConfig();
+            if (pPhaseConfig)
+            {
+                auto pPhaseController = std::make_unique<BossPhaseController>(pEnemyComp);
+                pPhaseController->SetPhaseConfig(std::move(pPhaseConfig));
+                pEnemyComp->SetBossPhaseController(std::move(pPhaseController));
+                OutputDebugString(L"[EnemySpawner] Boss phase controller set\n");
+            }
         }
     }
 

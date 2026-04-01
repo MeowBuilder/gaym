@@ -38,6 +38,7 @@ public:
                                          m_eTransitionState != PhaseTransitionState::TransitionDone; }
     bool IsInTransitionAttack() const { return m_eTransitionState == PhaseTransitionState::TransitionAttack; }
     PhaseTransitionState GetTransitionState() const { return m_eTransitionState; }
+    const BossPhaseData& GetCurrentPhaseData() const { return m_pPhaseConfig->GetPhase(m_nCurrentPhase); }
 
     // 비행 가능 여부 (현재 페이즈 기준)
     bool CanFly() const;

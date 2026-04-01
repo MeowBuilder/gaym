@@ -77,6 +77,10 @@ void EnemyComponent::Update(float deltaTime)
     {
         m_fSpecialCooldownTimer -= deltaTime;
     }
+    if (m_fFlyingCooldownTimer > 0.0f)
+    {
+        m_fFlyingCooldownTimer -= deltaTime;
+    }
 
     // Threat table update (distance-based threat decay/gain)
     auto* pTransform = m_pOwner ? m_pOwner->GetTransform() : nullptr;
@@ -171,8 +175,21 @@ void EnemyComponent::ChangeState(EnemyState newState)
         break;
     case EnemyState::Attack:
         {
-            // Execute the appropriate attack behavior
-            IAttackBehavior* pBehavior = m_bUsingSpecialAttack ? m_pSpecialAttackBehavior.get() : m_pAttackBehavior.get();
+            // Execute the appropriate attack behavior (priority: flying > special > primary)
+            IAttackBehavior* pBehavior = nullptr;
+            if (m_bUsingFlyingAttack && m_pFlyingAttackBehavior)
+            {
+                pBehavior = m_pFlyingAttackBehavior.get();
+            }
+            else if (m_bUsingSpecialAttack && m_pSpecialAttackBehavior)
+            {
+                pBehavior = m_pSpecialAttackBehavior.get();
+            }
+            else
+            {
+                pBehavior = m_pAttackBehavior.get();
+            }
+
             if (pBehavior)
             {
                 pBehavior->Execute(this);
@@ -228,6 +245,11 @@ void EnemyComponent::SetAttackBehavior(std::unique_ptr<IAttackBehavior> pBehavio
 void EnemyComponent::SetSpecialAttackBehavior(std::unique_ptr<IAttackBehavior> pBehavior)
 {
     m_pSpecialAttackBehavior = std::move(pBehavior);
+}
+
+void EnemyComponent::SetFlyingAttackBehavior(std::unique_ptr<IAttackBehavior> pBehavior)
+{
+    m_pFlyingAttackBehavior = std::move(pBehavior);
 }
 
 float EnemyComponent::GetDistanceToTarget() const
@@ -376,6 +398,12 @@ void EnemyComponent::UpdateChase(float dt)
         return;
     }
 
+    // 보스 페이즈 전환 중이면 대기
+    if (m_pPhaseController && m_pPhaseController->IsInTransition())
+    {
+        return;
+    }
+
     float distance = GetDistanceToTarget();
 
     // Check if within attack range
@@ -387,15 +415,58 @@ void EnemyComponent::UpdateChase(float dt)
             // Face target instantly when starting attack
             FaceTarget(dt, true);
 
-            // Boss special attack selection
+            // Boss attack selection
             m_bUsingSpecialAttack = false;
-            if (m_bIsBoss && m_pSpecialAttackBehavior && m_fSpecialCooldownTimer <= 0.0f)
+            m_bUsingFlyingAttack = false;
+
+            if (m_bIsBoss)
             {
-                // Roll for special attack chance
-                if ((rand() % 100) < m_nSpecialAttackChance)
+                // 1순위: 비행 공격 (쿨다운 체크 + 확률)
+                if (CanUseFlyingAttack() && m_fFlyingCooldownTimer <= 0.0f)
                 {
-                    m_bUsingSpecialAttack = true;
-                    OutputDebugString(L"[Boss] Using SPECIAL attack pattern!\n");
+                    int flyChance = m_nFlyingAttackChance;
+                    if (m_pPhaseController)
+                    {
+                        flyChance = m_pPhaseController->GetFlyingAttackChance();
+                    }
+                    if ((rand() % 100) < flyChance)
+                    {
+                        // 페이즈 컨트롤러에서 비행 공격 생성
+                        if (m_pPhaseController)
+                        {
+                            const BossPhaseData& phase = m_pPhaseController->GetCurrentPhaseData();
+                            if (phase.m_fnFlyingAttack)
+                            {
+                                m_pFlyingAttackBehavior = phase.m_fnFlyingAttack();
+                            }
+                        }
+                        if (m_pFlyingAttackBehavior)
+                        {
+                            m_bUsingFlyingAttack = true;
+                            OutputDebugString(L"[Boss] Using FLYING attack pattern!\n");
+                        }
+                    }
+                }
+
+                // 2순위: 특수 공격 (쿨다운 체크 + 확률)
+                if (!m_bUsingFlyingAttack && m_fSpecialCooldownTimer <= 0.0f)
+                {
+                    // 페이즈 컨트롤러에서 특수 공격 생성 (매번 새로 생성해서 랜덤 선택)
+                    if (m_pPhaseController)
+                    {
+                        const BossPhaseData& phase = m_pPhaseController->GetCurrentPhaseData();
+                        if (phase.m_fnSpecialAttack && (rand() % 100) < m_nSpecialAttackChance)
+                        {
+                            m_pSpecialAttackBehavior = phase.m_fnSpecialAttack();
+                            m_bUsingSpecialAttack = true;
+                            OutputDebugString(L"[Boss] Using SPECIAL attack pattern!\n");
+                        }
+                    }
+                    else if (m_pSpecialAttackBehavior && (rand() % 100) < m_nSpecialAttackChance)
+                    {
+                        m_bUsingSpecialAttack = true;
+                        OutputDebugString(L"[Boss] Using SPECIAL attack pattern!\n");
+                    }
                 }
             }
 
@@ -417,8 +488,20 @@ void EnemyComponent::UpdateChase(float dt)
 
 void EnemyComponent::UpdateAttack(float dt)
 {
-    // Select which behavior to use
-    IAttackBehavior* pCurrentBehavior = m_bUsingSpecialAttack ? m_pSpecialAttackBehavior.get() : m_pAttackBehavior.get();
+    // Select which behavior to use (priority: flying > special > primary)
+    IAttackBehavior* pCurrentBehavior = nullptr;
+    if (m_bUsingFlyingAttack && m_pFlyingAttackBehavior)
+    {
+        pCurrentBehavior = m_pFlyingAttackBehavior.get();
+    }
+    else if (m_bUsingSpecialAttack && m_pSpecialAttackBehavior)
+    {
+        pCurrentBehavior = m_pSpecialAttackBehavior.get();
+    }
+    else
+    {
+        pCurrentBehavior = m_pAttackBehavior.get();
+    }
 
     if (pCurrentBehavior)
     {
@@ -429,9 +512,19 @@ void EnemyComponent::UpdateAttack(float dt)
             // Reset cooldowns
             m_fAttackCooldownTimer = m_Stats.m_fAttackCooldown;
 
-            if (m_bUsingSpecialAttack)
+            if (m_bUsingFlyingAttack)
             {
-                // Special attack has longer cooldown
+                m_fFlyingCooldownTimer = m_fFlyingAttackCooldown;
+                m_bUsingFlyingAttack = false;
+                // 비행 공격 후 비행 공격 behavior 리셋
+                if (m_pFlyingAttackBehavior)
+                {
+                    m_pFlyingAttackBehavior->Reset();
+                }
+                OutputDebugString(L"[Boss] Flying attack finished, cooldown started\n");
+            }
+            else if (m_bUsingSpecialAttack)
+            {
                 m_fSpecialCooldownTimer = m_fSpecialAttackCooldown;
                 m_bUsingSpecialAttack = false;
                 OutputDebugString(L"[Boss] Special attack finished, cooldown started\n");
@@ -462,6 +555,26 @@ void EnemyComponent::UpdateStagger(float dt)
 void EnemyComponent::UpdateDead(float dt)
 {
     m_fDeadTimer -= dt;
+
+    // 보스는 죽음 애니메이션 끝난 후에도 시체로 남아있음
+    if (m_bIsBoss)
+    {
+        // 애니메이션 재생 중이면 타이머 일시정지
+        if (m_pAnimationComp && m_pAnimationComp->IsPlaying())
+        {
+            // 무한 대기 방지 - 최대 8초
+            if (m_fDeadTimer > -6.0f)
+            {
+                m_fDeadTimer = 0.1f;  // 타이머 유지 (삭제 안 함)
+                return;
+            }
+        }
+        // 애니메이션 끝났으면 추가 3초 대기 (시체 상태)
+        else if (m_fDeadTimer > -3.0f)
+        {
+            return;  // 3초 더 기다림
+        }
+    }
 
     // When timer expires, request deletion
     if (m_fDeadTimer <= 0.0f)
