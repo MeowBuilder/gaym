@@ -73,6 +73,11 @@ struct EnemyStats
     float m_fAttackRange = 2.0f;
     float m_fAttackCooldown = 1.0f;
     float m_fDetectionRange = 50.0f;
+
+    // Boss distance-based attack ranges
+    float m_fLongRangeThreshold = 30.0f;   // 이 거리 이상: 비행/브레스 공격
+    float m_fMidRangeThreshold = 15.0f;    // 이 거리 이상: 특수 공격
+    // 이 거리 미만: 근접 공격
 };
 
 class EnemyComponent : public Component
@@ -119,6 +124,7 @@ public:
     void SetFlyingAttackBehavior(std::unique_ptr<IAttackBehavior> pBehavior);
     IAttackBehavior* GetFlyingAttackBehavior() const { return m_pFlyingAttackBehavior.get(); }
     bool IsUsingFlyingAttack() const { return m_bUsingFlyingAttack; }
+    void SetFlyingAttackCooldown(float fCooldown) { m_fFlyingAttackCooldown = fCooldown; }
     void SetFlyingAttackChance(int nChance) { m_nFlyingAttackChance = nChance; }
 
     // Boss settings

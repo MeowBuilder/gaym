@@ -39,7 +39,9 @@ struct EnemySpawnData
     // Boss settings
     bool m_bIsBoss = false;
     float m_fSpecialAttackCooldown = 10.0f;
+    float m_fFlyingAttackCooldown = 12.0f;
     int m_nSpecialAttackChance = 30;  // Percentage (0-100)
+    int m_nFlyingAttackChance = 30;   // Percentage (0-100)
 
     // Boss phase config factory (for multi-phase bosses)
     std::function<std::unique_ptr<BossPhaseConfig>()> m_fnCreateBossPhaseConfig;

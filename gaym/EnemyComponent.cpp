@@ -9,6 +9,7 @@
 #include "Dx12App.h"
 #include "MathUtils.h"
 #include "BossPhaseController.h"
+#include <algorithm>
 
 EnemyComponent::EnemyComponent(GameObject* pOwner)
     : Component(pOwner)
@@ -406,75 +407,173 @@ void EnemyComponent::UpdateChase(float dt)
 
     float distance = GetDistanceToTarget();
 
-    // Check if within attack range
-    if (distance <= m_Stats.m_fAttackRange)
+    // Boss: 거리 기반 공격 선택 (카이팅 방지)
+    if (m_bIsBoss && m_fAttackCooldownTimer <= 0.0f)
     {
-        // Check if can attack (cooldown)
-        if (m_fAttackCooldownTimer <= 0.0f)
+        m_bUsingSpecialAttack = false;
+        m_bUsingFlyingAttack = false;
+
+        // 원거리 (30+ units): 비행 공격 또는 브레스 우선
+        if (distance >= m_Stats.m_fLongRangeThreshold)
         {
-            // Face target instantly when starting attack
             FaceTarget(dt, true);
 
-            // Boss attack selection
-            m_bUsingSpecialAttack = false;
-            m_bUsingFlyingAttack = false;
-
-            if (m_bIsBoss)
+            // 비행 공격 시도 (높은 확률)
+            if (CanUseFlyingAttack() && m_fFlyingCooldownTimer <= 0.0f)
             {
-                // 1순위: 비행 공격 (쿨다운 체크 + 확률)
-                if (CanUseFlyingAttack() && m_fFlyingCooldownTimer <= 0.0f)
+                int flyChance = 70;  // 원거리에서는 70% 확률로 비행 공격
+                if (m_pPhaseController)
                 {
-                    int flyChance = m_nFlyingAttackChance;
-                    if (m_pPhaseController)
-                    {
-                        flyChance = m_pPhaseController->GetFlyingAttackChance();
-                    }
-                    if ((rand() % 100) < flyChance)
-                    {
-                        // 페이즈 컨트롤러에서 비행 공격 생성
-                        if (m_pPhaseController)
-                        {
-                            const BossPhaseData& phase = m_pPhaseController->GetCurrentPhaseData();
-                            if (phase.m_fnFlyingAttack)
-                            {
-                                m_pFlyingAttackBehavior = phase.m_fnFlyingAttack();
-                            }
-                        }
-                        if (m_pFlyingAttackBehavior)
-                        {
-                            m_bUsingFlyingAttack = true;
-                            OutputDebugString(L"[Boss] Using FLYING attack pattern!\n");
-                        }
-                    }
+                    flyChance = std::max(flyChance, m_pPhaseController->GetFlyingAttackChance());
                 }
-
-                // 2순위: 특수 공격 (쿨다운 체크 + 확률)
-                if (!m_bUsingFlyingAttack && m_fSpecialCooldownTimer <= 0.0f)
+                if ((rand() % 100) < flyChance)
                 {
-                    // 페이즈 컨트롤러에서 특수 공격 생성 (매번 새로 생성해서 랜덤 선택)
                     if (m_pPhaseController)
                     {
                         const BossPhaseData& phase = m_pPhaseController->GetCurrentPhaseData();
-                        if (phase.m_fnSpecialAttack && (rand() % 100) < m_nSpecialAttackChance)
+                        if (phase.m_fnFlyingAttack)
                         {
-                            m_pSpecialAttackBehavior = phase.m_fnSpecialAttack();
-                            m_bUsingSpecialAttack = true;
-                            OutputDebugString(L"[Boss] Using SPECIAL attack pattern!\n");
+                            m_pFlyingAttackBehavior = phase.m_fnFlyingAttack();
                         }
                     }
-                    else if (m_pSpecialAttackBehavior && (rand() % 100) < m_nSpecialAttackChance)
+                    if (m_pFlyingAttackBehavior)
                     {
-                        m_bUsingSpecialAttack = true;
-                        OutputDebugString(L"[Boss] Using SPECIAL attack pattern!\n");
+                        m_bUsingFlyingAttack = true;
+                        OutputDebugString(L"[Boss] Long range - Using FLYING attack!\n");
+                        ChangeState(EnemyState::Attack);
+                        return;
                     }
                 }
             }
 
+            // 비행 불가 시 브레스 공격 (기본 공격이 브레스면 바로 사용)
+            OutputDebugString(L"[Boss] Long range - Using BREATH attack!\n");
+            ChangeState(EnemyState::Attack);
+            return;
+        }
+        // 중거리 (15-30 units): 특수 공격 또는 비행 공격
+        else if (distance >= m_Stats.m_fMidRangeThreshold)
+        {
+            FaceTarget(dt, true);
+
+            // 비행 공격 시도
+            if (CanUseFlyingAttack() && m_fFlyingCooldownTimer <= 0.0f)
+            {
+                int flyChance = m_nFlyingAttackChance;
+                if (m_pPhaseController)
+                {
+                    flyChance = m_pPhaseController->GetFlyingAttackChance();
+                }
+                if ((rand() % 100) < flyChance)
+                {
+                    if (m_pPhaseController)
+                    {
+                        const BossPhaseData& phase = m_pPhaseController->GetCurrentPhaseData();
+                        if (phase.m_fnFlyingAttack)
+                        {
+                            m_pFlyingAttackBehavior = phase.m_fnFlyingAttack();
+                        }
+                    }
+                    if (m_pFlyingAttackBehavior)
+                    {
+                        m_bUsingFlyingAttack = true;
+                        OutputDebugString(L"[Boss] Mid range - Using FLYING attack!\n");
+                        ChangeState(EnemyState::Attack);
+                        return;
+                    }
+                }
+            }
+
+            // 특수 공격 시도 (중거리에서 높은 확률)
+            if (m_fSpecialCooldownTimer <= 0.0f)
+            {
+                int specialChance = 50;  // 중거리에서 50% 확률
+                if (m_pPhaseController)
+                {
+                    const BossPhaseData& phase = m_pPhaseController->GetCurrentPhaseData();
+                    if (phase.m_fnSpecialAttack && (rand() % 100) < specialChance)
+                    {
+                        m_pSpecialAttackBehavior = phase.m_fnSpecialAttack();
+                        m_bUsingSpecialAttack = true;
+                        OutputDebugString(L"[Boss] Mid range - Using SPECIAL attack!\n");
+                        ChangeState(EnemyState::Attack);
+                        return;
+                    }
+                }
+            }
+
+            // 그 외엔 브레스 공격
+            OutputDebugString(L"[Boss] Mid range - Using BREATH attack!\n");
+            ChangeState(EnemyState::Attack);
+            return;
+        }
+        // 근거리 (< 15 units): 근접 콤보 / 특수 공격
+        else
+        {
+            FaceTarget(dt, true);
+
+            // 비행 공격 (낮은 확률)
+            if (CanUseFlyingAttack() && m_fFlyingCooldownTimer <= 0.0f)
+            {
+                int flyChance = m_nFlyingAttackChance / 2;  // 근접에서는 확률 절반
+                if (m_pPhaseController)
+                {
+                    flyChance = m_pPhaseController->GetFlyingAttackChance() / 2;
+                }
+                if ((rand() % 100) < flyChance)
+                {
+                    if (m_pPhaseController)
+                    {
+                        const BossPhaseData& phase = m_pPhaseController->GetCurrentPhaseData();
+                        if (phase.m_fnFlyingAttack)
+                        {
+                            m_pFlyingAttackBehavior = phase.m_fnFlyingAttack();
+                        }
+                    }
+                    if (m_pFlyingAttackBehavior)
+                    {
+                        m_bUsingFlyingAttack = true;
+                        OutputDebugString(L"[Boss] Close range - Using FLYING attack!\n");
+                        ChangeState(EnemyState::Attack);
+                        return;
+                    }
+                }
+            }
+
+            // 특수 공격 시도
+            if (m_fSpecialCooldownTimer <= 0.0f)
+            {
+                if (m_pPhaseController)
+                {
+                    const BossPhaseData& phase = m_pPhaseController->GetCurrentPhaseData();
+                    if (phase.m_fnSpecialAttack && (rand() % 100) < m_nSpecialAttackChance)
+                    {
+                        m_pSpecialAttackBehavior = phase.m_fnSpecialAttack();
+                        m_bUsingSpecialAttack = true;
+                        OutputDebugString(L"[Boss] Close range - Using SPECIAL attack!\n");
+                        ChangeState(EnemyState::Attack);
+                        return;
+                    }
+                }
+            }
+
+            // 기본 공격 (브레스 또는 콤보)
+            OutputDebugString(L"[Boss] Close range - Using PRIMARY attack!\n");
+            ChangeState(EnemyState::Attack);
+            return;
+        }
+    }
+
+    // 일반 적: 기존 사거리 기반 공격
+    if (distance <= m_Stats.m_fAttackRange)
+    {
+        if (m_fAttackCooldownTimer <= 0.0f)
+        {
+            FaceTarget(dt, true);
             ChangeState(EnemyState::Attack);
         }
         else
         {
-            // Wait for cooldown, face target smoothly
             FaceTarget(dt);
         }
     }

@@ -174,13 +174,15 @@ void EnemySpawner::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pComma
     dragon.m_strMeshPath = "Assets/Enemies/Dragon/Red.bin";
     dragon.m_strAnimationPath = "Assets/Enemies/Dragon/Red_Anim.bin";
     dragon.m_strTexturePath = "Assets/Enemies/Dragon/Textures/RedHP.png";
-    dragon.m_xmf3Scale = XMFLOAT3(2.5f, 2.5f, 2.5f);
+    dragon.m_xmf3Scale = XMFLOAT3(3.0f, 3.0f, 3.0f);  // 더 크게
     dragon.m_xmf4Color = XMFLOAT4(1.0f, 0.3f, 0.1f, 1.0f);
-    dragon.m_Stats.m_fMaxHP = 150.0f;
-    dragon.m_Stats.m_fCurrentHP = 150.0f;
-    dragon.m_Stats.m_fMoveSpeed = 6.0f;
-    dragon.m_Stats.m_fAttackRange = 15.0f;
-    dragon.m_Stats.m_fAttackCooldown = 2.5f;
+    dragon.m_Stats.m_fMaxHP = 800.0f;           // HP 대폭 상향
+    dragon.m_Stats.m_fCurrentHP = 800.0f;
+    dragon.m_Stats.m_fMoveSpeed = 10.0f;        // 이동속도 상향
+    dragon.m_Stats.m_fAttackRange = 40.0f;      // 공격 사거리 상향 (브레스 사거리)
+    dragon.m_Stats.m_fAttackCooldown = 1.5f;    // 공격 쿨다운 감소
+    dragon.m_Stats.m_fLongRangeThreshold = 35.0f;   // 원거리 기준
+    dragon.m_Stats.m_fMidRangeThreshold = 18.0f;    // 중거리 기준
 
     // Flying mode disabled - boss intro handles the entrance
     dragon.m_bIsFlying = false;
@@ -188,8 +190,10 @@ void EnemySpawner::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pComma
 
     // Boss settings - immune to stagger, has special attack
     dragon.m_bIsBoss = true;
-    dragon.m_fSpecialAttackCooldown = 8.0f;
-    dragon.m_nSpecialAttackChance = 35;
+    dragon.m_fSpecialAttackCooldown = 4.0f;    // 특수 공격 쿨다운 감소
+    dragon.m_fFlyingAttackCooldown = 8.0f;     // 비행 공격 쿨다운 감소
+    dragon.m_nSpecialAttackChance = 45;        // 특수 공격 확률 증가
+    dragon.m_nFlyingAttackChance = 50;         // 비행 공격 확률 증가
 
     // Ground combat animations
     dragon.m_AnimConfig.m_strIdleClip = "Idle01";
@@ -201,15 +205,15 @@ void EnemySpawner::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pComma
     dragon.m_IndicatorConfig.m_eType = IndicatorType::Circle;
     dragon.m_IndicatorConfig.m_fHitRadius = 15.0f;
 
-    // Normal attack: Breath attack
+    // Normal attack: Breath attack (상향된 데미지)
     dragon.m_fnCreateAttack = [pProjMgr]() {
-        return std::make_unique<BreathAttackBehavior>(pProjMgr, 20.0f, 30.0f, 7, 45.0f, 0.6f, 1.2f, 0.4f);
+        return std::make_unique<BreathAttackBehavior>(pProjMgr, 28.0f, 38.0f, 8, 55.0f, 0.4f, 0.9f, 0.3f);
     };
 
-    // Special attack (fallback if no phase controller)
+    // Special attack (fallback if no phase controller, 상향된 데미지)
     dragon.m_fnCreateSpecialAttack = [pProjMgr]() {
         return std::make_unique<FlyingBarrageAttackBehavior>(
-            pProjMgr, 15.0f, 12.0f, 16, 6, 0.4f, 18.0f, 1.0f, 1.0f);
+            pProjMgr, 22.0f, 18.0f, 20, 7, 0.3f, 16.0f, 0.8f, 0.8f);
     };
 
     // Boss Phase Configuration - 3 phases with varied attack patterns
@@ -221,23 +225,23 @@ void EnemySpawner::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pComma
         phase1.m_fHealthThreshold = 1.0f;
         phase1.m_fSpeedMultiplier = 1.0f;
         phase1.m_fAttackSpeedMultiplier = 1.0f;
-        phase1.m_nSpecialAttackChance = 25;
+        phase1.m_nSpecialAttackChance = 35;
         phase1.m_bCanFly = false;
 
-        // Primary: Breath attack
+        // Primary: Breath attack (상향된 데미지)
         phase1.m_fnPrimaryAttack = [pProjMgr]() {
-            return std::make_unique<BreathAttackBehavior>(pProjMgr, 18.0f, 28.0f, 5, 40.0f, 0.5f, 1.0f, 0.4f);
+            return std::make_unique<BreathAttackBehavior>(pProjMgr, 25.0f, 35.0f, 7, 50.0f, 0.4f, 0.9f, 0.3f);
         };
 
         // Special: Randomly choose between tail sweep and claw combo
         phase1.m_fnSpecialAttack = []() -> std::unique_ptr<IAttackBehavior> {
             int choice = rand() % 3;
             if (choice == 0) {
-                // Tail sweep - wide arc behind
-                return std::make_unique<TailSweepAttackBehavior>(22.0f, 0.4f, 0.3f, 0.4f, 7.0f, 180.0f, true);
+                // Tail sweep - wide arc behind (상향된 데미지)
+                return std::make_unique<TailSweepAttackBehavior>(35.0f, 0.35f, 0.25f, 0.35f, 8.0f, 180.0f, true);
             } else if (choice == 1) {
-                // Jump slam
-                return std::make_unique<JumpSlamAttackBehavior>(28.0f, 8.0f, 0.5f, 6.0f, 0.3f, 0.5f, true);
+                // Jump slam (상향된 데미지)
+                return std::make_unique<JumpSlamAttackBehavior>(45.0f, 10.0f, 0.45f, 7.0f, 0.25f, 0.4f, true);
             } else {
                 // Light combo (3-hit)
                 return std::unique_ptr<IAttackBehavior>(ComboAttackBehavior::CreateLightCombo());
@@ -249,38 +253,38 @@ void EnemySpawner::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pComma
         // ============ Phase 2 (70% - 35% HP): Aerial Assault ============
         BossPhaseData phase2;
         phase2.m_fHealthThreshold = 0.7f;
-        phase2.m_fSpeedMultiplier = 1.2f;
-        phase2.m_fAttackSpeedMultiplier = 0.9f;
-        phase2.m_nSpecialAttackChance = 35;
-        phase2.m_nFlyingAttackChance = 40;
+        phase2.m_fSpeedMultiplier = 1.3f;     // 속도 증가
+        phase2.m_fAttackSpeedMultiplier = 0.85f;
+        phase2.m_nSpecialAttackChance = 45;
+        phase2.m_nFlyingAttackChance = 55;    // 비행 공격 확률 증가
         phase2.m_bCanFly = true;
 
-        // Primary: Faster breath
+        // Primary: Faster breath (상향된 데미지)
         phase2.m_fnPrimaryAttack = [pProjMgr]() {
-            return std::make_unique<BreathAttackBehavior>(pProjMgr, 22.0f, 32.0f, 8, 50.0f, 0.4f, 1.0f, 0.3f);
+            return std::make_unique<BreathAttackBehavior>(pProjMgr, 30.0f, 38.0f, 9, 55.0f, 0.35f, 0.85f, 0.25f);
         };
 
-        // Special: Ground attacks
+        // Special: Ground attacks (상향된 데미지)
         phase2.m_fnSpecialAttack = []() -> std::unique_ptr<IAttackBehavior> {
             int choice = rand() % 2;
             if (choice == 0) {
-                return std::make_unique<JumpSlamAttackBehavior>(30.0f, 10.0f, 0.5f, 7.0f, 0.25f, 0.4f, true);
+                return std::make_unique<JumpSlamAttackBehavior>(50.0f, 12.0f, 0.45f, 8.0f, 0.2f, 0.35f, true);
             } else {
                 return std::unique_ptr<IAttackBehavior>(ComboAttackBehavior::CreateHeavyCombo());
             }
         };
 
-        // Flying: Strafe or Circle attack
+        // Flying: Strafe or Circle attack (상향된 데미지)
         phase2.m_fnFlyingAttack = [pProjMgr]() -> std::unique_ptr<IAttackBehavior> {
             int choice = rand() % 2;
             if (choice == 0) {
                 // Strafe - side movement while shooting at player
                 return std::make_unique<FlyingStrafeAttackBehavior>(
-                    pProjMgr, 14.0f, 18.0f, 16.0f, 20.0f, 0.12f, 3, 10.0f, 0.5f, 0.5f);
+                    pProjMgr, 20.0f, 22.0f, 18.0f, 22.0f, 0.1f, 4, 12.0f, 0.4f, 0.4f);
             } else {
                 // Circle - orbit around player (shorter, faster)
                 return std::make_unique<FlyingCircleAttackBehavior>(
-                    pProjMgr, 12.0f, 18.0f, 16.0f, 90.0f, 270.0f, 0.15f, 3, 10.0f, 0.5f, 0.5f);
+                    pProjMgr, 18.0f, 22.0f, 18.0f, 100.0f, 300.0f, 0.12f, 4, 12.0f, 0.4f, 0.4f);
             }
         };
 
@@ -294,47 +298,47 @@ void EnemySpawner::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pComma
         // ============ Phase 3 (35% - 0% HP): Fury Mode ============
         BossPhaseData phase3;
         phase3.m_fHealthThreshold = 0.35f;
-        phase3.m_fSpeedMultiplier = 1.4f;
-        phase3.m_fAttackSpeedMultiplier = 0.75f;
-        phase3.m_nSpecialAttackChance = 45;
-        phase3.m_nFlyingAttackChance = 50;
+        phase3.m_fSpeedMultiplier = 1.6f;     // 더 빠르게
+        phase3.m_fAttackSpeedMultiplier = 0.7f;
+        phase3.m_nSpecialAttackChance = 55;
+        phase3.m_nFlyingAttackChance = 65;    // 비행 공격 확률 대폭 증가
         phase3.m_bCanFly = true;
 
-        // Primary: Rapid breath
+        // Primary: Rapid breath (상향된 데미지)
         phase3.m_fnPrimaryAttack = [pProjMgr]() {
-            return std::make_unique<BreathAttackBehavior>(pProjMgr, 25.0f, 35.0f, 10, 60.0f, 0.3f, 0.8f, 0.25f);
+            return std::make_unique<BreathAttackBehavior>(pProjMgr, 35.0f, 42.0f, 12, 65.0f, 0.25f, 0.7f, 0.2f);
         };
 
-        // Special: Fury combo or double jump slam
+        // Special: Fury combo or double jump slam (상향된 데미지)
         phase3.m_fnSpecialAttack = []() -> std::unique_ptr<IAttackBehavior> {
             int choice = rand() % 2;
             if (choice == 0) {
                 return std::unique_ptr<IAttackBehavior>(ComboAttackBehavior::CreateFuryCombo());
             } else {
-                return std::make_unique<JumpSlamAttackBehavior>(35.0f, 12.0f, 0.45f, 8.0f, 0.2f, 0.35f, true);
+                return std::make_unique<JumpSlamAttackBehavior>(60.0f, 14.0f, 0.4f, 9.0f, 0.18f, 0.3f, true);
             }
         };
 
-        // Flying: All aerial attacks available (faster versions)
+        // Flying: All aerial attacks available (faster, stronger versions)
         phase3.m_fnFlyingAttack = [pProjMgr]() -> std::unique_ptr<IAttackBehavior> {
             int choice = rand() % 4;
             switch (choice) {
             case 0:
-                // Dive bomb - dive at player while shooting
+                // Dive bomb - dive at player while shooting (상향된 데미지)
                 return std::make_unique<DiveBombAttackBehavior>(
-                    pProjMgr, 18.0f, 28.0f, 32.0f, 35.0f, 6.0f, 5, 0.08f, 15.0f, 0.5f, 0.3f);
+                    pProjMgr, 25.0f, 32.0f, 36.0f, 40.0f, 7.0f, 6, 0.06f, 18.0f, 0.4f, 0.25f);
             case 1:
-                // Sweep - side-to-side fire while moving (shorter distance)
+                // Sweep - side-to-side fire while moving (상향된 데미지)
                 return std::make_unique<FlyingSweepAttackBehavior>(
-                    pProjMgr, 15.0f, 24.0f, 16.0f, 25.0f, 90.0f, 200.0f, 0.06f, 2, 8.0f, 0.4f, 0.4f);
+                    pProjMgr, 22.0f, 28.0f, 18.0f, 28.0f, 100.0f, 220.0f, 0.05f, 3, 10.0f, 0.35f, 0.35f);
             case 2:
-                // Barrage - fewer but faster waves
+                // Barrage - fewer but faster waves (상향된 데미지)
                 return std::make_unique<FlyingBarrageAttackBehavior>(
-                    pProjMgr, 18.0f, 16.0f, 16, 5, 0.3f, 14.0f, 0.6f, 0.6f);
+                    pProjMgr, 24.0f, 20.0f, 20, 6, 0.25f, 16.0f, 0.5f, 0.5f);
             default:
-                // Fast strafe
+                // Fast strafe (상향된 데미지)
                 return std::make_unique<FlyingStrafeAttackBehavior>(
-                    pProjMgr, 16.0f, 22.0f, 20.0f, 22.0f, 0.1f, 4, 10.0f, 0.4f, 0.4f);
+                    pProjMgr, 22.0f, 26.0f, 22.0f, 25.0f, 0.08f, 5, 12.0f, 0.35f, 0.35f);
             }
         };
 
@@ -517,6 +521,8 @@ void EnemySpawner::SetupEnemyComponents(GameObject* pEnemy, const EnemySpawnData
         pEnemyComp->SetBoss(true);
         pEnemyComp->SetSpecialAttackCooldown(data.m_fSpecialAttackCooldown);
         pEnemyComp->SetSpecialAttackChance(data.m_nSpecialAttackChance);
+        pEnemyComp->SetFlyingAttackCooldown(data.m_fFlyingAttackCooldown);
+        pEnemyComp->SetFlyingAttackChance(data.m_nFlyingAttackChance);
 
         // Create special attack behavior if provided
         if (data.m_fnCreateSpecialAttack)
