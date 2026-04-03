@@ -25,7 +25,7 @@ void CCamera::SetLens(float fovY, float aspect, float zn, float zf)
     XMStoreFloat4x4(&m_projectionMatrix, P);
 }
 
-void CCamera::Update(float mouseDeltaX, float mouseDeltaY, float scrollDelta)
+void CCamera::Update(float mouseDeltaX, float mouseDeltaY, float scrollDelta, float deltaTime)
 {
     // Update yaw and pitch from mouse input
     //m_yaw += mouseDeltaX * m_rotationSpeed;
@@ -38,8 +38,44 @@ void CCamera::Update(float mouseDeltaX, float mouseDeltaY, float scrollDelta)
     m_distance -= scrollDelta * m_zoomSpeed;
     m_distance = max(m_minDistance, min(m_maxDistance, m_distance));
 
+    // Update camera shake
+    if (m_bShaking && deltaTime > 0.0f)
+    {
+        m_fShakeTimer += deltaTime;
+        if (m_fShakeTimer >= m_fShakeDuration)
+        {
+            StopShake();
+        }
+        else
+        {
+            // Shake intensity decreases over time
+            float fRemainingRatio = 1.0f - (m_fShakeTimer / m_fShakeDuration);
+            float fCurrentIntensity = m_fShakeIntensity * fRemainingRatio;
+
+            // Random offset
+            m_shakeOffset.x = ((float)(rand() % 1000) / 500.0f - 1.0f) * fCurrentIntensity;
+            m_shakeOffset.y = ((float)(rand() % 1000) / 500.0f - 1.0f) * fCurrentIntensity;
+            m_shakeOffset.z = ((float)(rand() % 1000) / 500.0f - 1.0f) * fCurrentIntensity * 0.5f;
+        }
+    }
+
     // Recalculate the view matrix
     UpdateViewMatrix();
+}
+
+void CCamera::StartShake(float fIntensity, float fDuration)
+{
+    m_bShaking = true;
+    m_fShakeIntensity = fIntensity;
+    m_fShakeDuration = fDuration;
+    m_fShakeTimer = 0.0f;
+}
+
+void CCamera::StopShake()
+{
+    m_bShaking = false;
+    m_fShakeTimer = 0.0f;
+    m_shakeOffset = { 0.0f, 0.0f, 0.0f };
 }
 
 void CCamera::UpdateViewMatrix()
@@ -62,6 +98,13 @@ void CCamera::UpdateViewMatrix()
     float z = m_distance * cosf(pitchRad) * cosf(yawRad);
 
     XMVECTOR cameraPos = targetPos + XMVectorSet(x, y, z, 0.0f);
+
+    // Apply shake offset
+    if (m_bShaking)
+    {
+        cameraPos = cameraPos + XMLoadFloat3(&m_shakeOffset);
+    }
+
     XMStoreFloat3(&m_position, cameraPos);
 
     // Build the view matrix

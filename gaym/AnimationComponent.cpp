@@ -106,10 +106,13 @@ void AnimationComponent::Update(float deltaTime)
 {
     if (!m_bIsPlaying || !m_pCurrentClip) return;
 
+    // Apply playback speed
+    float scaledDelta = deltaTime * m_fPlaybackSpeed;
+
     // Update blend timer
     if (m_bIsBlending)
     {
-        m_fBlendTimer += deltaTime;
+        m_fBlendTimer += deltaTime;  // 블렌드 타이머는 실제 시간 사용
         if (m_fBlendTimer >= m_fBlendDuration)
         {
             m_bIsBlending = false;
@@ -119,7 +122,7 @@ void AnimationComponent::Update(float deltaTime)
         // Also update previous clip time
         if (m_pPreviousClip)
         {
-            m_fPreviousTime += deltaTime;
+            m_fPreviousTime += scaledDelta;
             if (m_fPreviousTime >= m_pPreviousClip->m_fDuration)
             {
                 if (m_bPreviousLoop)
@@ -131,7 +134,7 @@ void AnimationComponent::Update(float deltaTime)
     }
 
     // Update current clip time
-    m_fCurrentTime += deltaTime;
+    m_fCurrentTime += scaledDelta;
     if (m_fCurrentTime >= m_pCurrentClip->m_fDuration)
     {
         if (m_bLoop)

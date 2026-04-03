@@ -17,7 +17,7 @@ public:
     void SetLens(float fovY, float aspect, float zn, float zf);
 
     // Update camera based on mouse input
-    void Update(float mouseDeltaX, float mouseDeltaY, float scrollDelta);
+    void Update(float mouseDeltaX, float mouseDeltaY, float scrollDelta, float deltaTime = 0.0f);
 
     // Get camera matrices
     const DirectX::XMFLOAT4X4& GetViewMatrix() const { return m_viewMatrix; }
@@ -29,6 +29,11 @@ public:
     // Camera direction vectors
     DirectX::XMVECTOR GetLookDirection() const;
     DirectX::XMVECTOR GetRightDirection() const;
+
+    // Camera shake
+    void StartShake(float fIntensity, float fDuration);
+    void StopShake();
+    bool IsShaking() const { return m_bShaking; }
 
 private:
     void UpdateViewMatrix();
@@ -57,4 +62,11 @@ private:
     // Mouse sensitivity
     float m_rotationSpeed = 0.2f;
     float m_zoomSpeed = 0.01f;
+
+    // Camera shake
+    bool m_bShaking = false;
+    float m_fShakeIntensity = 0.0f;
+    float m_fShakeDuration = 0.0f;
+    float m_fShakeTimer = 0.0f;
+    DirectX::XMFLOAT3 m_shakeOffset = { 0.0f, 0.0f, 0.0f };
 };

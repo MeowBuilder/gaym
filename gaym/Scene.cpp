@@ -496,7 +496,7 @@ void Scene::Update(float deltaTime, InputSystem* pInputSystem)
     // Update camera
     if (m_pCamera && pInputSystem)
     {
-        m_pCamera->Update(pInputSystem->GetMouseDeltaX(), pInputSystem->GetMouseDeltaY(), pInputSystem->GetMouseWheelDelta());
+        m_pCamera->Update(pInputSystem->GetMouseDeltaX(), pInputSystem->GetMouseDeltaY(), pInputSystem->GetMouseWheelDelta(), deltaTime);
     }
 
     // Update Pass Constants

@@ -20,6 +20,7 @@
 #include "TailSweepAttackBehavior.h"
 #include "JumpSlamAttackBehavior.h"
 #include "ComboAttackBehavior.h"
+#include "MegaBreathAttackBehavior.h"
 #include "BossPhaseConfig.h"
 #include "BossPhaseController.h"
 #include "Room.h"
@@ -288,10 +289,22 @@ void EnemySpawner::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pComma
             }
         };
 
-        // No transition effect for now - will add Mega Breath later
-        // phase2.m_fnTransitionAttack = [pProjMgr]() { return MegaBreathAttack(...); };
-        phase2.m_bHasTransitionAttack = false;
-        phase2.m_fTransitionDuration = 0.0f;  // Instant transition
+        // Phase 2 transition: Mega Breath attack
+        phase2.m_fnTransitionAttack = []() {
+            return std::make_unique<MegaBreathAttackBehavior>(
+                15.0f,  // 틱당 데미지
+                0.2f,   // 틱 간격
+                20.0f,  // 이동 속도
+                2.0f,   // 벽 이동 시간
+                2.0f,   // 준비 시간
+                4.0f,   // 브레스 지속
+                1.0f,   // 회복 시간
+                3.0f    // 엄폐물 크기
+            );
+        };
+        phase2.m_bHasTransitionAttack = true;
+        phase2.m_bInvincibleDuringTransition = true;
+        phase2.m_fTransitionDuration = 0.0f;  // MegaBreath handles its own timing
 
         pConfig->AddPhase(phase2);
 
@@ -342,10 +355,22 @@ void EnemySpawner::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pComma
             }
         };
 
-        // No transition effect for now - will add Mega Breath later
-        // phase3.m_fnTransitionAttack = [pProjMgr]() { return MegaBreathAttack(...); };
-        phase3.m_bHasTransitionAttack = false;
-        phase3.m_fTransitionDuration = 0.0f;  // Instant transition
+        // Phase 3 transition: Stronger Mega Breath attack
+        phase3.m_fnTransitionAttack = []() {
+            return std::make_unique<MegaBreathAttackBehavior>(
+                25.0f,  // 틱당 데미지 (더 강함)
+                0.15f,  // 틱 간격 (더 빠름)
+                25.0f,  // 이동 속도
+                1.5f,   // 벽 이동 시간 (더 빠름)
+                1.5f,   // 준비 시간 (더 빠름)
+                5.0f,   // 브레스 지속 (더 길게)
+                0.8f,   // 회복 시간
+                3.5f    // 엄폐물 크기
+            );
+        };
+        phase3.m_bHasTransitionAttack = true;
+        phase3.m_bInvincibleDuringTransition = true;
+        phase3.m_fTransitionDuration = 0.0f;  // MegaBreath handles its own timing
 
         pConfig->AddPhase(phase3);
 

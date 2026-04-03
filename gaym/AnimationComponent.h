@@ -31,12 +31,17 @@ public:
     void SetTimeOffset(float fOffset) { m_fTimeOffset = fOffset; }
     float GetTimeOffset() const { return m_fTimeOffset; }
 
+    // Playback speed (1.0 = normal, 0.5 = half speed, 2.0 = double speed)
+    void SetPlaybackSpeed(float fSpeed) { m_fPlaybackSpeed = fSpeed; }
+    float GetPlaybackSpeed() const { return m_fPlaybackSpeed; }
+
 private:
     std::shared_ptr<AnimationSet> m_pAnimationSet;
     AnimationClip* m_pCurrentClip = nullptr;
 
     float m_fCurrentTime = 0.0f;
     float m_fTimeOffset = 0.0f;  // Random offset to desync animations
+    float m_fPlaybackSpeed = 1.0f;  // Playback speed multiplier
     bool m_bLoop = true;
     bool m_bIsPlaying = false;
 

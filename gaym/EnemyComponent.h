@@ -148,6 +148,7 @@ public:
 
     // Room reference for death callback
     void SetRoom(CRoom* pRoom) { m_pRoom = pRoom; }
+    CRoom* GetRoom() const { return m_pRoom; }
 
     // Death callback
     using DeathCallback = std::function<void(EnemyComponent*)>;
