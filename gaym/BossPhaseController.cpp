@@ -224,6 +224,9 @@ void BossPhaseController::FinishTransition()
     if (m_pOwner)
     {
         m_pOwner->SetInvincible(false);
+
+        // 상태를 Idle로 리셋하여 애니메이션이 자연스럽게 전환되도록
+        m_pOwner->ChangeState(EnemyState::Idle);
     }
 
     // 페이즈 데이터 적용

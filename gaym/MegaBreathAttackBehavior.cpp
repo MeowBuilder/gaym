@@ -60,9 +60,15 @@ void MegaBreathAttackBehavior::Execute(EnemyComponent* pEnemy)
     // 무적 설정
     pEnemy->SetInvincible(true);
 
-    m_ePhase = Phase::MoveToWall;
+    // 이륙 애니메이션 시작
+    if (AnimationComponent* pAnim = pEnemy->GetAnimationComponent())
+    {
+        pAnim->CrossFade("Take Off", 0.15f, false);
+    }
 
-    OutputDebugString(L"[MegaBreath] Attack started - moving to wall\n");
+    m_ePhase = Phase::TakeOff;
+
+    OutputDebugString(L"[MegaBreath] Attack started - taking off\n");
 }
 
 void MegaBreathAttackBehavior::Update(float dt, EnemyComponent* pEnemy)
@@ -85,9 +91,97 @@ void MegaBreathAttackBehavior::Update(float dt, EnemyComponent* pEnemy)
 
     switch (m_ePhase)
     {
+    case Phase::TakeOff:
+        // 이륙 중 - 높이 상승
+        {
+            GameObject* pOwner = pEnemy->GetOwner();
+            if (pOwner)
+            {
+                TransformComponent* pTransform = pOwner->GetTransform();
+                if (pTransform)
+                {
+                    float t = m_fTimer / m_fTakeOffTime;
+                    t = min(t, 1.0f);
+                    float smoothT = t * t;  // easeIn
+
+                    XMFLOAT3 pos = m_xmf3StartPosition;
+                    pos.y = m_xmf3StartPosition.y + m_fFlyHeight * smoothT;
+                    pTransform->SetPosition(pos);
+                }
+            }
+        }
+
+        if (m_fTimer >= m_fTakeOffTime)
+        {
+            // 비행 애니메이션으로 전환
+            if (AnimationComponent* pAnim = pEnemy->GetAnimationComponent())
+            {
+                pAnim->CrossFade("Fly Glide", 0.2f, true);
+            }
+
+            m_ePhase = Phase::MoveToWall;
+            m_fTimer = 0.0f;
+
+            // 시작 위치 업데이트 (현재 높이 포함)
+            if (GameObject* pOwner = pEnemy->GetOwner())
+            {
+                if (TransformComponent* pTransform = pOwner->GetTransform())
+                {
+                    m_xmf3StartPosition = pTransform->GetPosition();
+                    m_xmf3WallPosition.y = m_xmf3StartPosition.y;  // 비행 높이 유지
+                }
+            }
+
+            OutputDebugString(L"[MegaBreath] Flying to wall\n");
+        }
+        break;
+
     case Phase::MoveToWall:
         UpdateMoveToWall(dt, pEnemy);
         if (m_fTimer >= m_fMoveToWallTime)
+        {
+            // 착륙 애니메이션
+            if (AnimationComponent* pAnim = pEnemy->GetAnimationComponent())
+            {
+                pAnim->CrossFade("Land", 0.15f, false);
+            }
+
+            // 착륙 시작 위치 저장
+            if (GameObject* pOwner = pEnemy->GetOwner())
+            {
+                if (TransformComponent* pTransform = pOwner->GetTransform())
+                {
+                    m_xmf3StartPosition = pTransform->GetPosition();
+                }
+            }
+
+            m_ePhase = Phase::Landing;
+            m_fTimer = 0.0f;
+            OutputDebugString(L"[MegaBreath] Landing\n");
+        }
+        break;
+
+    case Phase::Landing:
+        // 착륙 중 - 높이 하강
+        {
+            GameObject* pOwner = pEnemy->GetOwner();
+            if (pOwner)
+            {
+                TransformComponent* pTransform = pOwner->GetTransform();
+                if (pTransform)
+                {
+                    float t = m_fTimer / m_fLandingTime;
+                    t = min(t, 1.0f);
+                    float smoothT = 1.0f - (1.0f - t) * (1.0f - t);  // easeOut
+
+                    XMFLOAT3 pos = m_xmf3StartPosition;
+                    pos.y = m_xmf3StartPosition.y - m_fFlyHeight * smoothT;
+                    pTransform->SetPosition(pos);
+                }
+            }
+        }
+
+        if (m_fTimer >= m_fLandingTime)
         {
             m_ePhase = Phase::SpawnCover;
             m_fTimer = 0.0f;
@@ -115,18 +209,6 @@ void MegaBreathAttackBehavior::Update(float dt, EnemyComponent* pEnemy)
         break;
 
     case Phase::Windup:
-        // 브레스 애니메이션 시작 (한 번만)
-        if (!m_bBreathAnimStarted)
-        {
-            if (AnimationComponent* pAnim = pEnemy->GetAnimationComponent())
-            {
-                pAnim->SetPlaybackSpeed(0.15f);  // 매우 느리게 (6~7배 길게)
-                pAnim->Play("Flame Attack", false);  // 루프 없이 한 번만
-                m_bBreathAnimStarted = true;
-                OutputDebugString(L"[MegaBreath] Breath animation started (slow)\n");
-            }
-        }
-
         // 플레이어를 바라봄 (방 중앙 방향)
         {
             const BoundingBox& roomBox = m_pRoom->GetBoundingBox();
@@ -151,6 +233,19 @@ void MegaBreathAttackBehavior::Update(float dt, EnemyComponent* pEnemy)
             m_fTimer = 0.0f;
             m_fDamageTickTimer = 0.0f;
 
+            // 브레스 애니메이션 시작 (루프)
+            AnimationComponent* pAnim = pEnemy->GetAnimationComponent();
+            if (pAnim)
+            {
+                OutputDebugString(L"[MegaBreath] AnimationComponent found, calling CrossFade\n");
+                pAnim->CrossFade("Flame Attack", 0.2f, true);  // 루프로 재생
+                m_bBreathAnimStarted = true;
+            }
+            else
+            {
+                OutputDebugString(L"[MegaBreath] ERROR: AnimationComponent is NULL!\n");
+            }
+
             // 카메라 쉐이킹 시작
             if (Scene* pScene = m_pRoom->GetScene())
             {
@@ -160,7 +255,7 @@ void MegaBreathAttackBehavior::Update(float dt, EnemyComponent* pEnemy)
                 }
             }
 
-            OutputDebugString(L"[MegaBreath] Breath phase - FIRING! (Camera shake started)\n");
+            OutputDebugString(L"[MegaBreath] Breath phase - FIRING! (Animation + Camera shake started)\n");
         }
         break;
 
@@ -181,15 +276,9 @@ void MegaBreathAttackBehavior::Update(float dt, EnemyComponent* pEnemy)
         break;
 
     case Phase::Recovery:
-        // 애니메이션 속도 복원 및 Idle로 전환 (한 번만)
+        // 첫 프레임에만 정리 작업 수행
         if (m_bBreathAnimStarted)
         {
-            if (AnimationComponent* pAnim = pEnemy->GetAnimationComponent())
-            {
-                pAnim->SetPlaybackSpeed(1.0f);  // 정상 속도로 복원
-                pAnim->CrossFade("Idle", 0.3f, true);  // Idle로 즉시 전환
-            }
-
             // 카메라 쉐이킹 중지
             if (Scene* pScene = m_pRoom->GetScene())
             {
@@ -200,7 +289,7 @@ void MegaBreathAttackBehavior::Update(float dt, EnemyComponent* pEnemy)
             }
 
             m_bBreathAnimStarted = false;
-            OutputDebugString(L"[MegaBreath] Animation speed restored, camera shake stopped\n");
+            OutputDebugString(L"[MegaBreath] Camera shake stopped, waiting for recovery\n");
         }
 
         if (m_fTimer >= m_fRecoveryTime)
@@ -225,7 +314,7 @@ bool MegaBreathAttackBehavior::IsFinished() const
 
 void MegaBreathAttackBehavior::Reset()
 {
-    m_ePhase = Phase::MoveToWall;
+    m_ePhase = Phase::TakeOff;
     m_fTimer = 0.0f;
     m_fDamageTickTimer = 0.0f;
     m_bFinished = false;

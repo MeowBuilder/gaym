@@ -34,7 +34,9 @@ public:
 private:
     enum class Phase
     {
-        MoveToWall,   // 벽 끝으로 이동
+        TakeOff,      // 이륙
+        MoveToWall,   // 벽 끝으로 비행
+        Landing,      // 착륙
         SpawnCover,   // 엄폐물 생성
         Windup,       // 브레스 준비
         Breath,       // 브레스 발사
@@ -71,8 +73,13 @@ private:
     float m_fRecoveryTime = 1.0f;
     float m_fCoverObjectSize = 3.0f;
 
+    // 비행 관련
+    float m_fTakeOffTime = 0.5f;
+    float m_fLandingTime = 0.5f;
+    float m_fFlyHeight = 15.0f;
+
     // 런타임 상태
-    Phase m_ePhase = Phase::MoveToWall;
+    Phase m_ePhase = Phase::TakeOff;
     float m_fTimer = 0.0f;
     float m_fDamageTickTimer = 0.0f;
     bool m_bFinished = false;
