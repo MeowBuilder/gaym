@@ -19,6 +19,15 @@ cbuffer cbGameObject : register(b0)
     matrix gBoneTransforms[128];
 };
 
+// Torch light struct
+#define MAX_TORCH_LIGHTS 8
+
+struct TorchLight
+{
+    float3 Position; float Range;
+    float3 Color;    float Intensity;
+};
+
 // Per-Pass Constant Buffer
 cbuffer cbPass : register(b1)
 {
@@ -40,6 +49,10 @@ cbuffer cbPass : register(b1)
 
     // Time for animations
     float g_Time; float g_TimePad1; float g_TimePad2; float g_TimePad3;
+
+    // Torch lights array
+    TorchLight g_TorchLights[MAX_TORCH_LIGHTS];
+    int g_nActiveTorchLights; int g_TorchPad1; int g_TorchPad2; int g_TorchPad3;
 };
 
 Texture2D gAlbedoMap : register(t0);
@@ -261,6 +274,36 @@ float4 PS(PS_INPUT input) : SV_TARGET
         float4 spotSpecular = spotSpecularFactor * g_SpotLightColor * gMaterial.m_cSpecular * spotAttenuation;
         float4 spotTotal = spotDiffuse + spotSpecular;
         finalColor += spotTotal;
+    }
+
+    // --- Torch Lights Calculation (multiple point lights) ---
+    [loop]
+    for (int t = 0; t < g_nActiveTorchLights && t < MAX_TORCH_LIGHTS; ++t)
+    {
+        float3 torchVec = g_TorchLights[t].Position - input.worldPosition;
+        float torchDist = length(torchVec);
+
+        if (torchDist < g_TorchLights[t].Range)
+        {
+            float3 torchDir = torchVec / torchDist;
+
+            // Smooth quadratic attenuation for torch light
+            float normalizedDist = torchDist / g_TorchLights[t].Range;
+            float torchAtten = saturate(1.0f - normalizedDist * normalizedDist) * g_TorchLights[t].Intensity;
+
+            // Diffuse
+            float torchDiffuseFactor = saturate(dot(normal, torchDir));
+
+            // Specular
+            float3 vHalfTorch = normalize(vToCamera + torchDir);
+            float torchSpecularFactor = pow(max(dot(vHalfTorch, normal), 0.0f), gMaterial.m_cSpecular.a);
+
+            float4 torchColor = float4(g_TorchLights[t].Color, 1.0f);
+            float4 torchDiffuse = torchDiffuseFactor * torchColor * baseColor * torchAtten;
+            float4 torchSpecular = torchSpecularFactor * torchColor * gMaterial.m_cSpecular * torchAtten;
+
+            finalColor += torchDiffuse + torchSpecular;
+        }
     }
 
     return finalColor;

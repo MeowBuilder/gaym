@@ -40,6 +40,15 @@ struct SpotLight
     float m_fSpotLightOuterCone; float m_fPad5; float m_fPad6; float m_fPad7;
 };
 
+// Torch point light data (for GPU constant buffer)
+static constexpr int MAX_TORCH_LIGHTS = 8;
+
+struct TorchLight
+{
+    XMFLOAT3 m_xmf3Position; float m_fRange;
+    XMFLOAT3 m_xmf3Color;    float m_fIntensity;
+};
+
 struct PassConstants
 {
     XMFLOAT4X4 m_xmf4x4ViewProj;
@@ -53,7 +62,14 @@ struct PassConstants
     XMFLOAT3 m_xmf3CameraPosition; float m_fPadCam; // Camera World Position
     SpotLight m_SpotLight;
     float m_fTime; float m_fTimePad1; float m_fTimePad2; float m_fTimePad3; // 게임 시간 (용암 애니메이션용)
+
+    // Torch lights array
+    TorchLight m_TorchLights[MAX_TORCH_LIGHTS];
+    int m_nActiveTorchLights; int m_nTorchPad1; int m_nTorchPad2; int m_nTorchPad3;
 };
+
+// Include TorchSystem after PassConstants is defined (avoid circular include)
+#include "TorchSystem.h"
 
 class Scene
 {
@@ -74,6 +90,7 @@ public:
     ParticleSystem* GetParticleSystem() { return m_pParticleSystem.get(); }
     FluidParticleSystem* GetFluidParticleSystem() { return m_pFluidParticleSystem.get(); }
     FluidSkillVFXManager* GetFluidVFXManager() { return m_pFluidVFXManager.get(); }
+    TorchSystem* GetTorchSystem() { return m_pTorchSystem.get(); }
     GameObject* GetPlayer() const { return m_pPlayerGameObject; }
     std::vector<GameObject*> GetAllPlayers() const;  // 로컬 + 원격 플레이어 목록 반환
     void RegisterPlayersToEnemy(class EnemyComponent* pEnemy);  // 적에게 플레이어 등록
@@ -209,6 +226,9 @@ private:
 
     // Debug Renderer (F1 to toggle)
     std::unique_ptr<DebugRenderer> m_pDebugRenderer;
+
+    // Torch System (flickering lights and flame billboards)
+    std::unique_ptr<TorchSystem> m_pTorchSystem;
 
     void PrintHierarchy(GameObject* pGameObject, int nDepth);
     void CollectColliders(GameObject* pGameObject, std::vector<ColliderComponent*>& outColliders);

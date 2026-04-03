@@ -16,6 +16,7 @@
 #include "RushAoEAttackBehavior.h"
 #include "RushFrontAttackBehavior.h"
 #include "Dx12App.h"
+#include "TorchSystem.h"
 
 #include <fstream>
 #include <algorithm>
@@ -515,6 +516,20 @@ bool MapLoader::LoadIntoScene(
             pCol->SetCollisionMask(CollisionMask::Wall);
             } // !isHorizontal
         } // !isProp && maxWorldExt > 0.3f
+    }
+
+    // ── 3b. Torch placement at player spawn (for testing) ────────────────────────
+    TorchSystem* pTorchSystem = pScene->GetTorchSystem();
+    if (pTorchSystem) {
+        const JsonVal& spawn = root["playerSpawn"];
+        const JsonVal& spawnPos = spawn["position"];
+        XMFLOAT3 torchPos(
+            spawnPos[0].f() * MAP_SCALE + 3.0f,  // Slightly offset from player
+            0.0f,
+            -spawnPos[2].f() * MAP_SCALE + 3.0f
+        );
+        pTorchSystem->AddTorch(torchPos, pDevice, pCommandList);
+        OutputDebugStringA("[MapLoader] Placed 1 torch near player spawn\n");
     }
 
     // ── 4. Obstacles (collision only) ────────────────────────────────────────

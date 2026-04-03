@@ -32,6 +32,7 @@ Scene::Scene()
     m_pFluidSkillEffect    = std::make_unique<FluidSkillEffect>();
     m_pFluidVFXManager     = std::make_unique<FluidSkillVFXManager>();
     m_pDebugRenderer = std::make_unique<DebugRenderer>();
+    m_pTorchSystem = std::make_unique<TorchSystem>();
 }
 
 Scene::~Scene()
@@ -169,6 +170,12 @@ void Scene::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList)
     m_nNextDescriptorIndex += FluidSkillVFXManager::MAX_EFFECTS;
     m_pFluidVFXManager->Init(pDevice, pCommandList, m_pDescriptorHeap.get(), nFluidVFXDescStart);
     OutputDebugString(L"[Scene] FluidSkillVFXManager initialized\n");
+
+    // TorchSystem (횃불 조명 및 불꽃 빌보드)
+    UINT nTorchDescStart = m_nNextDescriptorIndex;
+    m_nNextDescriptorIndex += 2;  // 1 for flame texture SRV, 1 for instance buffer SRV
+    m_pTorchSystem->Init(pDevice, pCommandList, this, pShader.get(), m_pDescriptorHeap.get(), nTorchDescStart);
+    OutputDebugString(L"[Scene] TorchSystem initialized\n");
 
     // FluidSkillEffect: SkillComponent 연결 (플레이어 설정 후)
     if (m_pPlayerGameObject)
@@ -323,9 +330,9 @@ void Scene::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList)
             CubeMesh* pPlaneMesh = new CubeMesh(pDevice, pCommandList, 1.0f, 0.1f, 1.0f);
             pLavaPlane->SetMesh(pPlaneMesh);
 
-            // 타일보다 약간 아래에 배치, 맵 전체를 넓게 덮음
-            pLavaPlane->GetTransform()->SetPosition(0.0f, -3.5f, 0.0f);
-            pLavaPlane->GetTransform()->SetScale(300.0f, 1.0f, 350.0f);
+            // 타일보다 약간 아래에 배치, 맵 + 화산 외곽까지 충분히 덮음
+            pLavaPlane->GetTransform()->SetPosition(0.0f, -3.5f, -200.0f);
+            pLavaPlane->GetTransform()->SetScale(2000.0f, 1.0f, 2000.0f);
 
             pLavaPlane->SetLava(true);
 
@@ -362,11 +369,11 @@ void Scene::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList)
             float scale;
             float rotY;
         };
-        // 대형 화산 3개 (상단 2개 + 하단 1개)
+        // 대형 화산 3개 (맵 외곽 배경용 - 충분히 먼 거리로 배치)
         VolcanoPlacement placements[] = {
-            { -70.0f, -8.0f, -50.0f, 3000.0f, 20.0f },    // 우측 상단
-            { 80.0f, -8.0f, -40.0f, 2800.0f, -15.0f },    // 좌측 상단
-            { 0.0f, -10.0f, 100.0f, 5000.0f, 10.0f },     // 하단 중앙 (더 큰 화산)
+            { -600.0f, -8.0f, -800.0f, 3000.0f, 20.0f },   // 서북쪽 먼 외곽
+            { 600.0f, -8.0f, -800.0f, 2800.0f, -15.0f },   // 동북쪽 먼 외곽
+            { 0.0f, -10.0f, 400.0f, 5000.0f, 10.0f },      // 남쪽 외곽 (더 큰 화산)
         };
 
         XMFLOAT4X4 identity;
@@ -546,7 +553,7 @@ void Scene::Update(float deltaTime, InputSystem* pInputSystem)
     m_pcbMappedPass->m_fPad3 = 0.0f; // Padding
     m_pcbMappedPass->m_fPad4 = 0.0f; // Padding
 
-    m_pcbMappedPass->m_xmf4AmbientLight = XMFLOAT4(0.25f, 0.08f, 0.03f, 1.0f); // Brighter volcanic ambient glow
+    m_pcbMappedPass->m_xmf4AmbientLight = XMFLOAT4(0.12f, 0.05f, 0.02f, 1.0f); // Darker ambient for torch visibility
 
     // Set Camera Position for Specular Calculation
     XMFLOAT3 cameraPosition = m_pCamera->GetPosition();
@@ -632,6 +639,13 @@ void Scene::Update(float deltaTime, InputSystem* pInputSystem)
     {
         m_pFluidSkillEffect->Update(deltaTime,
             m_pPlayerGameObject->GetTransform()->GetPosition());
+    }
+
+    // Update Torch System (flickering effect)
+    if (m_pTorchSystem)
+    {
+        m_pTorchSystem->Update(deltaTime);
+        m_pTorchSystem->FillLightData(m_pcbMappedPass);
     }
 
     // 2. Check for collisions
@@ -809,6 +823,20 @@ void Scene::Render(ID3D12GraphicsCommandList* pCommandList, D3D12_GPU_DESCRIPTOR
 
             pGeyserManager->Render(pCommandList, viewProj3, camRight3, camUp3);
         }
+    }
+
+    // Render torch flame billboards
+    if (m_pTorchSystem && m_pTorchSystem->GetTorchCount() > 0)
+    {
+        XMMATRIX mView4 = XMLoadFloat4x4(&m_pCamera->GetViewMatrix());
+        XMFLOAT3 camRight4 = { XMVectorGetX(mView4.r[0]), XMVectorGetY(mView4.r[0]), XMVectorGetZ(mView4.r[0]) };
+        XMFLOAT3 camUp4    = { XMVectorGetX(mView4.r[1]), XMVectorGetY(mView4.r[1]), XMVectorGetZ(mView4.r[1]) };
+
+        XMMATRIX mViewProj4 = mView4 * XMLoadFloat4x4(&m_pCamera->GetProjectionMatrix());
+        XMFLOAT4X4 viewProj4;
+        XMStoreFloat4x4(&viewProj4, XMMatrixTranspose(mViewProj4));
+
+        m_pTorchSystem->Render(pCommandList, viewProj4, camRight4, camUp4);
     }
 
     // Render debug colliders (F1 to toggle)
@@ -1227,6 +1255,9 @@ void Scene::TransitionToNextRoom()
     // ── 2b. 디스크립터 인덱스를 워터마크로 리셋 (맵 슬롯 재활용)
     m_nNextDescriptorIndex = m_nPersistentDescriptorEnd;
 
+    // ── 2c. 횃불 시스템 클리어 (새 맵에서 다시 배치)
+    if (m_pTorchSystem) m_pTorchSystem->Clear();
+
     // ── 3. 인터랙션 큐브 숨기기 (다음 맵에서 다시 보여야 하는 시작 큐브)
     if (m_pInteractionCube)
     {
@@ -1332,6 +1363,9 @@ void Scene::TransitionToRoomByIndex(int index)
 
     m_nNextDescriptorIndex = m_nPersistentDescriptorEnd;
 
+    // 횃불 시스템 클리어
+    if (m_pTorchSystem) m_pTorchSystem->Clear();
+
     if (m_pInteractionCube)
     {
         auto* pInteractable = m_pInteractionCube->GetComponent<InteractableComponent>();
@@ -1399,6 +1433,9 @@ void Scene::TransitionToBossRoom()
 
     // ── 3. 디스크립터 인덱스를 워터마크로 리셋
     m_nNextDescriptorIndex = m_nPersistentDescriptorEnd;
+
+    // ── 3b. 횃불 시스템 클리어
+    if (m_pTorchSystem) m_pTorchSystem->Clear();
 
     // ── 4. 영속 오브젝트의 RC를 셰이더에 다시 등록
     for (auto& pGO : m_vGameObjects)
