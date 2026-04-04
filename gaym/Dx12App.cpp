@@ -328,6 +328,10 @@ void Dx12App::ToggleFullscreen()
     CHECK_HR(m_pdxgiSwapChain->GetDesc1(&newDesc));
     m_nWndClientWidth = newDesc.Width;
     m_nWndClientHeight = newDesc.Height;
+
+    // Screen-Space Fluid 텍스처 리사이즈
+    if (m_pScene)
+        m_pScene->OnResizeSSF(m_nWndClientWidth, m_nWndClientHeight);
 }
 
 void Dx12App::UpdateFrameRate()
@@ -556,8 +560,10 @@ void Dx12App::FrameAdvance()
         }
     }
 
-    // Render scene with shadow map
-    m_pScene->Render(m_pd3dCommandList.Get(), m_shadowSrvGpuHandle);
+    // Render scene with shadow map (mainRTV + mainDSV 전달)
+    m_pScene->Render(m_pd3dCommandList.Get(), m_shadowSrvGpuHandle,
+                     d3dRtvCPUDescriptorHandle, d3dDsvCPUDescriptorHandle,
+                     m_pd3dRenderTargetBuffers[m_nSwapChainBufferIndex].Get());
 
     // Transition shadow map back to depth write for next frame
     D3D12_RESOURCE_BARRIER shadowBarrierBack;
@@ -614,6 +620,10 @@ void Dx12App::OnResize(UINT nWidth, UINT nHeight)
 
     CreateRenderTargetViews();
     CreateDepthStencilView();
+
+    // Screen-Space Fluid 텍스처 리사이즈
+    if (m_pScene)
+        m_pScene->OnResizeSSF(m_nWndClientWidth, m_nWndClientHeight);
 }
 
 ComPtr<ID3D12Resource> Dx12App::CreateBufferResource(const void* pData, UINT nBytes, D3D12_HEAP_TYPE d3dHeapType, D3D12_RESOURCE_STATES d3dResourceStates, ComPtr<ID3D12Resource>* ppd3dUploadBuffer)

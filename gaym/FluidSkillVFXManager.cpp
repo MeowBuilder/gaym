@@ -1,5 +1,6 @@
 #include "stdafx.h"
 #include "FluidSkillVFXManager.h"
+#include "ScreenSpaceFluid.h"
 #include "DescriptorHeap.h"
 #include <algorithm>
 #include <cmath>
@@ -41,7 +42,7 @@ int FluidSkillVFXManager::SpawnEffect(const XMFLOAT3& origin, const XMFLOAT3& di
             cfg.stiffness         = 50.0f;
             cfg.viscosity         = 0.25f;
             cfg.boundaryStiffness = 150.0f;
-            cfg.particleSize      = 0.25f;
+            cfg.particleSize      = 0.35f;
 
             slot.pSystem->Spawn(origin, cfg);
             PushControlPoints(slot);
@@ -85,12 +86,13 @@ int FluidSkillVFXManager::SpawnSequenceEffect(const XMFLOAT3& origin, const XMFL
             cfg.particleCount     = seqDef.particleCount;
             cfg.spawnRadius       = seqDef.spawnRadius;
             cfg.boundaryStiffness = 150.0f;
-            cfg.particleSize      = 0.25f;
+            cfg.particleSize      = 0.35f;
             if (seqDef.overridePhysics) {
-                cfg.stiffness       = seqDef.sphStiffness;
-                cfg.restDensity     = seqDef.sphRestDensity;
-                cfg.viscosity       = seqDef.sphViscosity;
-                cfg.smoothingRadius = seqDef.sphSmoothingRadius;
+                cfg.stiffness              = seqDef.sphStiffness;
+                cfg.nearPressureMultiplier = seqDef.sphNearPressureMult;
+                cfg.restDensity            = seqDef.sphRestDensity;
+                cfg.viscosity              = seqDef.sphViscosity;
+                cfg.smoothingRadius        = seqDef.sphSmoothingRadius;
             } else {
                 cfg.smoothingRadius = 1.2f;
                 cfg.restDensity     = 7.0f;
@@ -212,6 +214,15 @@ void FluidSkillVFXManager::Update(float deltaTime)
     }
 }
 
+void FluidSkillVFXManager::DispatchSPH(ID3D12GraphicsCommandList* pCmdList, float deltaTime)
+{
+    for (auto& slot : m_Slots)
+    {
+        if (!slot.isActive || !slot.pSystem) continue;
+        slot.pSystem->DispatchSPH(pCmdList, deltaTime);
+    }
+}
+
 void FluidSkillVFXManager::Render(ID3D12GraphicsCommandList* pCommandList,
                                    const XMFLOAT4X4& viewProj, const XMFLOAT3& camRight, const XMFLOAT3& camUp)
 {
@@ -219,6 +230,33 @@ void FluidSkillVFXManager::Render(ID3D12GraphicsCommandList* pCommandList,
     {
         if (!slot.isActive || !slot.pSystem->IsActive()) continue;
         slot.pSystem->Render(pCommandList, viewProj, camRight, camUp);
+    }
+}
+
+void FluidSkillVFXManager::RenderDepth(ID3D12GraphicsCommandList* pCmdList,
+                                        const XMFLOAT4X4& viewProjTransposed,
+                                        const XMFLOAT4X4& viewTransposed,
+                                        const XMFLOAT3& camRight,
+                                        const XMFLOAT3& camUp,
+                                        float projA, float projB,
+                                        ScreenSpaceFluid* pSSF)
+{
+    for (auto& slot : m_Slots)
+    {
+        if (!slot.isActive || !slot.pSystem->IsActive()) continue;
+        slot.pSystem->RenderDepth(pCmdList, viewProjTransposed, viewTransposed,
+                                   camRight, camUp, projA, projB, pSSF);
+    }
+}
+
+void FluidSkillVFXManager::RenderThicknessOnly(
+    ID3D12GraphicsCommandList* pCmdList,
+    ScreenSpaceFluid* pSSF)
+{
+    for (auto& slot : m_Slots)
+    {
+        if (!slot.isActive || !slot.pSystem->IsActive()) continue;
+        slot.pSystem->RenderThicknessOnly(pCmdList, pSSF);
     }
 }
 
@@ -364,19 +402,29 @@ void FluidSkillVFXManager::UpdatePhase(FluidVFXSlot& slot, float dt)
             slot.pSystem->ZeroAxisVelocity(fwd);
         }
 
-        // Phase 진입 시 랜덤 좌우 속도 부여 (파도 확산)
+        // Phase 진입 시 랜덤 좌우 + 상하 속도 부여 (3D 확산)
+        // SebLague 방식: 파티클이 모든 방향으로 고르게 퍼져야 어떤 각도에서도 두껍게 보임
         if (phase.randomSidewaysImpulse > 0.f)
         {
-            // slot.direction 기준 right 축 계산
             XMVECTOR fwdV    = XMVector3Normalize(XMLoadFloat3(&slot.direction));
             XMVECTOR worldUp = XMVectorSet(0, 1, 0, 0);
             float    dotV    = XMVectorGetX(XMVector3Dot(fwdV, worldUp));
             XMVECTOR rightV  = (fabsf(dotV) > 0.99f)
                 ? XMVectorSet(1, 0, 0, 0)
                 : XMVector3Normalize(XMVector3Cross(worldUp, fwdV));
+            XMVECTOR upV     = XMVector3Cross(fwdV, rightV);
+
+            // 좌우 랜덤 산란 (기존)
             XMFLOAT3 rightDir;
             XMStoreFloat3(&rightDir, rightV);
             slot.pSystem->ApplyRandomSidewaysImpulse(rightDir, phase.randomSidewaysImpulse);
+
+            // 상하 양방향 산란 추가: 위 파티클은 위로, 아래 파티클은 아래로 밀려
+            // GPU opFlags 0x04(ApplyAxisSpreadForce)를 사용 — 좌우(0x02)와 동시 적용 가능
+            XMFLOAT3 upDir;
+            XMStoreFloat3(&upDir, upV);
+            slot.pSystem->ApplyAxisSpreadForce(upDir, slot.origin,
+                phase.randomSidewaysImpulse * 0.45f);
         }
 
         // 전역 중력 설정
@@ -518,7 +566,7 @@ FluidSkillVFXDef FluidSkillVFXManager::GetVFXDef(ElementType element, const Rune
 {
     FluidSkillVFXDef def;
     def.element = element;
-    def.particleCount = 80;
+    def.particleCount = 1000;
     def.spawnRadius   = 0.8f;
 
     switch (element)
@@ -646,7 +694,21 @@ FluidSkillVFXDef FluidSkillVFXManager::GetVFXDef(ElementType element, const Rune
         def.particleCount = (int)(def.particleCount * 1.5f);
     }
 
-    if (def.particleCount > 128) def.particleCount = 128;
+    if (def.particleCount > 2048) def.particleCount = 2048;
 
     return def;
+}
+
+XMFLOAT4 FluidSkillVFXManager::GetDominantFluidColor() const
+{
+    // 첫 번째 활성 슬롯의 원소 색상 반환
+    for (const auto& slot : m_Slots)
+    {
+        if (!slot.isActive) continue;
+        ElementType elem = slot.useSequence ? slot.sequenceDef.element : slot.def.element;
+        auto colors = FluidElementColors::Get(elem);
+        return colors.coreColor;
+    }
+    // 활성 슬롯 없으면 기본 파란색
+    return { 0.15f, 0.55f, 1.0f, 0.85f };
 }

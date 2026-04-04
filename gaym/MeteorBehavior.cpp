@@ -58,8 +58,8 @@ void MeteorBehavior::Execute(GameObject* caster, const DirectX::XMFLOAT3& target
     // 4. 룬 플래그
     uint32_t runeFlags = GetRuneFlags(caster);
 
-    // 5. VFXLibrary에서 메테오 시퀀스 정의 가져오기
-    VFXSequenceDef seqDef = VFXLibrary::Get().GetDef(SkillSlot::R, runeFlags);
+    // 5. VFXLibrary에서 메테오 시퀀스 정의 가져오기 (스킬 속성색 적용)
+    VFXSequenceDef seqDef = VFXLibrary::Get().GetDef(SkillSlot::R, runeFlags, m_SkillData.element);
 
     // 6. 시퀀스 이펙트 생성
     //    SpawnSequenceEffect 내부에서 masterCPPos = { origin.x, origin.y + 50, origin.z } 로 설정됨

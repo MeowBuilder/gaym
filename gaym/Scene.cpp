@@ -35,6 +35,7 @@ Scene::Scene()
     m_pFluidParticleSystem = std::make_unique<FluidParticleSystem>();
     m_pFluidSkillEffect    = std::make_unique<FluidSkillEffect>();
     m_pFluidVFXManager     = std::make_unique<FluidSkillVFXManager>();
+    m_pSSF                 = std::make_unique<ScreenSpaceFluid>();
     m_pDebugRenderer = std::make_unique<DebugRenderer>();
 }
 
@@ -187,6 +188,13 @@ void Scene::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList)
     // VFXLibrary 초기화 (모든 스킬 VFX 정의 등록)
     VFXLibrary::Get().Initialize();
     OutputDebugString(L"[Scene] VFXLibrary initialized\n");
+
+    // Screen-Space Fluid Renderer 초기화
+    if (auto* pApp = Dx12App::GetInstance())
+    {
+        m_pSSF->Init(pDevice, pApp->GetWindowWidth(), pApp->GetWindowHeight());
+        OutputDebugString(L"[Scene] ScreenSpaceFluid initialized\n");
+    }
 
     // FluidSkillEffect: SkillComponent 연결 (플레이어 설정 후)
     if (m_pPlayerGameObject)
@@ -480,6 +488,8 @@ void Scene::AddRenderComponentsToHierarchy(ID3D12Device* pDevice, ID3D12Graphics
 
 void Scene::Update(float deltaTime, InputSystem* pInputSystem)
 {
+    m_fLastDeltaTime = deltaTime;
+
     // Toggle debug collider visualization with F1
     if (pInputSystem && pInputSystem->IsKeyPressed(VK_F1))
     {
@@ -755,7 +765,9 @@ void Scene::RenderShadowPass(ID3D12GraphicsCommandList* pCommandList)
     }
 }
 
-void Scene::Render(ID3D12GraphicsCommandList* pCommandList, D3D12_GPU_DESCRIPTOR_HANDLE shadowSrvHandle)
+void Scene::Render(ID3D12GraphicsCommandList* pCommandList, D3D12_GPU_DESCRIPTOR_HANDLE shadowSrvHandle,
+                   D3D12_CPU_DESCRIPTOR_HANDLE mainRTV, D3D12_CPU_DESCRIPTOR_HANDLE mainDSV,
+                   ID3D12Resource* pMainRTBuffer)
 {
     // Set the descriptor heap
     ID3D12DescriptorHeap* ppHeaps[] = { m_pDescriptorHeap->GetHeap() };
@@ -781,34 +793,132 @@ void Scene::Render(ID3D12GraphicsCommandList* pCommandList, D3D12_GPU_DESCRIPTOR
         m_pParticleSystem->Render(pCommandList);
     }
 
-    // Render fluid particles
-    if (m_pFluidParticleSystem && m_pFluidParticleSystem->IsActive())
+    // ---------- Screen-Space Fluid 렌더링 ----------
+    bool bHasFluid = (m_pFluidParticleSystem && m_pFluidParticleSystem->IsActive());
+    if (!bHasFluid && m_pFluidVFXManager)
     {
-        // 뷰 행렬에서 카메라 Right/Up 추출 (행 0, 1)
-        XMMATRIX mView = XMLoadFloat4x4(&m_pCamera->GetViewMatrix());
-        XMFLOAT3 camRight = { XMVectorGetX(mView.r[0]), XMVectorGetY(mView.r[0]), XMVectorGetZ(mView.r[0]) };
-        XMFLOAT3 camUp    = { XMVectorGetX(mView.r[1]), XMVectorGetY(mView.r[1]), XMVectorGetZ(mView.r[1]) };
-
-        XMMATRIX mViewProj = XMLoadFloat4x4(&m_pCamera->GetViewMatrix())
-                            * XMLoadFloat4x4(&m_pCamera->GetProjectionMatrix());
-        XMFLOAT4X4 viewProj;
-        XMStoreFloat4x4(&viewProj, XMMatrixTranspose(mViewProj));
-
-        m_pFluidParticleSystem->Render(pCommandList, viewProj, camRight, camUp);
+        // VFX 매니저에 활성 슬롯이 있는지 확인 (Render에서 내부적으로도 체크하므로 간단히 true)
+        bHasFluid = true;
     }
 
-    // Render fluid skill VFX (투사체 유체 이펙트)
-    if (m_pFluidVFXManager)
+    if (m_pSSF && m_pSSF->IsInitialized() && bHasFluid)
     {
-        XMMATRIX mView2 = XMLoadFloat4x4(&m_pCamera->GetViewMatrix());
-        XMFLOAT3 camRight2 = { XMVectorGetX(mView2.r[0]), XMVectorGetY(mView2.r[0]), XMVectorGetZ(mView2.r[0]) };
-        XMFLOAT3 camUp2    = { XMVectorGetX(mView2.r[1]), XMVectorGetY(mView2.r[1]), XMVectorGetZ(mView2.r[1]) };
+        // 행렬 준비
+        XMMATRIX mView = XMLoadFloat4x4(&m_pCamera->GetViewMatrix());
+        XMMATRIX mProj = XMLoadFloat4x4(&m_pCamera->GetProjectionMatrix());
+        // 뷰 행렬 r[i] = (xaxis.i, yaxis.i, zaxis.i) 구조이므로 열 방향으로 추출
+        XMFLOAT3 camRight = { XMVectorGetX(mView.r[0]), XMVectorGetX(mView.r[1]), XMVectorGetX(mView.r[2]) };
+        XMFLOAT3 camUp    = { XMVectorGetY(mView.r[0]), XMVectorGetY(mView.r[1]), XMVectorGetY(mView.r[2]) };
 
-        XMMATRIX mViewProj2 = mView2 * XMLoadFloat4x4(&m_pCamera->GetProjectionMatrix());
-        XMFLOAT4X4 viewProj2;
-        XMStoreFloat4x4(&viewProj2, XMMatrixTranspose(mViewProj2));
+        XMFLOAT4X4 viewProjT, viewT;
+        XMStoreFloat4x4(&viewProjT, XMMatrixTranspose(mView * mProj));
+        XMStoreFloat4x4(&viewT, XMMatrixTranspose(mView));
 
-        m_pFluidVFXManager->Render(pCommandList, viewProj2, camRight2, camUp2);
+        XMFLOAT4X4 projRaw;
+        XMStoreFloat4x4(&projRaw, mProj);  // 비전치 (projA/projB 추출용)
+
+        float projA = projRaw._33;
+        float projB = projRaw._43;
+
+        // GPU SPH dispatch (BeginDepthPass 전에)
+        if (m_pFluidVFXManager)
+            m_pFluidVFXManager->DispatchSPH(pCommandList, m_fLastDeltaTime);
+        if (m_pFluidParticleSystem && m_pFluidParticleSystem->IsActive())
+            m_pFluidParticleSystem->DispatchSPH(pCommandList, m_fLastDeltaTime);
+
+        // 장면 캡처: 유체 렌더 전 메인 RT를 복사 (굴절 배경용)
+        if (pMainRTBuffer)
+        {
+            m_pSSF->CaptureSceneColor(pCommandList, pMainRTBuffer);
+        }
+
+        // Pass 1a: Sphere depth (깊이 테스트 있음 - 가장 가까운 구체 표면 Z 캡처)
+        m_pSSF->BeginDepthPass(pCommandList);
+
+        if (m_pFluidParticleSystem && m_pFluidParticleSystem->IsActive())
+            m_pFluidParticleSystem->RenderDepth(pCommandList, viewProjT, viewT, camRight, camUp, projA, projB, m_pSSF.get());
+
+        if (m_pFluidVFXManager)
+            m_pFluidVFXManager->RenderDepth(pCommandList, viewProjT, viewT, camRight, camUp, projA, projB, m_pSSF.get());
+
+        // Pass 1b: Thickness (깊이 테스트 없음 - 모든 파티클이 두께에 기여)
+        // 카메라 각도에 무관하게 좌우 대칭 두께 보장
+        m_pSSF->BeginThicknessPass(pCommandList);
+
+        if (m_pFluidParticleSystem && m_pFluidParticleSystem->IsActive())
+            m_pFluidParticleSystem->RenderThicknessOnly(pCommandList, m_pSSF.get());
+
+        if (m_pFluidVFXManager)
+            m_pFluidVFXManager->RenderThicknessOnly(pCommandList, m_pSSF.get());
+
+        m_pSSF->EndDepthPass(pCommandList);
+
+        // Pass 2+3: Smooth + Composite (메인 RT에 합성)
+        // 조명 방향을 뷰 공간으로 변환
+        XMFLOAT3 lightDirWorld = { -0.5f, -0.8f, -0.3f };
+        XMVECTOR lightV = XMVector3TransformNormal(XMLoadFloat3(&lightDirWorld), mView);
+        XMFLOAT3 lightDirVS;
+        XMStoreFloat3(&lightDirVS, XMVector3Normalize(lightV));
+
+        // 태양 이펙트 색상: outer=코로나(붉은 주황), inner=코어(밝은 노란-흰색)
+        XMFLOAT4 fluidColorOuter = { 0.95f, 0.15f, 0.0f,  0.9f };  // 기본: 진한 붉은 주황
+        XMFLOAT4 fluidColorInner = { 1.0f,  0.88f, 0.25f, 1.0f };  // 기본: 밝은 노란-흰색
+        if (m_pFluidVFXManager)
+        {
+            XMFLOAT4 dominant = m_pFluidVFXManager->GetDominantFluidColor();
+            fluidColorOuter = dominant;
+            // inner = outer를 밝게 + 채도 낮춤 (코어는 더 하얗게)
+            fluidColorInner = {
+                (std::min)(dominant.x * 1.0f + 0.3f, 1.0f),
+                (std::min)(dominant.y * 1.2f + 0.3f, 1.0f),
+                (std::min)(dominant.z * 1.0f + 0.3f, 1.0f),
+                1.0f
+            };
+        }
+
+        // 뷰포트/시저렉트를 메인 크기로 복원
+        if (auto* pApp = Dx12App::GetInstance())
+        {
+            D3D12_VIEWPORT vp = { 0, 0, (FLOAT)pApp->GetWindowWidth(), (FLOAT)pApp->GetWindowHeight(), 0.0f, 1.0f };
+            pCommandList->RSSetViewports(1, &vp);
+            D3D12_RECT sr = { 0, 0, (LONG)pApp->GetWindowWidth(), (LONG)pApp->GetWindowHeight() };
+            pCommandList->RSSetScissorRects(1, &sr);
+        }
+
+        m_pSSF->SmoothAndComposite(pCommandList, mainRTV, mainDSV, projRaw, lightDirVS, fluidColorOuter, fluidColorInner);
+
+        // SSF 후 메인 RT 복원 (디스크립터 힙도 Scene의 마스터 힙으로 복원)
+        pCommandList->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
+        pCommandList->OMSetRenderTargets(1, &mainRTV, FALSE, &mainDSV);
+    }
+    else
+    {
+        // Fallback: 기존 빌보드 렌더링
+        if (m_pFluidParticleSystem && m_pFluidParticleSystem->IsActive())
+        {
+            XMMATRIX mView = XMLoadFloat4x4(&m_pCamera->GetViewMatrix());
+            XMFLOAT3 camRight = { XMVectorGetX(mView.r[0]), XMVectorGetX(mView.r[1]), XMVectorGetX(mView.r[2]) };
+            XMFLOAT3 camUp    = { XMVectorGetY(mView.r[0]), XMVectorGetY(mView.r[1]), XMVectorGetY(mView.r[2]) };
+
+            XMMATRIX mViewProj = mView * XMLoadFloat4x4(&m_pCamera->GetProjectionMatrix());
+            XMFLOAT4X4 viewProj;
+            XMStoreFloat4x4(&viewProj, XMMatrixTranspose(mViewProj));
+
+            m_pFluidParticleSystem->Render(pCommandList, viewProj, camRight, camUp);
+        }
+
+        if (m_pFluidVFXManager)
+        {
+            XMMATRIX mView2 = XMLoadFloat4x4(&m_pCamera->GetViewMatrix());
+            XMFLOAT3 camRight2 = { XMVectorGetX(mView2.r[0]), XMVectorGetX(mView2.r[1]), XMVectorGetX(mView2.r[2]) };
+            XMFLOAT3 camUp2    = { XMVectorGetY(mView2.r[0]), XMVectorGetY(mView2.r[1]), XMVectorGetY(mView2.r[2]) };
+
+            XMMATRIX mViewProj2 = mView2 * XMLoadFloat4x4(&m_pCamera->GetProjectionMatrix());
+            XMFLOAT4X4 viewProj2;
+            XMStoreFloat4x4(&viewProj2, XMMatrixTranspose(mViewProj2));
+
+            m_pFluidVFXManager->Render(pCommandList, viewProj2, camRight2, camUp2);
+        }
     }
 
     // Render lava geyser particles (Room 기반 맵 기믹)
@@ -818,8 +928,8 @@ void Scene::Render(ID3D12GraphicsCommandList* pCommandList, D3D12_GPU_DESCRIPTOR
         if (pGeyserManager && pGeyserManager->IsActive())
         {
             XMMATRIX mView3 = XMLoadFloat4x4(&m_pCamera->GetViewMatrix());
-            XMFLOAT3 camRight3 = { XMVectorGetX(mView3.r[0]), XMVectorGetY(mView3.r[0]), XMVectorGetZ(mView3.r[0]) };
-            XMFLOAT3 camUp3    = { XMVectorGetX(mView3.r[1]), XMVectorGetY(mView3.r[1]), XMVectorGetZ(mView3.r[1]) };
+            XMFLOAT3 camRight3 = { XMVectorGetX(mView3.r[0]), XMVectorGetX(mView3.r[1]), XMVectorGetX(mView3.r[2]) };
+            XMFLOAT3 camUp3    = { XMVectorGetY(mView3.r[0]), XMVectorGetY(mView3.r[1]), XMVectorGetY(mView3.r[2]) };
 
             XMMATRIX mViewProj3 = mView3 * XMLoadFloat4x4(&m_pCamera->GetProjectionMatrix());
             XMFLOAT4X4 viewProj3;
@@ -851,6 +961,17 @@ void Scene::Render(ID3D12GraphicsCommandList* pCommandList, D3D12_GPU_DESCRIPTOR
         }
 
         m_pDebugRenderer->Render(pCommandList, GetPassCBVAddress(), allColliders);
+    }
+}
+
+void Scene::OnResizeSSF(UINT width, UINT height)
+{
+    if (m_pSSF && m_pSSF->IsInitialized())
+    {
+        if (auto* pApp = Dx12App::GetInstance())
+        {
+            m_pSSF->OnResize(pApp->GetDevice(), width, height);
+        }
     }
 }
 

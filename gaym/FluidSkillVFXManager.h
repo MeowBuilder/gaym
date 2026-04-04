@@ -8,6 +8,7 @@
 #include <memory>
 
 class CDescriptorHeap;
+class ScreenSpaceFluid;
 
 // 한 슬롯 = 하나의 활성 투사체 유체 이펙트
 struct FluidVFXSlot {
@@ -56,11 +57,31 @@ public:
     void ImpactEffect(int id, const XMFLOAT3& impactPos);
 
     void Update(float deltaTime);
+
+    // GPU SPH dispatch (Render 전에 호출, Beam 모드는 CPU update 후 GPU 복사)
+    void DispatchSPH(ID3D12GraphicsCommandList* pCmdList, float deltaTime);
+
     void Render(ID3D12GraphicsCommandList* pCommandList,
                 const XMFLOAT4X4& viewProj, const XMFLOAT3& camRight, const XMFLOAT3& camUp);
 
+    // Screen-Space Fluid: 구체 깊이 렌더링
+    void RenderDepth(ID3D12GraphicsCommandList* pCmdList,
+                     const XMFLOAT4X4& viewProjTransposed,
+                     const XMFLOAT4X4& viewTransposed,
+                     const XMFLOAT3& camRight,
+                     const XMFLOAT3& camUp,
+                     float projA, float projB,
+                     ScreenSpaceFluid* pSSF);
+
+    // Screen-Space Fluid: 두께 렌더링 (RenderDepth 이후 호출, 깊이 테스트 없음)
+    void RenderThicknessOnly(ID3D12GraphicsCommandList* pCmdList,
+                              ScreenSpaceFluid* pSSF);
+
     // 원소별 내장 VFX 정의 반환 (룬 combo에 따라 파라미터 조정)
     static FluidSkillVFXDef GetVFXDef(ElementType element, const RuneCombo& combo = {}, float chargeRatio = 0.0f);
+
+    // 현재 활성 슬롯의 대표 유체 색상 (composite fluidColor용)
+    XMFLOAT4 GetDominantFluidColor() const;
 
 private:
     void PushControlPoints(FluidVFXSlot& slot) const;

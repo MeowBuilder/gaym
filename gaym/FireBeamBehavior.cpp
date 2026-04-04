@@ -71,8 +71,8 @@ void FireBeamBehavior::Execute(GameObject* caster, const DirectX::XMFLOAT3& targ
         // 룬 플래그
         uint32_t runeFlags = GetRuneFlags(caster);
 
-        // VFXLibrary에서 빔 시퀀스 정의 가져오기
-        VFXSequenceDef seqDef = VFXLibrary::Get().GetDef(SkillSlot::E, runeFlags);
+        // VFXLibrary에서 빔 시퀀스 정의 가져오기 (스킬 속성색 적용)
+        VFXSequenceDef seqDef = VFXLibrary::Get().GetDef(SkillSlot::E, runeFlags, m_SkillData.element);
 
         // 시퀀스 이펙트 생성
         m_vfxId = m_pVFXManager->SpawnSequenceEffect(origin, direction, seqDef);

@@ -15,7 +15,7 @@ void VFXLibrary::Initialize() {
         VFXSequenceDef def;
         def.name          = "Q_WaveSlash";
         def.element       = ElementType::Fire;
-        def.particleCount = 250;
+        def.particleCount = 1024;
         def.spawnRadius   = 0.4f;
 
         // Phase 0: 플레이어 앞 작은 박스에 뭉침 (0~0.3s)
@@ -44,40 +44,39 @@ void VFXLibrary::Initialize() {
         p1.duration   = 0.8f;           // 0.5 -> 0.8 (앞으로 완전히 퍼지는 시간 늘림)
         p1.motionMode = ParticleMotionMode::ControlPoint;
         p1.boxDesc.active      = true;
-        p1.boxDesc.halfExtents = { 1.2f, 0.8f, 9.0f }; // Z 앞으로 확장 (더 길게), X 옆도 약간 넓게
+        p1.boxDesc.halfExtents = { 1.5f, 1.5f, 5.0f }; // Y도 넓게: 측면에서 보여도 두꺼운 덩어리
         // Phase 1: CP 없음 + 앞(Z)방향 힘
         p1.cpDescs = {};
         p1.expansionForce = { 0.f, 0.f, 1.f };  // 로컬 forward(Z) 방향
         p1.expansionForceStrength = 22.5f;
         def.phases.push_back(p1);
 
-        // Phase 2: 장판 (1.1~5.1s) - 랜덤 좌우 확산 + 중력으로 바닥에 깔림
+        // Phase 2: 구름 유지 (1.1~5.1s) - 3D 공간에 고르게 분포
+        // SebLague 방식: 중력 최소화 + 상하 산란 → 어떤 각도에서 봐도 두껍게 보임
         VFXPhase p2;
-        p2.startTime  = 1.1f;           // Phase1 끝 (0.3 + 0.8 = 1.1)
-        p2.duration   = 4.0f;           // 장판 유지
+        p2.startTime  = 1.1f;
+        p2.duration   = 4.0f;
         p2.motionMode = ParticleMotionMode::ControlPoint;
-        p2.cpDescs    = {};              // CP 없음
-        // ConfinementBox: X 넓게, Y 낮게(바닥에 깔리는 효과), Z 유지
+        p2.cpDescs    = {};
+        // ConfinementBox: X/Z 넓게, Y를 충분히 높여 3D 분포 허용
         p2.boxDesc.active      = true;
-        p2.boxDesc.halfExtents = { 15.0f, 0.3f, 9.0f };  // Y 낮게(장판), X/Z 크게 확대
-        // Phase 2 진입 시 앞쪽(forward) 속도 제거 - Phase 1에서 남은 Z 관성 해소
+        p2.boxDesc.halfExtents = { 10.0f, 3.5f, 8.0f };  // Y 3.5: 상하 산란 공간 확보
         p2.cancelForwardVelocityOnEnter = true;
-        // 랜덤 좌우 확산 (일회성 impulse) - 각 파티클에 랜덤 X 속도 부여
-        p2.randomSidewaysImpulse  = 21.f;
-        // 지속 expansion force 제거 (일회성 impulse로 대체)
+        p2.randomSidewaysImpulse  = 14.f;  // 좌우 산란 (+ UpdatePhase에서 상하 산란도 추가)
         p2.expansionForce         = { 0.f, 0.f, 0.f };
         p2.expansionForceStrength = 0.f;
         p2.useAxisSpreadForce     = false;
-        // 중력 추가: 파티클이 바닥으로 내려가게
-        p2.globalGravityStrength  = 20.f;
+        // 중력 대폭 감소: 파티클이 납작해지지 않고 3D 볼륨 유지
+        p2.globalGravityStrength  = 1.5f;  // 4.0 → 1.5 (SPH 압력이 중력 이기도록)
         def.phases.push_back(p2);
 
         // SPH 물리 오버라이드: 강한 반발력 + 낮은 목표밀도 → 바닥에 넓게 깔림
-        def.overridePhysics    = true;
-        def.sphStiffness       = 150.f;   // 기본 50 → 3배 (강한 반발)
-        def.sphRestDensity     = 2.5f;    // 기본 7 → 낮게 (입자가 퍼지고 싶어함)
-        def.sphViscosity       = 0.08f;   // 기본 0.25 → 낮게 (잘 미끄러짐)
-        def.sphSmoothingRadius = 1.8f;    // 기본 1.2 → 크게 (더 넓은 상호작용)
+        def.overridePhysics           = true;
+        def.sphStiffness              = 80.f;    // 압력 배율 (낮출수록 파티클이 퍼짐)
+        def.sphNearPressureMult       = 3.0f;    // 근압력 (클러스터링 방지)
+        def.sphRestDensity            = 1.5f;    // 목표 밀도 (낮을수록 더 퍼짐)
+        def.sphViscosity              = 0.05f;   // 점성 (낮을수록 빠르게 퍼짐)
+        def.sphSmoothingRadius        = 2.0f;    // 상호작용 반경
 
         RegisterBase(SkillSlot::Q, def);
 
@@ -103,7 +102,7 @@ void VFXLibrary::Initialize() {
         VFXSequenceDef def;
         def.name          = "E_FireBeam";
         def.element       = ElementType::Fire;
-        def.particleCount = 350;
+        def.particleCount = 1024;
         def.spawnRadius   = 0.2f;
 
         VFXPhase p0;
@@ -138,7 +137,7 @@ void VFXLibrary::Initialize() {
         VFXSequenceDef def;
         def.name          = "R_Meteor";
         def.element       = ElementType::Fire;
-        def.particleCount = 500;
+        def.particleCount = 1024;
         def.spawnRadius   = 6.f;
 
         // Phase 0: 낙하 (OrbitalCP)
@@ -191,7 +190,7 @@ void VFXLibrary::Initialize() {
         VFXSequenceDef def;
         def.name          = "RC_Fireball";
         def.element       = ElementType::Fire;
-        def.particleCount = 300;
+        def.particleCount = 1024;
         def.spawnRadius   = 2.5f;
 
         VFXPhase p0;
@@ -219,19 +218,26 @@ void VFXLibrary::RegisterExactCombo(SkillSlot slot, uint32_t runeFlags, VFXSeque
     m_ExactCombos[MakeKey(slot, runeFlags)] = std::move(def);
 }
 
-VFXSequenceDef VFXLibrary::GetDef(SkillSlot slot, uint32_t runeFlags) const {
+VFXSequenceDef VFXLibrary::GetDef(SkillSlot slot, uint32_t runeFlags, ElementType element) const {
+    VFXSequenceDef result;
+
     // 정확한 조합 먼저
     auto exactIt = m_ExactCombos.find(MakeKey(slot, runeFlags));
-    if (exactIt != m_ExactCombos.end()) return exactIt->second;
-
-    // 기본 정의에 룬 modifier 누적 적용
-    VFXSequenceDef result = m_BaseDefs[static_cast<int>(slot)];
-    const auto& mods = m_RuneMods[static_cast<int>(slot)];
-    for (const auto& [flag, mod] : mods) {
-        if (runeFlags & flag) {
-            result = ApplyModifier(result, mod);
+    if (exactIt != m_ExactCombos.end()) {
+        result = exactIt->second;
+    } else {
+        // 기본 정의에 룬 modifier 누적 적용
+        result = m_BaseDefs[static_cast<int>(slot)];
+        const auto& mods = m_RuneMods[static_cast<int>(slot)];
+        for (const auto& [flag, mod] : mods) {
+            if (runeFlags & flag) {
+                result = ApplyModifier(result, mod);
+            }
         }
     }
+
+    // 호출 측에서 element를 명시하면 def의 element를 override (속성색 적용)
+    result.element = element;
     return result;
 }
 

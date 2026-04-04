@@ -41,6 +41,7 @@ struct VFXSequenceDef {
     // SPH 물리 오버라이드 (true 시 기본값 대신 적용)
     bool  overridePhysics    = false;
     float sphStiffness       = 50.f;
+    float sphNearPressureMult = 2.0f;   // 근압력 배율 (이중 밀도 완화)
     float sphRestDensity     = 7.f;
     float sphViscosity       = 0.25f;
     float sphSmoothingRadius = 1.2f;
@@ -56,8 +57,9 @@ public:
     void RegisterRuneMod(SkillSlot slot, uint32_t runeFlag, VFXModifier mod);
     void RegisterExactCombo(SkillSlot slot, uint32_t runeFlags, VFXSequenceDef def);
 
-    // 런타임 조회: base에 룬 modifier 누적 적용
-    VFXSequenceDef GetDef(SkillSlot slot, uint32_t runeFlags) const;
+    // 런타임 조회: base에 룬 modifier 누적 적용 (element를 지정하면 def.element override)
+    VFXSequenceDef GetDef(SkillSlot slot, uint32_t runeFlags,
+                          ElementType element = ElementType::Fire) const;
 
 private:
     VFXLibrary() = default;

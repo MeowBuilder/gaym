@@ -54,9 +54,10 @@ struct FluidParticleConfig
     // For h=1.5, mass=1.0, ~200 particles in radius 2.5: expected density ~5-8.
     float smoothingRadius    = 1.5f;
     float restDensity        = 7.0f;
-    float stiffness          = 60.0f;
-    float viscosity          = 0.30f;
-    float boundaryStiffness  = 200.0f;
+    float stiffness              = 60.0f;
+    float nearPressureMultiplier = 2.0f;   // 근압력 배율 (Sebastian Lague 이중 밀도 완화)
+    float viscosity              = 0.30f;
+    float boundaryStiffness      = 200.0f;
 
     // Particle visual
     float particleSize       = 0.35f;

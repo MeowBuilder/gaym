@@ -60,8 +60,8 @@ void WaveSlashBehavior::Execute(GameObject* caster, const DirectX::XMFLOAT3& tar
     // 2. 룬 비트마스크 계산
     uint32_t runeFlags = GetRuneFlags(caster);
 
-    // 3. VFXLibrary에서 시퀀스 정의 가져오기
-    VFXSequenceDef seqDef = VFXLibrary::Get().GetDef(SkillSlot::Q, runeFlags);
+    // 3. VFXLibrary에서 시퀀스 정의 가져오기 (스킬 속성색 적용)
+    VFXSequenceDef seqDef = VFXLibrary::Get().GetDef(SkillSlot::Q, runeFlags, m_SkillData.element);
 
     // 4. 시퀀스 이펙트 생성
     m_vfxId = m_pVFXManager->SpawnSequenceEffect(origin, direction, seqDef);
