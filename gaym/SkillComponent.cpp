@@ -87,6 +87,15 @@ void SkillComponent::Update(float deltaTime)
             }
         }
 
+        // 채널링 중에도 스킬 Update() 호출 (방향 추적 등)
+        {
+            size_t chIndex = static_cast<size_t>(m_ActiveSkillSlot);
+            if (chIndex < m_Skills.size() && m_Skills[chIndex])
+            {
+                m_Skills[chIndex]->Update(deltaTime);
+            }
+        }
+
         // Check if channel duration expired
         if (m_fChannelTime >= m_fChannelDuration)
         {
@@ -219,6 +228,7 @@ void SkillComponent::ProcessSkillInput(InputSystem* pInputSystem, CCamera* pCame
     // Handle channeling state
     if (m_bIsChanneling)
     {
+        m_ChannelTargetPosition = targetPos;  // 매 프레임 방향 업데이트
         if (IsSkillKeyPressed(m_ActiveSkillSlot, pInputSystem))
         {
             // Continue channeling - handled in Update
@@ -561,6 +571,11 @@ void SkillComponent::ExecuteWithActivationType(SkillSlot slot, const DirectX::XM
     RuneCombo combo = GetRuneCombo(slot);
     bool enhanceOnly = combo.hasEnhance && !combo.hasCharge && !combo.hasChannel && !combo.hasPlace && !combo.hasInstant;
 
+    // 스킬의 기본 activationType을 fallback으로 사용
+    ActivationType defaultType = (m_Skills[index])
+        ? m_Skills[index]->GetSkillData().activationType
+        : ActivationType::Instant;
+
     if (combo.hasCharge)
     {
         // Charge mode: hold-release (combo modifiers applied on release)
@@ -571,7 +586,7 @@ void SkillComponent::ExecuteWithActivationType(SkillSlot slot, const DirectX::XM
         m_SkillStates[index] = SkillState::Casting;
         OutputDebugString(L"[Skill] Charging started... Hold to charge, release to fire\n");
     }
-    else if (combo.hasChannel)
+    else if (combo.hasChannel || defaultType == ActivationType::Channel)
     {
         // Channel mode: hold-sustain, ticks apply combo modifiers
         m_bIsChanneling = true;

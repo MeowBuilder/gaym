@@ -180,6 +180,15 @@
     <ClInclude Include="FireballBehavior.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
+    <ClInclude Include="WaveSlashBehavior.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="FireBeamBehavior.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="MeteorBehavior.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
     <ClInclude Include="Projectile.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
@@ -207,6 +216,12 @@
     <ClInclude Include="NetworkManager.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
+    <ClInclude Include="VFXTypes.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="VFXLibrary.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
     <ClInclude Include="FluidParticle.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
@@ -217,6 +232,9 @@
       <Filter>헤더 파일</Filter>
     </ClInclude>
     <ClInclude Include="FluidSkillVFXManager.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="ScreenSpaceFluid.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
     <ClInclude Include="ServerCore\Allocator.h">
@@ -467,6 +485,15 @@
     <ClCompile Include="FireballBehavior.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
+    <ClCompile Include="WaveSlashBehavior.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="FireBeamBehavior.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="MeteorBehavior.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
     <ClCompile Include="ProjectileManager.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
@@ -485,6 +512,9 @@
     <ClCompile Include="NetworkManager.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
+    <ClCompile Include="VFXLibrary.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
     <ClCompile Include="FluidParticleSystem.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
@@ -492,6 +522,9 @@
       <Filter>소스 파일</Filter>
     </ClCompile>
     <ClCompile Include="FluidSkillVFXManager.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="ScreenSpaceFluid.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
     <ClCompile Include="ServerCore\Allocator.cpp">

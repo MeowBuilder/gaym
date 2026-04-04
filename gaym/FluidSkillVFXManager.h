@@ -2,10 +2,13 @@
 #include "stdafx.h"
 #include "FluidParticle.h"
 #include "FluidParticleSystem.h"
+#include "VFXTypes.h"
+#include "VFXLibrary.h"
 #include <array>
 #include <memory>
 
 class CDescriptorHeap;
+class ScreenSpaceFluid;
 
 // 한 슬롯 = 하나의 활성 투사체 유체 이펙트
 struct FluidVFXSlot {
@@ -18,6 +21,14 @@ struct FluidVFXSlot {
     XMFLOAT3         prevOrigin  = {0, 0, 0};  // 이전 프레임 origin (파티클 공동이동용)
     XMFLOAT3         direction   = {0, 0, 1};
     FluidSkillVFXDef def;
+
+    // 시퀀스 기반 VFX 확장 멤버
+    VFXSequenceDef   sequenceDef;           // 현재 재생 중인 시퀀스 정의
+    int              currentPhaseIndex = 0; // 현재 페이즈 인덱스
+    bool             useSequence = false;   // 시퀀스 모드 활성 여부
+    float            masterCPFallY = 0.f;   // 메테오용 마스터 CP Y 위치 (낙하 추적)
+    XMFLOAT3         masterCPPos = {};      // 메테오 마스터 CP 현재 위치
+    float            masterCPFallSpeed = 15.f; // 낙하 속도 (units/s)
 };
 
 class FluidSkillVFXManager
@@ -32,6 +43,10 @@ public:
     int SpawnEffect(const XMFLOAT3& origin, const XMFLOAT3& direction,
                     const FluidSkillVFXDef& def);
 
+    // 시퀀스 기반 이펙트 생성 (VFXLibrary 연동)
+    int SpawnSequenceEffect(const XMFLOAT3& origin, const XMFLOAT3& direction,
+                            const VFXSequenceDef& seqDef);
+
     // 매 프레임 투사체 위치/방향 추적
     void TrackEffect(int id, const XMFLOAT3& origin, const XMFLOAT3& direction);
 
@@ -42,14 +57,38 @@ public:
     void ImpactEffect(int id, const XMFLOAT3& impactPos);
 
     void Update(float deltaTime);
+
+    // GPU SPH dispatch (Render 전에 호출, Beam 모드는 CPU update 후 GPU 복사)
+    void DispatchSPH(ID3D12GraphicsCommandList* pCmdList, float deltaTime);
+
     void Render(ID3D12GraphicsCommandList* pCommandList,
                 const XMFLOAT4X4& viewProj, const XMFLOAT3& camRight, const XMFLOAT3& camUp);
+
+    // Screen-Space Fluid: 구체 깊이 렌더링
+    void RenderDepth(ID3D12GraphicsCommandList* pCmdList,
+                     const XMFLOAT4X4& viewProjTransposed,
+                     const XMFLOAT4X4& viewTransposed,
+                     const XMFLOAT3& camRight,
+                     const XMFLOAT3& camUp,
+                     float projA, float projB,
+                     ScreenSpaceFluid* pSSF);
+
+    // Screen-Space Fluid: 두께 렌더링 (RenderDepth 이후 호출, 깊이 테스트 없음)
+    void RenderThicknessOnly(ID3D12GraphicsCommandList* pCmdList,
+                              ScreenSpaceFluid* pSSF);
 
     // 원소별 내장 VFX 정의 반환 (룬 combo에 따라 파라미터 조정)
     static FluidSkillVFXDef GetVFXDef(ElementType element, const RuneCombo& combo = {}, float chargeRatio = 0.0f);
 
+    // 현재 활성 슬롯의 대표 유체 색상 (composite fluidColor용)
+    XMFLOAT4 GetDominantFluidColor() const;
+
 private:
     void PushControlPoints(FluidVFXSlot& slot) const;
+
+    // 시퀀스 기반 페이즈 전환 로직
+    void UpdatePhase(FluidVFXSlot& slot, float dt);
+    void UpdateOrbitalCPs(FluidVFXSlot& slot, float dt);
 
     std::array<FluidVFXSlot, MAX_EFFECTS> m_Slots;
 };

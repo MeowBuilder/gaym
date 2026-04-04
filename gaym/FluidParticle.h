@@ -24,6 +24,11 @@ struct FluidParticle
     float    pressure   = 0.0f;
     float    mass       = 1.0f;
     bool     active     = true;
+    // Beam 모드 전용: 빔-로컬 좌표 (방향 변경 시 즉시 스냅)
+    float    beamT      = 0.f;  // 빔 축 방향 진행 거리
+    float    beamRx     = 0.f;  // 빔 수직 평면 X 오프셋
+    float    beamRy     = 0.f;  // 빔 수직 평면 Y 오프셋
+    float    beamSpeed  = 0.f;  // 빔 진행 속도
 };
 
 // Attraction control point (skill/rune places these)
@@ -49,9 +54,10 @@ struct FluidParticleConfig
     // For h=1.5, mass=1.0, ~200 particles in radius 2.5: expected density ~5-8.
     float smoothingRadius    = 1.5f;
     float restDensity        = 7.0f;
-    float stiffness          = 60.0f;
-    float viscosity          = 0.30f;
-    float boundaryStiffness  = 200.0f;
+    float stiffness              = 60.0f;
+    float nearPressureMultiplier = 2.0f;   // 근압력 배율 (Sebastian Lague 이중 밀도 완화)
+    float viscosity              = 0.30f;
+    float boundaryStiffness      = 200.0f;
 
     // Particle visual
     float particleSize       = 0.35f;

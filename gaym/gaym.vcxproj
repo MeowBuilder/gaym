@@ -29,20 +29,20 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
-    <PlatformToolset>v145</PlatformToolset>
+    <PlatformToolset>v143</PlatformToolset>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>v145</PlatformToolset>
+    <PlatformToolset>v143</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
-    <PlatformToolset>v145</PlatformToolset>
+    <PlatformToolset>v143</PlatformToolset>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
@@ -216,6 +216,9 @@ xcopy /Y "$(ProjectDir)Libraries\Libs\libprotobuf.dll" "$(OutDir)"</Command>
     <ClInclude Include="ISkillBehavior.h" />
     <ClInclude Include="SkillComponent.h" />
     <ClInclude Include="FireballBehavior.h" />
+    <ClInclude Include="WaveSlashBehavior.h" />
+    <ClInclude Include="FireBeamBehavior.h" />
+    <ClInclude Include="MeteorBehavior.h" />
     <ClInclude Include="Projectile.h" />
     <ClInclude Include="ProjectileManager.h" />
     <ClInclude Include="Particle.h" />
@@ -224,6 +227,9 @@ xcopy /Y "$(ProjectDir)Libraries\Libs\libprotobuf.dll" "$(OutDir)"</Command>
     <ClInclude Include="FluidParticleSystem.h" />
     <ClInclude Include="FluidSkillEffect.h" />
     <ClInclude Include="FluidSkillVFXManager.h" />
+    <ClInclude Include="ScreenSpaceFluid.h" />
+    <ClInclude Include="VFXTypes.h" />
+    <ClInclude Include="VFXLibrary.h" />
     <ClInclude Include="LavaGeyserComponent.h" />
     <ClInclude Include="LavaGeyserManager.h" />
     <ClInclude Include="RenderComponent.h" />
@@ -320,11 +326,16 @@ xcopy /Y "$(ProjectDir)Libraries\Libs\libprotobuf.dll" "$(OutDir)"</Command>
     <ClCompile Include="PlayerComponent.cpp" />
     <ClCompile Include="SkillComponent.cpp" />
     <ClCompile Include="FireballBehavior.cpp" />
+    <ClCompile Include="WaveSlashBehavior.cpp" />
+    <ClCompile Include="FireBeamBehavior.cpp" />
+    <ClCompile Include="MeteorBehavior.cpp" />
     <ClCompile Include="ProjectileManager.cpp" />
     <ClCompile Include="ParticleSystem.cpp" />
     <ClCompile Include="FluidParticleSystem.cpp" />
     <ClCompile Include="FluidSkillEffect.cpp" />
     <ClCompile Include="FluidSkillVFXManager.cpp" />
+    <ClCompile Include="ScreenSpaceFluid.cpp" />
+    <ClCompile Include="VFXLibrary.cpp" />
     <ClCompile Include="LavaGeyserComponent.cpp" />
     <ClCompile Include="LavaGeyserManager.cpp" />
     <ClCompile Include="RenderComponent.cpp" />

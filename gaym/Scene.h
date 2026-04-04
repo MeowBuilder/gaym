@@ -18,6 +18,7 @@
 #include "FluidParticleSystem.h" // Added FluidParticleSystem include
 #include "FluidSkillEffect.h"   // Added FluidSkillEffect include
 #include "FluidSkillVFXManager.h" // Added FluidSkillVFXManager include
+#include "ScreenSpaceFluid.h" // Screen-Space Fluid Renderer
 #include "DebugRenderer.h" // Added DebugRenderer include
 
 struct ID3D12Device;
@@ -81,7 +82,10 @@ public:
     void LoadSceneFromFile(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList, const char* pstrFileName);
     void Update(float deltaTime, InputSystem* pInputSystem);
     void RenderShadowPass(ID3D12GraphicsCommandList* pCommandList);
-    void Render(ID3D12GraphicsCommandList* pCommandList, D3D12_GPU_DESCRIPTOR_HANDLE shadowSrvHandle);
+    void Render(ID3D12GraphicsCommandList* pCommandList, D3D12_GPU_DESCRIPTOR_HANDLE shadowSrvHandle,
+                D3D12_CPU_DESCRIPTOR_HANDLE mainRTV, D3D12_CPU_DESCRIPTOR_HANDLE mainDSV,
+                ID3D12Resource* pMainRTBuffer = nullptr);
+    void OnResizeSSF(UINT width, UINT height);
 
     CCamera* GetCamera() const { return m_pCamera.get(); } // Added getter for CCamera
     CRoom* GetCurrentRoom() const { return m_pCurrentRoom; } // Added getter for current room
@@ -157,6 +161,7 @@ public:
 
 private:
     float m_fTotalTime = 0.0f; // 누적 시간 (용암 애니메이션용)
+    float m_fLastDeltaTime = 0.016f; // 최근 deltaTime (GPU SPH dispatch용)
 
     std::vector<std::unique_ptr<GameObject>> m_vGameObjects; // Global Objects (Player, etc.)
     std::vector<GameObject*> m_vPendingDeletions; // Objects marked for deletion (processed at end of frame)
@@ -223,6 +228,9 @@ private:
 
     // Fluid Skill VFX Manager (투사체 유체 이펙트, 최대 8개 동시)
     std::unique_ptr<FluidSkillVFXManager> m_pFluidVFXManager;
+
+    // Screen-Space Fluid Renderer
+    std::unique_ptr<ScreenSpaceFluid> m_pSSF;
 
     // Debug Renderer (F1 to toggle)
     std::unique_ptr<DebugRenderer> m_pDebugRenderer;
