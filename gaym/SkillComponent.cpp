@@ -7,6 +7,7 @@
 #include "GameObject.h"
 #include "TransformComponent.h"
 #include "Dx12App.h" // For runtime window size
+#include "NetworkManager.h" // For skill sync
 
 SkillComponent::SkillComponent(GameObject* pOwner)
     : Component(pOwner)
@@ -640,5 +641,33 @@ void SkillComponent::ExecuteWithActivationType(SkillSlot slot, const DirectX::XM
         }
         m_SkillStates[index] = SkillState::Casting;
         m_ActiveSkillSlot = slot;
+    }
+
+    // 네트워크로 스킬 전송
+    NetworkManager* pNetMgr = NetworkManager::GetInstance();
+    if (pNetMgr && pNetMgr->IsConnected())
+    {
+        // 스킬 슬롯을 Protocol::SkillType으로 변환
+        int skillType = 0;
+        switch (slot)
+        {
+        case SkillSlot::Q:          skillType = 1; break; // SKILL_TYPE_Q
+        case SkillSlot::E:          skillType = 2; break; // SKILL_TYPE_E
+        case SkillSlot::R:          skillType = 3; break; // SKILL_TYPE_R
+        case SkillSlot::RightClick: skillType = 4; break; // SKILL_TYPE_MOUSE_RIGHT
+        default:                    skillType = 0; break;
+        }
+
+        // 플레이어 위치와 방향 가져오기
+        TransformComponent* pTransform = m_pOwner->GetTransform();
+        if (pTransform)
+        {
+            const DirectX::XMFLOAT3& pos = pTransform->GetPosition();
+            DirectX::XMVECTOR lookVec = pTransform->GetLook();
+            DirectX::XMFLOAT3 lookDir;
+            DirectX::XMStoreFloat3(&lookDir, lookVec);
+
+            pNetMgr->SendSkill(skillType, pos.x, pos.y, pos.z, lookDir.x, lookDir.y, lookDir.z);
+        }
     }
 }

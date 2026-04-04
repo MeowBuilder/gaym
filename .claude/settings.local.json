@@ -10,7 +10,9 @@
       "Bash(\"C:\\\\Program Files\\\\Microsoft Visual Studio\\\\2022\\\\Community\\\\MSBuild\\\\Current\\\\Bin\\\\MSBuild.exe\" \"C:\\\\Users\\\\tta12\\\\Documents\\\\저장소\\\\gaym\\\\gaym\\\\gaym.sln\" /p:Configuration=Release /p:Platform=x64 /v:minimal)",
       "Bash(\"C:\\\\Program Files\\\\Microsoft Visual Studio\\\\2022\\\\Community\\\\MSBuild\\\\Current\\\\Bin\\\\MSBuild.exe\" \"C:\\\\Users\\\\tta12\\\\Documents\\\\저장소\\\\gaym\\\\gaym\\\\gaym.sln\" \"/p:Configuration=Release\" \"/p:Platform=x64\" \"/v:minimal\")",
       "Bash(where:*)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(cmd.exe /c:*)",
+      "Bash(powershell.exe -Command \"Copy-Item -Force ''C:\\\\Users\\\\khj16\\\\Downloads\\\\RuneCode_Server\\\\GameServer\\\\Protocol.pb.h'' ''C:\\\\Users\\\\khj16\\\\Downloads\\\\gaym\\\\gaym\\\\Protocol\\\\Protocol.pb.h''\")"
     ]
   }
 }

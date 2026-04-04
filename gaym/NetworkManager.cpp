@@ -245,7 +245,11 @@ void NetworkManager::Update(Scene* pScene, ID3D12Device* pDevice, ID3D12Graphics
             break;
 
         case NetworkCommand::Move:
-            ProcessMovePlayer(cmd.playerId, cmd.x, cmd.y, cmd.z);
+            ProcessMovePlayer(cmd.playerId, cmd.x, cmd.y, cmd.z, cmd.dirX, cmd.dirY, cmd.dirZ);
+            break;
+
+        case NetworkCommand::Skill:
+            ProcessSkill(cmd.playerId, cmd.skillType, cmd.x, cmd.y, cmd.z, cmd.dirX, cmd.dirY, cmd.dirZ);
             break;
 
         case NetworkCommand::SetLocalPlayerId:
@@ -255,7 +259,7 @@ void NetworkManager::Update(Scene* pScene, ID3D12Device* pDevice, ID3D12Graphics
     }
 }
 
-void NetworkManager::SendMove(float x, float y, float z)
+void NetworkManager::SendMove(float x, float y, float z, float dirX, float dirY, float dirZ)
 {
     if (!m_bConnected || !m_pSession)
         return;
@@ -264,8 +268,29 @@ void NetworkManager::SendMove(float x, float y, float z)
     movePkt.set_x(x);
     movePkt.set_y(y);
     movePkt.set_z(z);
+    movePkt.set_dirx(dirX);
+    movePkt.set_diry(dirY);
+    movePkt.set_dirz(dirZ);
 
     auto sendBuffer = ServerPacketHandler::MakeSendBuffer(movePkt);
+    m_pSession->Send(sendBuffer);
+}
+
+void NetworkManager::SendSkill(int skillType, float x, float y, float z, float dirX, float dirY, float dirZ)
+{
+    if (!m_bConnected || !m_pSession)
+        return;
+
+    Protocol::C_SKILL skillPkt;
+    skillPkt.set_skilltype(static_cast<Protocol::SkillType>(skillType));
+    skillPkt.set_x(x);
+    skillPkt.set_y(y);
+    skillPkt.set_z(z);
+    skillPkt.set_dirx(dirX);
+    skillPkt.set_diry(dirY);
+    skillPkt.set_dirz(dirZ);
+
+    auto sendBuffer = ServerPacketHandler::MakeSendBuffer(skillPkt);
     m_pSession->Send(sendBuffer);
 }
 
@@ -296,7 +321,7 @@ void NetworkManager::QueueDespawnPlayer(uint64 playerId)
     m_vCommandQueue.push_back(cmd);
 }
 
-void NetworkManager::QueueMovePlayer(uint64 playerId, float x, float y, float z)
+void NetworkManager::QueueMovePlayer(uint64 playerId, float x, float y, float z, float dirX, float dirY, float dirZ)
 {
     std::lock_guard<std::mutex> lock(m_queueMutex);
 
@@ -306,6 +331,27 @@ void NetworkManager::QueueMovePlayer(uint64 playerId, float x, float y, float z)
     cmd.x = x;
     cmd.y = y;
     cmd.z = z;
+    cmd.dirX = dirX;
+    cmd.dirY = dirY;
+    cmd.dirZ = dirZ;
+
+    m_vCommandQueue.push_back(cmd);
+}
+
+void NetworkManager::QueueSkill(uint64 playerId, int skillType, float x, float y, float z, float dirX, float dirY, float dirZ)
+{
+    std::lock_guard<std::mutex> lock(m_queueMutex);
+
+    NetworkCommandData cmd;
+    cmd.type = NetworkCommand::Skill;
+    cmd.playerId = playerId;
+    cmd.skillType = skillType;
+    cmd.x = x;
+    cmd.y = y;
+    cmd.z = z;
+    cmd.dirX = dirX;
+    cmd.dirY = dirY;
+    cmd.dirZ = dirZ;
 
     m_vCommandQueue.push_back(cmd);
 }
@@ -356,7 +402,8 @@ void NetworkManager::ProcessSpawnPlayer(Scene* pScene, ID3D12Device* pDevice,
     {
         swprintf_s(idLog, 256, L"[Network] Remote player %llu already exists. Updating position.\n", playerId);
         OutputDebugString(idLog);
-        ProcessMovePlayer(playerId, x, y, z);
+        // Spawn에는 방향 정보가 없으므로 기본 방향 (0, 0, 1) 사용
+        ProcessMovePlayer(playerId, x, y, z, 0.0f, 0.0f, 1.0f);
         return;
     }
 
@@ -445,7 +492,7 @@ void NetworkManager::ProcessDespawnPlayer(Scene* pScene, uint64 playerId)
     OutputDebugString(buf);
 }
 
-void NetworkManager::ProcessMovePlayer(uint64 playerId, float x, float y, float z)
+void NetworkManager::ProcessMovePlayer(uint64 playerId, float x, float y, float z, float dirX, float dirY, float dirZ)
 {
     // 로컬 플레이어라면 무시 (로컬은 자체 업데이트)
     if (playerId == m_nLocalPlayerId.load())
@@ -459,6 +506,104 @@ void NetworkManager::ProcessMovePlayer(uint64 playerId, float x, float y, float 
     TransformComponent* pTransform = pRemotePlayer->GetTransform();
     if (pTransform)
     {
+        // 위치 설정
         pTransform->SetPosition(x, y, z);
+
+        // 방향 벡터로 Y축 회전 계산 (XZ 평면 기준)
+        float length = sqrtf(dirX * dirX + dirZ * dirZ);
+        if (length > 0.001f)
+        {
+            // atan2로 Y축 회전각 계산 (라디안)
+            float yaw = atan2f(dirX, dirZ);
+            // 라디안을 도(degree)로 변환
+            float yawDegrees = XMConvertToDegrees(yaw);
+
+            // Y축 회전만 적용 (기존 X, Z 회전은 유지)
+            XMFLOAT3 currentRot = pTransform->GetRotation();
+            pTransform->SetRotation(currentRot.x, yawDegrees, currentRot.z);
+        }
     }
+
+    // 걷기 애니메이션 활성화
+    AnimationComponent* pAnim = pRemotePlayer->GetComponent<AnimationComponent>();
+    if (pAnim)
+    {
+        // CrossFade로 부드럽게 전환 (이미 걷기 중이면 무시)
+        pAnim->CrossFade("Walk", 0.1f, true);
+    }
+
+    // 마지막 이동 시간 기록 (idle 전환용)
+    m_mapRemotePlayerMoveTime[playerId] = 0.0f;
+}
+
+void NetworkManager::CheckRemotePlayerIdle(float deltaTime)
+{
+    // 원격 플레이어들의 마지막 이동 시간 업데이트
+    for (auto it = m_mapRemotePlayerMoveTime.begin(); it != m_mapRemotePlayerMoveTime.end(); )
+    {
+        uint64 playerId = it->first;
+        float& timeSinceMove = it->second;
+        timeSinceMove += deltaTime;
+
+        // 일정 시간 동안 이동 패킷이 없으면 idle로 전환
+        if (timeSinceMove >= IDLE_TRANSITION_TIME)
+        {
+            auto playerIt = m_mapRemotePlayers.find(playerId);
+            if (playerIt != m_mapRemotePlayers.end())
+            {
+                AnimationComponent* pAnim = playerIt->second->GetComponent<AnimationComponent>();
+                if (pAnim)
+                {
+                    pAnim->CrossFade("Idle", 0.2f, true);
+                }
+            }
+            // 처리 완료 후 맵에서 제거
+            it = m_mapRemotePlayerMoveTime.erase(it);
+        }
+        else
+        {
+            ++it;
+        }
+    }
+}
+
+void NetworkManager::ProcessSkill(uint64 playerId, int skillType, float x, float y, float z, float dirX, float dirY, float dirZ)
+{
+    // 로컬 플레이어라면 무시 (로컬은 자체 처리)
+    if (playerId == m_nLocalPlayerId.load())
+        return;
+
+    auto it = m_mapRemotePlayers.find(playerId);
+    if (it == m_mapRemotePlayers.end())
+        return;
+
+    GameObject* pRemotePlayer = it->second;
+    TransformComponent* pTransform = pRemotePlayer->GetTransform();
+    if (pTransform)
+    {
+        // 위치 설정
+        pTransform->SetPosition(x, y, z);
+
+        // 방향 벡터로 Y축 회전 계산 (XZ 평면 기준)
+        float length = sqrtf(dirX * dirX + dirZ * dirZ);
+        if (length > 0.001f)
+        {
+            float yaw = atan2f(dirX, dirZ);
+            float yawDegrees = XMConvertToDegrees(yaw);
+            XMFLOAT3 currentRot = pTransform->GetRotation();
+            pTransform->SetRotation(currentRot.x, yawDegrees, currentRot.z);
+        }
+    }
+
+    // 스킬 애니메이션 재생 (현재 플레이어 모델은 Attack1만 지원)
+    AnimationComponent* pAnim = pRemotePlayer->GetComponent<AnimationComponent>();
+    if (pAnim)
+    {
+        // 스킬 애니메이션은 한 번만 재생 (루프 X)
+        pAnim->CrossFade("Attack1", 0.1f, false);
+    }
+
+    wchar_t buf[128];
+    swprintf_s(buf, L"[Network] ProcessSkill: PlayerId=%llu SkillType=%d\n", playerId, skillType);
+    OutputDebugString(buf);
 }

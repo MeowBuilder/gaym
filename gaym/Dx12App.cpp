@@ -1187,6 +1187,9 @@ void Dx12App::UpdateNetwork(float deltaTime)
     if (!m_pNetworkManager || !m_pNetworkManager->IsConnected())
         return;
 
+    // 원격 플레이어 idle 전환 체크 (항상 실행)
+    m_pNetworkManager->CheckRemotePlayerIdle(deltaTime);
+
     // 이동 패킷 전송 간격 체크
     m_fNetworkSendTimer += deltaTime;
     if (m_fNetworkSendTimer < m_fNetworkSendInterval)
@@ -1216,8 +1219,14 @@ void Dx12App::UpdateNetwork(float deltaTime)
 
     if (distSq > 0.0001f)  // 0.01 squared
     {
-        // 위치 전송
-        m_pNetworkManager->SendMove(currentPos.x, currentPos.y, currentPos.z);
+        // 방향 벡터 가져오기 (Look 방향)
+        XMVECTOR lookVec = pTransform->GetLook();
+        XMFLOAT3 lookDir;
+        XMStoreFloat3(&lookDir, lookVec);
+
+        // 위치와 방향 전송
+        m_pNetworkManager->SendMove(currentPos.x, currentPos.y, currentPos.z,
+                                    lookDir.x, lookDir.y, lookDir.z);
         m_lastSentPosition = currentPos;
     }
 }

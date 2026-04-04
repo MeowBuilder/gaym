@@ -170,18 +170,49 @@ bool Handle_S_MOVE(PacketSessionRef& session, Protocol::S_MOVE& pkt)
     float x = pkt.x();
     float y = pkt.y();
     float z = pkt.z();
+    float dirX = pkt.dirx();
+    float dirY = pkt.diry();
+    float dirZ = pkt.dirz();
 
     char buf[256];
-    sprintf_s(buf, "[Network] S_MOVE received: PlayerId=%llu Pos=(%.1f, %.1f, %.1f)",
-        playerId, x, y, z);
+    sprintf_s(buf, "[Network] S_MOVE received: PlayerId=%llu Pos=(%.1f, %.1f, %.1f) Dir=(%.2f, %.2f, %.2f)",
+        playerId, x, y, z, dirX, dirY, dirZ);
     WriteNetworkLog(buf);
 
     // NetworkManager를 통해 메인 스레드에서 처리
     NetworkManager* pNetMgr = NetworkManager::GetInstance();
     if (pNetMgr)
     {
-        pNetMgr->QueueMovePlayer(playerId, x, y, z);
+        pNetMgr->QueueMovePlayer(playerId, x, y, z, dirX, dirY, dirZ);
         WriteNetworkLog("[Network] QueueMovePlayer called");
+    }
+
+    return true;
+}
+
+// 플레이어 스킬 처리
+bool Handle_S_SKILL(PacketSessionRef& session, Protocol::S_SKILL& pkt)
+{
+    uint64 playerId = pkt.playerid();
+    int skillType = static_cast<int>(pkt.skilltype());
+    float x = pkt.x();
+    float y = pkt.y();
+    float z = pkt.z();
+    float dirX = pkt.dirx();
+    float dirY = pkt.diry();
+    float dirZ = pkt.dirz();
+
+    char buf[256];
+    sprintf_s(buf, "[Network] S_SKILL received: PlayerId=%llu SkillType=%d Pos=(%.1f, %.1f, %.1f) Dir=(%.2f, %.2f, %.2f)",
+        playerId, skillType, x, y, z, dirX, dirY, dirZ);
+    WriteNetworkLog(buf);
+
+    // NetworkManager를 통해 메인 스레드에서 처리
+    NetworkManager* pNetMgr = NetworkManager::GetInstance();
+    if (pNetMgr)
+    {
+        pNetMgr->QueueSkill(playerId, skillType, x, y, z, dirX, dirY, dirZ);
+        WriteNetworkLog("[Network] QueueSkill called");
     }
 
     return true;

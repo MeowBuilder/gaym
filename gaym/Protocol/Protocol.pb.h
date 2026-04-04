@@ -48,7 +48,7 @@ struct TableStruct_Protocol_2eproto {
     PROTOBUF_SECTION_VARIABLE(protodesc_cold);
   static const ::PROTOBUF_NAMESPACE_ID::internal::AuxiliaryParseTableField aux[]
     PROTOBUF_SECTION_VARIABLE(protodesc_cold);
-  static const ::PROTOBUF_NAMESPACE_ID::internal::ParseTable schema[10]
+  static const ::PROTOBUF_NAMESPACE_ID::internal::ParseTable schema[12]
     PROTOBUF_SECTION_VARIABLE(protodesc_cold);
   static const ::PROTOBUF_NAMESPACE_ID::internal::FieldMetadata field_metadata[];
   static const ::PROTOBUF_NAMESPACE_ID::internal::SerializationTable serialization_table[];
@@ -68,6 +68,9 @@ extern C_LOGINDefaultTypeInternal _C_LOGIN_default_instance_;
 class C_MOVE;
 struct C_MOVEDefaultTypeInternal;
 extern C_MOVEDefaultTypeInternal _C_MOVE_default_instance_;
+class C_SKILL;
+struct C_SKILLDefaultTypeInternal;
+extern C_SKILLDefaultTypeInternal _C_SKILL_default_instance_;
 class S_CHAT;
 struct S_CHATDefaultTypeInternal;
 extern S_CHATDefaultTypeInternal _S_CHAT_default_instance_;
@@ -83,6 +86,9 @@ extern S_LOGINDefaultTypeInternal _S_LOGIN_default_instance_;
 class S_MOVE;
 struct S_MOVEDefaultTypeInternal;
 extern S_MOVEDefaultTypeInternal _S_MOVE_default_instance_;
+class S_SKILL;
+struct S_SKILLDefaultTypeInternal;
+extern S_SKILLDefaultTypeInternal _S_SKILL_default_instance_;
 class S_SPAWN;
 struct S_SPAWNDefaultTypeInternal;
 extern S_SPAWNDefaultTypeInternal _S_SPAWN_default_instance_;
@@ -92,11 +98,13 @@ template<> ::Protocol::C_CHAT* Arena::CreateMaybeMessage<::Protocol::C_CHAT>(Are
 template<> ::Protocol::C_ENTER_GAME* Arena::CreateMaybeMessage<::Protocol::C_ENTER_GAME>(Arena*);
 template<> ::Protocol::C_LOGIN* Arena::CreateMaybeMessage<::Protocol::C_LOGIN>(Arena*);
 template<> ::Protocol::C_MOVE* Arena::CreateMaybeMessage<::Protocol::C_MOVE>(Arena*);
+template<> ::Protocol::C_SKILL* Arena::CreateMaybeMessage<::Protocol::C_SKILL>(Arena*);
 template<> ::Protocol::S_CHAT* Arena::CreateMaybeMessage<::Protocol::S_CHAT>(Arena*);
 template<> ::Protocol::S_DESPAWN* Arena::CreateMaybeMessage<::Protocol::S_DESPAWN>(Arena*);
 template<> ::Protocol::S_ENTER_GAME* Arena::CreateMaybeMessage<::Protocol::S_ENTER_GAME>(Arena*);
 template<> ::Protocol::S_LOGIN* Arena::CreateMaybeMessage<::Protocol::S_LOGIN>(Arena*);
 template<> ::Protocol::S_MOVE* Arena::CreateMaybeMessage<::Protocol::S_MOVE>(Arena*);
+template<> ::Protocol::S_SKILL* Arena::CreateMaybeMessage<::Protocol::S_SKILL>(Arena*);
 template<> ::Protocol::S_SPAWN* Arena::CreateMaybeMessage<::Protocol::S_SPAWN>(Arena*);
 PROTOBUF_NAMESPACE_CLOSE
 namespace Protocol {
@@ -1318,6 +1326,9 @@ class C_MOVE final :
     kXFieldNumber = 1,
     kYFieldNumber = 2,
     kZFieldNumber = 3,
+    kDirXFieldNumber = 4,
+    kDirYFieldNumber = 5,
+    kDirZFieldNumber = 6,
   };
   // float x = 1;
   void clear_x();
@@ -1346,6 +1357,33 @@ class C_MOVE final :
   void _internal_set_z(float value);
   public:
 
+  // float dirX = 4;
+  void clear_dirx();
+  float dirx() const;
+  void set_dirx(float value);
+  private:
+  float _internal_dirx() const;
+  void _internal_set_dirx(float value);
+  public:
+
+  // float dirY = 5;
+  void clear_diry();
+  float diry() const;
+  void set_diry(float value);
+  private:
+  float _internal_diry() const;
+  void _internal_set_diry(float value);
+  public:
+
+  // float dirZ = 6;
+  void clear_dirz();
+  float dirz() const;
+  void set_dirz(float value);
+  private:
+  float _internal_dirz() const;
+  void _internal_set_dirz(float value);
+  public:
+
   // @@protoc_insertion_point(class_scope:Protocol.C_MOVE)
  private:
   class _Internal;
@@ -1356,6 +1394,9 @@ class C_MOVE final :
   float x_;
   float y_;
   float z_;
+  float dirx_;
+  float diry_;
+  float dirz_;
   mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
   friend struct ::TableStruct_Protocol_2eproto;
 };
@@ -1473,6 +1514,9 @@ class S_MOVE final :
     kXFieldNumber = 2,
     kYFieldNumber = 3,
     kZFieldNumber = 4,
+    kDirXFieldNumber = 5,
+    kDirYFieldNumber = 6,
+    kDirZFieldNumber = 7,
   };
   // uint64 playerId = 1;
   void clear_playerid();
@@ -1510,6 +1554,33 @@ class S_MOVE final :
   void _internal_set_z(float value);
   public:
 
+  // float dirX = 5;
+  void clear_dirx();
+  float dirx() const;
+  void set_dirx(float value);
+  private:
+  float _internal_dirx() const;
+  void _internal_set_dirx(float value);
+  public:
+
+  // float dirY = 6;
+  void clear_diry();
+  float diry() const;
+  void set_diry(float value);
+  private:
+  float _internal_diry() const;
+  void _internal_set_diry(float value);
+  public:
+
+  // float dirZ = 7;
+  void clear_dirz();
+  float dirz() const;
+  void set_dirz(float value);
+  private:
+  float _internal_dirz() const;
+  void _internal_set_dirz(float value);
+  public:
+
   // @@protoc_insertion_point(class_scope:Protocol.S_MOVE)
  private:
   class _Internal;
@@ -1521,6 +1592,416 @@ class S_MOVE final :
   float x_;
   float y_;
   float z_;
+  float dirx_;
+  float diry_;
+  float dirz_;
+  mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
+  friend struct ::TableStruct_Protocol_2eproto;
+};
+// -------------------------------------------------------------------
+
+class C_SKILL final :
+    public ::PROTOBUF_NAMESPACE_ID::Message /* @@protoc_insertion_point(class_definition:Protocol.C_SKILL) */ {
+ public:
+  inline C_SKILL() : C_SKILL(nullptr) {}
+  ~C_SKILL() override;
+  explicit constexpr C_SKILL(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
+
+  C_SKILL(const C_SKILL& from);
+  C_SKILL(C_SKILL&& from) noexcept
+    : C_SKILL() {
+    *this = ::std::move(from);
+  }
+
+  inline C_SKILL& operator=(const C_SKILL& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline C_SKILL& operator=(C_SKILL&& from) noexcept {
+    if (this == &from) return *this;
+    if (GetOwningArena() == from.GetOwningArena()) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  static const ::PROTOBUF_NAMESPACE_ID::Descriptor* descriptor() {
+    return GetDescriptor();
+  }
+  static const ::PROTOBUF_NAMESPACE_ID::Descriptor* GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  static const ::PROTOBUF_NAMESPACE_ID::Reflection* GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  static const C_SKILL& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const C_SKILL* internal_default_instance() {
+    return reinterpret_cast<const C_SKILL*>(
+               &_C_SKILL_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages =
+    10;
+
+  friend void swap(C_SKILL& a, C_SKILL& b) {
+    a.Swap(&b);
+  }
+  inline void Swap(C_SKILL* other) {
+    if (other == this) return;
+    if (GetOwningArena() == other->GetOwningArena()) {
+      InternalSwap(other);
+    } else {
+      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(C_SKILL* other) {
+    if (other == this) return;
+    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  inline C_SKILL* New() const final {
+    return new C_SKILL();
+  }
+
+  C_SKILL* New(::PROTOBUF_NAMESPACE_ID::Arena* arena) const final {
+    return CreateMaybeMessage<C_SKILL>(arena);
+  }
+  void CopyFrom(const ::PROTOBUF_NAMESPACE_ID::Message& from) final;
+  void MergeFrom(const ::PROTOBUF_NAMESPACE_ID::Message& from) final;
+  void CopyFrom(const C_SKILL& from);
+  void MergeFrom(const C_SKILL& from);
+  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
+  bool IsInitialized() const final;
+
+  size_t ByteSizeLong() const final;
+  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
+  ::PROTOBUF_NAMESPACE_ID::uint8* _InternalSerialize(
+      ::PROTOBUF_NAMESPACE_ID::uint8* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
+  int GetCachedSize() const final { return _cached_size_.Get(); }
+
+  private:
+  void SharedCtor();
+  void SharedDtor();
+  void SetCachedSize(int size) const final;
+  void InternalSwap(C_SKILL* other);
+  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
+  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
+    return "Protocol.C_SKILL";
+  }
+  protected:
+  explicit C_SKILL(::PROTOBUF_NAMESPACE_ID::Arena* arena);
+  private:
+  static void ArenaDtor(void* object);
+  inline void RegisterArenaDtor(::PROTOBUF_NAMESPACE_ID::Arena* arena);
+  public:
+
+  ::PROTOBUF_NAMESPACE_ID::Metadata GetMetadata() const final;
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+
+  enum : int {
+    kSkillTypeFieldNumber = 1,
+    kXFieldNumber = 2,
+    kYFieldNumber = 3,
+    kZFieldNumber = 4,
+    kDirXFieldNumber = 5,
+    kDirYFieldNumber = 6,
+    kDirZFieldNumber = 7,
+  };
+  // .Protocol.SkillType skillType = 1;
+  void clear_skilltype();
+  ::Protocol::SkillType skilltype() const;
+  void set_skilltype(::Protocol::SkillType value);
+  private:
+  ::Protocol::SkillType _internal_skilltype() const;
+  void _internal_set_skilltype(::Protocol::SkillType value);
+  public:
+
+  // float x = 2;
+  void clear_x();
+  float x() const;
+  void set_x(float value);
+  private:
+  float _internal_x() const;
+  void _internal_set_x(float value);
+  public:
+
+  // float y = 3;
+  void clear_y();
+  float y() const;
+  void set_y(float value);
+  private:
+  float _internal_y() const;
+  void _internal_set_y(float value);
+  public:
+
+  // float z = 4;
+  void clear_z();
+  float z() const;
+  void set_z(float value);
+  private:
+  float _internal_z() const;
+  void _internal_set_z(float value);
+  public:
+
+  // float dirX = 5;
+  void clear_dirx();
+  float dirx() const;
+  void set_dirx(float value);
+  private:
+  float _internal_dirx() const;
+  void _internal_set_dirx(float value);
+  public:
+
+  // float dirY = 6;
+  void clear_diry();
+  float diry() const;
+  void set_diry(float value);
+  private:
+  float _internal_diry() const;
+  void _internal_set_diry(float value);
+  public:
+
+  // float dirZ = 7;
+  void clear_dirz();
+  float dirz() const;
+  void set_dirz(float value);
+  private:
+  float _internal_dirz() const;
+  void _internal_set_dirz(float value);
+  public:
+
+  // @@protoc_insertion_point(class_scope:Protocol.C_SKILL)
+ private:
+  class _Internal;
+
+  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
+  typedef void InternalArenaConstructable_;
+  typedef void DestructorSkippable_;
+  int skilltype_;
+  float x_;
+  float y_;
+  float z_;
+  float dirx_;
+  float diry_;
+  float dirz_;
+  mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
+  friend struct ::TableStruct_Protocol_2eproto;
+};
+// -------------------------------------------------------------------
+
+class S_SKILL final :
+    public ::PROTOBUF_NAMESPACE_ID::Message /* @@protoc_insertion_point(class_definition:Protocol.S_SKILL) */ {
+ public:
+  inline S_SKILL() : S_SKILL(nullptr) {}
+  ~S_SKILL() override;
+  explicit constexpr S_SKILL(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
+
+  S_SKILL(const S_SKILL& from);
+  S_SKILL(S_SKILL&& from) noexcept
+    : S_SKILL() {
+    *this = ::std::move(from);
+  }
+
+  inline S_SKILL& operator=(const S_SKILL& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline S_SKILL& operator=(S_SKILL&& from) noexcept {
+    if (this == &from) return *this;
+    if (GetOwningArena() == from.GetOwningArena()) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  static const ::PROTOBUF_NAMESPACE_ID::Descriptor* descriptor() {
+    return GetDescriptor();
+  }
+  static const ::PROTOBUF_NAMESPACE_ID::Descriptor* GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  static const ::PROTOBUF_NAMESPACE_ID::Reflection* GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  static const S_SKILL& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const S_SKILL* internal_default_instance() {
+    return reinterpret_cast<const S_SKILL*>(
+               &_S_SKILL_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages =
+    11;
+
+  friend void swap(S_SKILL& a, S_SKILL& b) {
+    a.Swap(&b);
+  }
+  inline void Swap(S_SKILL* other) {
+    if (other == this) return;
+    if (GetOwningArena() == other->GetOwningArena()) {
+      InternalSwap(other);
+    } else {
+      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(S_SKILL* other) {
+    if (other == this) return;
+    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  inline S_SKILL* New() const final {
+    return new S_SKILL();
+  }
+
+  S_SKILL* New(::PROTOBUF_NAMESPACE_ID::Arena* arena) const final {
+    return CreateMaybeMessage<S_SKILL>(arena);
+  }
+  void CopyFrom(const ::PROTOBUF_NAMESPACE_ID::Message& from) final;
+  void MergeFrom(const ::PROTOBUF_NAMESPACE_ID::Message& from) final;
+  void CopyFrom(const S_SKILL& from);
+  void MergeFrom(const S_SKILL& from);
+  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
+  bool IsInitialized() const final;
+
+  size_t ByteSizeLong() const final;
+  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
+  ::PROTOBUF_NAMESPACE_ID::uint8* _InternalSerialize(
+      ::PROTOBUF_NAMESPACE_ID::uint8* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
+  int GetCachedSize() const final { return _cached_size_.Get(); }
+
+  private:
+  void SharedCtor();
+  void SharedDtor();
+  void SetCachedSize(int size) const final;
+  void InternalSwap(S_SKILL* other);
+  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
+  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
+    return "Protocol.S_SKILL";
+  }
+  protected:
+  explicit S_SKILL(::PROTOBUF_NAMESPACE_ID::Arena* arena);
+  private:
+  static void ArenaDtor(void* object);
+  inline void RegisterArenaDtor(::PROTOBUF_NAMESPACE_ID::Arena* arena);
+  public:
+
+  ::PROTOBUF_NAMESPACE_ID::Metadata GetMetadata() const final;
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+
+  enum : int {
+    kPlayerIdFieldNumber = 1,
+    kSkillTypeFieldNumber = 2,
+    kXFieldNumber = 3,
+    kYFieldNumber = 4,
+    kZFieldNumber = 5,
+    kDirXFieldNumber = 6,
+    kDirYFieldNumber = 7,
+    kDirZFieldNumber = 8,
+  };
+  // uint64 playerId = 1;
+  void clear_playerid();
+  ::PROTOBUF_NAMESPACE_ID::uint64 playerid() const;
+  void set_playerid(::PROTOBUF_NAMESPACE_ID::uint64 value);
+  private:
+  ::PROTOBUF_NAMESPACE_ID::uint64 _internal_playerid() const;
+  void _internal_set_playerid(::PROTOBUF_NAMESPACE_ID::uint64 value);
+  public:
+
+  // .Protocol.SkillType skillType = 2;
+  void clear_skilltype();
+  ::Protocol::SkillType skilltype() const;
+  void set_skilltype(::Protocol::SkillType value);
+  private:
+  ::Protocol::SkillType _internal_skilltype() const;
+  void _internal_set_skilltype(::Protocol::SkillType value);
+  public:
+
+  // float x = 3;
+  void clear_x();
+  float x() const;
+  void set_x(float value);
+  private:
+  float _internal_x() const;
+  void _internal_set_x(float value);
+  public:
+
+  // float y = 4;
+  void clear_y();
+  float y() const;
+  void set_y(float value);
+  private:
+  float _internal_y() const;
+  void _internal_set_y(float value);
+  public:
+
+  // float z = 5;
+  void clear_z();
+  float z() const;
+  void set_z(float value);
+  private:
+  float _internal_z() const;
+  void _internal_set_z(float value);
+  public:
+
+  // float dirX = 6;
+  void clear_dirx();
+  float dirx() const;
+  void set_dirx(float value);
+  private:
+  float _internal_dirx() const;
+  void _internal_set_dirx(float value);
+  public:
+
+  // float dirY = 7;
+  void clear_diry();
+  float diry() const;
+  void set_diry(float value);
+  private:
+  float _internal_diry() const;
+  void _internal_set_diry(float value);
+  public:
+
+  // float dirZ = 8;
+  void clear_dirz();
+  float dirz() const;
+  void set_dirz(float value);
+  private:
+  float _internal_dirz() const;
+  void _internal_set_dirz(float value);
+  public:
+
+  // @@protoc_insertion_point(class_scope:Protocol.S_SKILL)
+ private:
+  class _Internal;
+
+  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
+  typedef void InternalArenaConstructable_;
+  typedef void DestructorSkippable_;
+  ::PROTOBUF_NAMESPACE_ID::uint64 playerid_;
+  int skilltype_;
+  float x_;
+  float y_;
+  float z_;
+  float dirx_;
+  float diry_;
+  float dirz_;
   mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
   friend struct ::TableStruct_Protocol_2eproto;
 };
@@ -1952,6 +2433,66 @@ inline void C_MOVE::set_z(float value) {
   // @@protoc_insertion_point(field_set:Protocol.C_MOVE.z)
 }
 
+// float dirX = 4;
+inline void C_MOVE::clear_dirx() {
+  dirx_ = 0;
+}
+inline float C_MOVE::_internal_dirx() const {
+  return dirx_;
+}
+inline float C_MOVE::dirx() const {
+  // @@protoc_insertion_point(field_get:Protocol.C_MOVE.dirX)
+  return _internal_dirx();
+}
+inline void C_MOVE::_internal_set_dirx(float value) {
+  
+  dirx_ = value;
+}
+inline void C_MOVE::set_dirx(float value) {
+  _internal_set_dirx(value);
+  // @@protoc_insertion_point(field_set:Protocol.C_MOVE.dirX)
+}
+
+// float dirY = 5;
+inline void C_MOVE::clear_diry() {
+  diry_ = 0;
+}
+inline float C_MOVE::_internal_diry() const {
+  return diry_;
+}
+inline float C_MOVE::diry() const {
+  // @@protoc_insertion_point(field_get:Protocol.C_MOVE.dirY)
+  return _internal_diry();
+}
+inline void C_MOVE::_internal_set_diry(float value) {
+  
+  diry_ = value;
+}
+inline void C_MOVE::set_diry(float value) {
+  _internal_set_diry(value);
+  // @@protoc_insertion_point(field_set:Protocol.C_MOVE.dirY)
+}
+
+// float dirZ = 6;
+inline void C_MOVE::clear_dirz() {
+  dirz_ = 0;
+}
+inline float C_MOVE::_internal_dirz() const {
+  return dirz_;
+}
+inline float C_MOVE::dirz() const {
+  // @@protoc_insertion_point(field_get:Protocol.C_MOVE.dirZ)
+  return _internal_dirz();
+}
+inline void C_MOVE::_internal_set_dirz(float value) {
+  
+  dirz_ = value;
+}
+inline void C_MOVE::set_dirz(float value) {
+  _internal_set_dirz(value);
+  // @@protoc_insertion_point(field_set:Protocol.C_MOVE.dirZ)
+}
+
 // -------------------------------------------------------------------
 
 // S_MOVE
@@ -2036,9 +2577,381 @@ inline void S_MOVE::set_z(float value) {
   // @@protoc_insertion_point(field_set:Protocol.S_MOVE.z)
 }
 
+// float dirX = 5;
+inline void S_MOVE::clear_dirx() {
+  dirx_ = 0;
+}
+inline float S_MOVE::_internal_dirx() const {
+  return dirx_;
+}
+inline float S_MOVE::dirx() const {
+  // @@protoc_insertion_point(field_get:Protocol.S_MOVE.dirX)
+  return _internal_dirx();
+}
+inline void S_MOVE::_internal_set_dirx(float value) {
+  
+  dirx_ = value;
+}
+inline void S_MOVE::set_dirx(float value) {
+  _internal_set_dirx(value);
+  // @@protoc_insertion_point(field_set:Protocol.S_MOVE.dirX)
+}
+
+// float dirY = 6;
+inline void S_MOVE::clear_diry() {
+  diry_ = 0;
+}
+inline float S_MOVE::_internal_diry() const {
+  return diry_;
+}
+inline float S_MOVE::diry() const {
+  // @@protoc_insertion_point(field_get:Protocol.S_MOVE.dirY)
+  return _internal_diry();
+}
+inline void S_MOVE::_internal_set_diry(float value) {
+  
+  diry_ = value;
+}
+inline void S_MOVE::set_diry(float value) {
+  _internal_set_diry(value);
+  // @@protoc_insertion_point(field_set:Protocol.S_MOVE.dirY)
+}
+
+// float dirZ = 7;
+inline void S_MOVE::clear_dirz() {
+  dirz_ = 0;
+}
+inline float S_MOVE::_internal_dirz() const {
+  return dirz_;
+}
+inline float S_MOVE::dirz() const {
+  // @@protoc_insertion_point(field_get:Protocol.S_MOVE.dirZ)
+  return _internal_dirz();
+}
+inline void S_MOVE::_internal_set_dirz(float value) {
+  
+  dirz_ = value;
+}
+inline void S_MOVE::set_dirz(float value) {
+  _internal_set_dirz(value);
+  // @@protoc_insertion_point(field_set:Protocol.S_MOVE.dirZ)
+}
+
+// -------------------------------------------------------------------
+
+// C_SKILL
+
+// .Protocol.SkillType skillType = 1;
+inline void C_SKILL::clear_skilltype() {
+  skilltype_ = 0;
+}
+inline ::Protocol::SkillType C_SKILL::_internal_skilltype() const {
+  return static_cast< ::Protocol::SkillType >(skilltype_);
+}
+inline ::Protocol::SkillType C_SKILL::skilltype() const {
+  // @@protoc_insertion_point(field_get:Protocol.C_SKILL.skillType)
+  return _internal_skilltype();
+}
+inline void C_SKILL::_internal_set_skilltype(::Protocol::SkillType value) {
+  
+  skilltype_ = value;
+}
+inline void C_SKILL::set_skilltype(::Protocol::SkillType value) {
+  _internal_set_skilltype(value);
+  // @@protoc_insertion_point(field_set:Protocol.C_SKILL.skillType)
+}
+
+// float x = 2;
+inline void C_SKILL::clear_x() {
+  x_ = 0;
+}
+inline float C_SKILL::_internal_x() const {
+  return x_;
+}
+inline float C_SKILL::x() const {
+  // @@protoc_insertion_point(field_get:Protocol.C_SKILL.x)
+  return _internal_x();
+}
+inline void C_SKILL::_internal_set_x(float value) {
+  
+  x_ = value;
+}
+inline void C_SKILL::set_x(float value) {
+  _internal_set_x(value);
+  // @@protoc_insertion_point(field_set:Protocol.C_SKILL.x)
+}
+
+// float y = 3;
+inline void C_SKILL::clear_y() {
+  y_ = 0;
+}
+inline float C_SKILL::_internal_y() const {
+  return y_;
+}
+inline float C_SKILL::y() const {
+  // @@protoc_insertion_point(field_get:Protocol.C_SKILL.y)
+  return _internal_y();
+}
+inline void C_SKILL::_internal_set_y(float value) {
+  
+  y_ = value;
+}
+inline void C_SKILL::set_y(float value) {
+  _internal_set_y(value);
+  // @@protoc_insertion_point(field_set:Protocol.C_SKILL.y)
+}
+
+// float z = 4;
+inline void C_SKILL::clear_z() {
+  z_ = 0;
+}
+inline float C_SKILL::_internal_z() const {
+  return z_;
+}
+inline float C_SKILL::z() const {
+  // @@protoc_insertion_point(field_get:Protocol.C_SKILL.z)
+  return _internal_z();
+}
+inline void C_SKILL::_internal_set_z(float value) {
+  
+  z_ = value;
+}
+inline void C_SKILL::set_z(float value) {
+  _internal_set_z(value);
+  // @@protoc_insertion_point(field_set:Protocol.C_SKILL.z)
+}
+
+// float dirX = 5;
+inline void C_SKILL::clear_dirx() {
+  dirx_ = 0;
+}
+inline float C_SKILL::_internal_dirx() const {
+  return dirx_;
+}
+inline float C_SKILL::dirx() const {
+  // @@protoc_insertion_point(field_get:Protocol.C_SKILL.dirX)
+  return _internal_dirx();
+}
+inline void C_SKILL::_internal_set_dirx(float value) {
+  
+  dirx_ = value;
+}
+inline void C_SKILL::set_dirx(float value) {
+  _internal_set_dirx(value);
+  // @@protoc_insertion_point(field_set:Protocol.C_SKILL.dirX)
+}
+
+// float dirY = 6;
+inline void C_SKILL::clear_diry() {
+  diry_ = 0;
+}
+inline float C_SKILL::_internal_diry() const {
+  return diry_;
+}
+inline float C_SKILL::diry() const {
+  // @@protoc_insertion_point(field_get:Protocol.C_SKILL.dirY)
+  return _internal_diry();
+}
+inline void C_SKILL::_internal_set_diry(float value) {
+  
+  diry_ = value;
+}
+inline void C_SKILL::set_diry(float value) {
+  _internal_set_diry(value);
+  // @@protoc_insertion_point(field_set:Protocol.C_SKILL.dirY)
+}
+
+// float dirZ = 7;
+inline void C_SKILL::clear_dirz() {
+  dirz_ = 0;
+}
+inline float C_SKILL::_internal_dirz() const {
+  return dirz_;
+}
+inline float C_SKILL::dirz() const {
+  // @@protoc_insertion_point(field_get:Protocol.C_SKILL.dirZ)
+  return _internal_dirz();
+}
+inline void C_SKILL::_internal_set_dirz(float value) {
+  
+  dirz_ = value;
+}
+inline void C_SKILL::set_dirz(float value) {
+  _internal_set_dirz(value);
+  // @@protoc_insertion_point(field_set:Protocol.C_SKILL.dirZ)
+}
+
+// -------------------------------------------------------------------
+
+// S_SKILL
+
+// uint64 playerId = 1;
+inline void S_SKILL::clear_playerid() {
+  playerid_ = uint64_t{0u};
+}
+inline ::PROTOBUF_NAMESPACE_ID::uint64 S_SKILL::_internal_playerid() const {
+  return playerid_;
+}
+inline ::PROTOBUF_NAMESPACE_ID::uint64 S_SKILL::playerid() const {
+  // @@protoc_insertion_point(field_get:Protocol.S_SKILL.playerId)
+  return _internal_playerid();
+}
+inline void S_SKILL::_internal_set_playerid(::PROTOBUF_NAMESPACE_ID::uint64 value) {
+  
+  playerid_ = value;
+}
+inline void S_SKILL::set_playerid(::PROTOBUF_NAMESPACE_ID::uint64 value) {
+  _internal_set_playerid(value);
+  // @@protoc_insertion_point(field_set:Protocol.S_SKILL.playerId)
+}
+
+// .Protocol.SkillType skillType = 2;
+inline void S_SKILL::clear_skilltype() {
+  skilltype_ = 0;
+}
+inline ::Protocol::SkillType S_SKILL::_internal_skilltype() const {
+  return static_cast< ::Protocol::SkillType >(skilltype_);
+}
+inline ::Protocol::SkillType S_SKILL::skilltype() const {
+  // @@protoc_insertion_point(field_get:Protocol.S_SKILL.skillType)
+  return _internal_skilltype();
+}
+inline void S_SKILL::_internal_set_skilltype(::Protocol::SkillType value) {
+  
+  skilltype_ = value;
+}
+inline void S_SKILL::set_skilltype(::Protocol::SkillType value) {
+  _internal_set_skilltype(value);
+  // @@protoc_insertion_point(field_set:Protocol.S_SKILL.skillType)
+}
+
+// float x = 3;
+inline void S_SKILL::clear_x() {
+  x_ = 0;
+}
+inline float S_SKILL::_internal_x() const {
+  return x_;
+}
+inline float S_SKILL::x() const {
+  // @@protoc_insertion_point(field_get:Protocol.S_SKILL.x)
+  return _internal_x();
+}
+inline void S_SKILL::_internal_set_x(float value) {
+  
+  x_ = value;
+}
+inline void S_SKILL::set_x(float value) {
+  _internal_set_x(value);
+  // @@protoc_insertion_point(field_set:Protocol.S_SKILL.x)
+}
+
+// float y = 4;
+inline void S_SKILL::clear_y() {
+  y_ = 0;
+}
+inline float S_SKILL::_internal_y() const {
+  return y_;
+}
+inline float S_SKILL::y() const {
+  // @@protoc_insertion_point(field_get:Protocol.S_SKILL.y)
+  return _internal_y();
+}
+inline void S_SKILL::_internal_set_y(float value) {
+  
+  y_ = value;
+}
+inline void S_SKILL::set_y(float value) {
+  _internal_set_y(value);
+  // @@protoc_insertion_point(field_set:Protocol.S_SKILL.y)
+}
+
+// float z = 5;
+inline void S_SKILL::clear_z() {
+  z_ = 0;
+}
+inline float S_SKILL::_internal_z() const {
+  return z_;
+}
+inline float S_SKILL::z() const {
+  // @@protoc_insertion_point(field_get:Protocol.S_SKILL.z)
+  return _internal_z();
+}
+inline void S_SKILL::_internal_set_z(float value) {
+  
+  z_ = value;
+}
+inline void S_SKILL::set_z(float value) {
+  _internal_set_z(value);
+  // @@protoc_insertion_point(field_set:Protocol.S_SKILL.z)
+}
+
+// float dirX = 6;
+inline void S_SKILL::clear_dirx() {
+  dirx_ = 0;
+}
+inline float S_SKILL::_internal_dirx() const {
+  return dirx_;
+}
+inline float S_SKILL::dirx() const {
+  // @@protoc_insertion_point(field_get:Protocol.S_SKILL.dirX)
+  return _internal_dirx();
+}
+inline void S_SKILL::_internal_set_dirx(float value) {
+  
+  dirx_ = value;
+}
+inline void S_SKILL::set_dirx(float value) {
+  _internal_set_dirx(value);
+  // @@protoc_insertion_point(field_set:Protocol.S_SKILL.dirX)
+}
+
+// float dirY = 7;
+inline void S_SKILL::clear_diry() {
+  diry_ = 0;
+}
+inline float S_SKILL::_internal_diry() const {
+  return diry_;
+}
+inline float S_SKILL::diry() const {
+  // @@protoc_insertion_point(field_get:Protocol.S_SKILL.dirY)
+  return _internal_diry();
+}
+inline void S_SKILL::_internal_set_diry(float value) {
+  
+  diry_ = value;
+}
+inline void S_SKILL::set_diry(float value) {
+  _internal_set_diry(value);
+  // @@protoc_insertion_point(field_set:Protocol.S_SKILL.dirY)
+}
+
+// float dirZ = 8;
+inline void S_SKILL::clear_dirz() {
+  dirz_ = 0;
+}
+inline float S_SKILL::_internal_dirz() const {
+  return dirz_;
+}
+inline float S_SKILL::dirz() const {
+  // @@protoc_insertion_point(field_get:Protocol.S_SKILL.dirZ)
+  return _internal_dirz();
+}
+inline void S_SKILL::_internal_set_dirz(float value) {
+  
+  dirz_ = value;
+}
+inline void S_SKILL::set_dirz(float value) {
+  _internal_set_dirz(value);
+  // @@protoc_insertion_point(field_set:Protocol.S_SKILL.dirZ)
+}
+
 #ifdef __GNUC__
   #pragma GCC diagnostic pop
 #endif  // __GNUC__
+// -------------------------------------------------------------------
+
+// -------------------------------------------------------------------
+
 // -------------------------------------------------------------------
 
 // -------------------------------------------------------------------

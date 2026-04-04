@@ -31,6 +31,7 @@ enum class NetworkCommand
     Spawn,
     Despawn,
     Move,
+    Skill,
     SetLocalPlayerId
 };
 
@@ -42,6 +43,8 @@ struct NetworkCommandData
     std::string name;
     int playerType;
     float x, y, z;
+    float dirX, dirY, dirZ;  // 방향 정보
+    int skillType;           // 스킬 타입 (Protocol::SkillType)
 };
 
 // =============================================================================
@@ -87,8 +90,11 @@ public:
     // 프레임마다 호출 (큐에 쌓인 명령 처리)
     void Update(Scene* pScene, ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList);
 
-    // 로컬 플레이어 이동 전송
-    void SendMove(float x, float y, float z);
+    // 로컬 플레이어 이동 전송 (위치 + 방향)
+    void SendMove(float x, float y, float z, float dirX, float dirY, float dirZ);
+
+    // 로컬 플레이어 스킬 전송
+    void SendSkill(int skillType, float x, float y, float z, float dirX, float dirY, float dirZ);
 
     // 로컬 플레이어 ID 설정/조회 (atomic으로 스레드 안전)
     void SetLocalPlayerId(uint64 playerId) { m_nLocalPlayerId.store(playerId); }
@@ -101,7 +107,8 @@ public:
     // 네트워크 스레드에서 호출 - 명령을 큐에 추가
     void QueueSpawnPlayer(uint64 playerId, const std::string& name, int playerType, float x, float y, float z);
     void QueueDespawnPlayer(uint64 playerId);
-    void QueueMovePlayer(uint64 playerId, float x, float y, float z);
+    void QueueMovePlayer(uint64 playerId, float x, float y, float z, float dirX, float dirY, float dirZ);
+    void QueueSkill(uint64 playerId, int skillType, float x, float y, float z, float dirX, float dirY, float dirZ);
     void QueueSetLocalPlayerId(uint64 playerId);
 
     // 원격 플레이어 조회
@@ -135,5 +142,16 @@ private:
     void ProcessSpawnPlayer(Scene* pScene, ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList,
                            uint64 playerId, const std::string& name, int playerType, float x, float y, float z);
     void ProcessDespawnPlayer(Scene* pScene, uint64 playerId);
-    void ProcessMovePlayer(uint64 playerId, float x, float y, float z);
+    void ProcessMovePlayer(uint64 playerId, float x, float y, float z, float dirX, float dirY, float dirZ);
+    void ProcessSkill(uint64 playerId, int skillType, float x, float y, float z, float dirX, float dirY, float dirZ);
+
+    // 원격 플레이어 마지막 이동 시간 (idle 전환용)
+    std::unordered_map<uint64, float> m_mapRemotePlayerMoveTime;
+
+    // idle 전환까지 대기 시간 (초)
+    static constexpr float IDLE_TRANSITION_TIME = 0.15f;
+
+public:
+    // 원격 플레이어 idle 전환 체크 (Update에서 호출)
+    void CheckRemotePlayerIdle(float deltaTime);
 };
