@@ -169,25 +169,16 @@ namespace {
 
 // OBJ load result: mesh + local-space AABB
 struct ObjResult {
-    Mesh*    pMesh = nullptr;
+    Mesh*    pMesh = nullptr;           // primary (merged or first group)
     XMFLOAT3 aabbMin{0,0,0};
     XMFLOAT3 aabbMax{0,0,0};
     bool     valid = false;
+    // Per-group submeshes (populated when OBJ has "g" groups)
+    std::vector<Mesh*>       subMeshes;
+    std::vector<std::string> subGroups;
 };
 std::map<std::string, ObjResult> s_meshCache;
 static std::map<std::string, JsonVal>  s_jsonCache;  // 파싱된 JSON 재사용
-
-struct ObjRawData {
-    std::vector<XMFLOAT3> positions;
-    std::vector<XMFLOAT3> normals;
-    std::vector<XMFLOAT2> uvs;
-
-    // Expanded (per-draw-vertex) output
-    std::vector<XMFLOAT3> outPos;
-    std::vector<XMFLOAT3> outNrm;
-    std::vector<XMFLOAT2> outUV;
-    std::vector<UINT>     outIdx;
-};
 
 // Deduplication key: (posIdx, uvIdx, nrmIdx)
 struct FaceKey {
@@ -199,6 +190,30 @@ struct FaceKeyHash {
         size_t h = (size_t)(k.p * 73856093) ^ (size_t)(k.t * 19349663) ^ (size_t)(k.n * 83492791);
         return h;
     }
+};
+
+struct ObjRawData {
+    std::vector<XMFLOAT3> positions;
+    std::vector<XMFLOAT3> normals;
+    std::vector<XMFLOAT2> uvs;
+
+    // Merged output (used when OBJ has no "g" groups)
+    std::vector<XMFLOAT3> outPos;
+    std::vector<XMFLOAT3> outNrm;
+    std::vector<XMFLOAT2> outUV;
+    std::vector<UINT>     outIdx;
+
+    // Per-group output (used when OBJ has "g" groups)
+    struct GroupData {
+        std::string name;
+        std::vector<XMFLOAT3> outPos;
+        std::vector<XMFLOAT3> outNrm;
+        std::vector<XMFLOAT2> outUV;
+        std::vector<UINT>     outIdx;
+        std::unordered_map<FaceKey, UINT, FaceKeyHash> vertexMap;
+    };
+    std::vector<GroupData> groups;
+    int currentGroup = -1;  // index into groups, -1 = no groups yet
 };
 
 // Parse one "v/t/n" token (1-based OBJ indices, 0 means absent)
@@ -255,6 +270,12 @@ ObjResult LoadObjMesh(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommand
             XMFLOAT2 uv;
             sscanf_s(rest, "%f %f", &uv.x, &uv.y);
             raw.uvs.push_back(uv);
+        } else if (strcmp(type, "g") == 0) {
+            std::string grpName(rest);
+            while (!grpName.empty() && (grpName.back() == '\r' || grpName.back() == '\n' || grpName.back() == ' '))
+                grpName.pop_back();
+            raw.groups.push_back({grpName, {}, {}, {}, {}, {}});
+            raw.currentGroup = (int)raw.groups.size() - 1;
         } else if (strcmp(type, "f") == 0) {
             // Triangulate: fan from first vertex
             char tok[4][64] = {};
@@ -271,39 +292,54 @@ ObjResult LoadObjMesh(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommand
             for (int t = 0; t < triCount; t++) {
                 FaceKey tri[3] = { keys[0], keys[t+1], keys[t+2] };
                 for (auto& k : tri) {
-                    auto vit = vertexMap.find(k);
-                    if (vit == vertexMap.end()) {
-                        UINT idx = (UINT)raw.outPos.size();
-                        vertexMap[k] = idx;
-
-                        // Position (1-based → 0-based)
-                        if (k.p > 0 && k.p <= (int)raw.positions.size())
-                            raw.outPos.push_back(raw.positions[k.p - 1]);
-                        else
-                            raw.outPos.push_back(XMFLOAT3(0,0,0));
-
-                        // Normal
-                        if (k.n > 0 && k.n <= (int)raw.normals.size())
-                            raw.outNrm.push_back(raw.normals[k.n - 1]);
-                        else
-                            raw.outNrm.push_back(XMFLOAT3(0,1,0));
-
-                        // UV
-                        if (k.t > 0 && k.t <= (int)raw.uvs.size())
-                            raw.outUV.push_back(raw.uvs[k.t - 1]);
-                        else
-                            raw.outUV.push_back(XMFLOAT2(0,0));
-
-                        raw.outIdx.push_back(idx);
+                    if (raw.currentGroup >= 0) {
+                        // Per-group path
+                        auto& grp = raw.groups[raw.currentGroup];
+                        auto vit = grp.vertexMap.find(k);
+                        if (vit == grp.vertexMap.end()) {
+                            UINT idx = (UINT)grp.outPos.size();
+                            grp.vertexMap[k] = idx;
+                            grp.outPos.push_back(k.p > 0 && k.p <= (int)raw.positions.size() ? raw.positions[k.p-1] : XMFLOAT3(0,0,0));
+                            grp.outNrm.push_back(k.n > 0 && k.n <= (int)raw.normals.size() ? raw.normals[k.n-1] : XMFLOAT3(0,1,0));
+                            grp.outUV.push_back(k.t > 0 && k.t <= (int)raw.uvs.size() ? raw.uvs[k.t-1] : XMFLOAT2(0,0));
+                            grp.outIdx.push_back(idx);
+                        } else {
+                            grp.outIdx.push_back(vit->second);
+                        }
                     } else {
-                        raw.outIdx.push_back(vit->second);
+                        // Merged path
+                        auto vit = vertexMap.find(k);
+                        if (vit == vertexMap.end()) {
+                            UINT idx = (UINT)raw.outPos.size();
+                            vertexMap[k] = idx;
+
+                            if (k.p > 0 && k.p <= (int)raw.positions.size())
+                                raw.outPos.push_back(raw.positions[k.p - 1]);
+                            else
+                                raw.outPos.push_back(XMFLOAT3(0,0,0));
+
+                            if (k.n > 0 && k.n <= (int)raw.normals.size())
+                                raw.outNrm.push_back(raw.normals[k.n - 1]);
+                            else
+                                raw.outNrm.push_back(XMFLOAT3(0,1,0));
+
+                            if (k.t > 0 && k.t <= (int)raw.uvs.size())
+                                raw.outUV.push_back(raw.uvs[k.t - 1]);
+                            else
+                                raw.outUV.push_back(XMFLOAT2(0,0));
+
+                            raw.outIdx.push_back(idx);
+                        } else {
+                            raw.outIdx.push_back(vit->second);
+                        }
                     }
                 }
             }
         }
     }
 
-    if (raw.outPos.empty() || raw.outIdx.empty()) {
+    // Compute local-space AABB from raw position data
+    if (raw.positions.empty()) {
         char buf[512];
         sprintf_s(buf, "[MapLoader] OBJ empty geometry: %s\n", path.c_str());
         OutputDebugStringA(buf);
@@ -311,7 +347,6 @@ ObjResult LoadObjMesh(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommand
         return {};
     }
 
-    // Compute local-space AABB from raw position data (before vertex expansion)
     ObjResult result;
     result.aabbMin = raw.positions[0];
     result.aabbMax = raw.positions[0];
@@ -324,11 +359,34 @@ ObjResult LoadObjMesh(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommand
         result.aabbMax.z = (std::max)(result.aabbMax.z, v.z);
     }
 
-    // Build GPU mesh (same layout as CubeMesh)
-    ObjMesh* pMesh = new ObjMesh();
-    pMesh->Build(pDevice, pCommandList, raw.outPos, raw.outNrm, raw.outUV, raw.outIdx);
+    if (!raw.groups.empty()) {
+        // Build one mesh per group
+        for (auto& grp : raw.groups) {
+            if (grp.outPos.empty() || grp.outIdx.empty()) continue;
+            ObjMesh* pSubMesh = new ObjMesh();
+            pSubMesh->Build(pDevice, pCommandList, grp.outPos, grp.outNrm, grp.outUV, grp.outIdx);
+            result.subMeshes.push_back(pSubMesh);
+            result.subGroups.push_back(grp.name);
+        }
+        if (result.subMeshes.empty()) {
+            s_meshCache[path] = {};
+            return {};
+        }
+        result.pMesh = result.subMeshes[0];  // backward compat: primary = first group
+    } else {
+        // Build single merged mesh (no groups)
+        if (raw.outPos.empty() || raw.outIdx.empty()) {
+            char buf[512];
+            sprintf_s(buf, "[MapLoader] OBJ empty geometry: %s\n", path.c_str());
+            OutputDebugStringA(buf);
+            s_meshCache[path] = {};
+            return {};
+        }
+        ObjMesh* pMesh = new ObjMesh();
+        pMesh->Build(pDevice, pCommandList, raw.outPos, raw.outNrm, raw.outUV, raw.outIdx);
+        result.pMesh = pMesh;
+    }
 
-    result.pMesh = pMesh;
     result.valid = true;
     s_meshCache[path] = result;
     return result;
@@ -439,43 +497,87 @@ bool MapLoader::LoadIntoScene(
         pRC->SetCastsShadow(true);
         pShader->AddRenderComponent(pRC);
 
-        // Apply material from JSON (color + smoothness/metallic exported from Unity)
-        {
+        // Helper: apply material properties from a JSON value (top-level or per-material entry)
+        auto applyMat = [&](GameObject* pTarget, const JsonVal& src) {
             float r = 1.f, g = 1.f, b = 1.f;
-            if (mo.has("color")) {
-                const JsonVal& col = mo["color"];
+            if (src.has("color")) {
+                const JsonVal& col = src["color"];
                 r = col[0].f() / 255.f;
                 g = col[1].f() / 255.f;
                 b = col[2].f() / 255.f;
             }
-            float smooth   = mo.has("smoothness") ? mo["smoothness"].f() : 0.5f;
-            float metallic = mo.has("metallic")   ? mo["metallic"].f()   : 0.0f;
+            float smooth   = src.has("smoothness") ? src["smoothness"].f() : 0.5f;
+            float metallic = src.has("metallic")   ? src["metallic"].f()   : 0.0f;
+            float specPow  = 2.0f + smooth * smooth * 254.0f;
+            float specStr  = (1.0f - metallic) * 0.1f + metallic * 0.9f;
 
-            // Convert PBR smoothness → specular power (rough approximation)
-            float specPow = 2.0f + smooth * smooth * 254.0f;  // [2..256]
-            float specStr = (1.0f - metallic) * 0.1f + metallic * 0.9f;
+            float er = 0.f, eg = 0.f, eb = 0.f;
+            if (src.has("emissive")) {
+                const JsonVal& em = src["emissive"];
+                er = em[0].f() / 255.f;
+                eg = em[1].f() / 255.f;
+                eb = em[2].f() / 255.f;
+            }
 
             MATERIAL mat;
             mat.m_cAmbient  = XMFLOAT4(r * 0.25f, g * 0.25f, b * 0.25f, 1.0f);
             mat.m_cDiffuse  = XMFLOAT4(r, g, b, 1.0f);
             mat.m_cSpecular = XMFLOAT4(specStr, specStr, specStr, specPow);
-            mat.m_cEmissive = XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f);
-            pGO->SetMaterial(mat);
-        }
+            mat.m_cEmissive = XMFLOAT4(er, eg, eb, 1.0f);
+            pTarget->SetMaterial(mat);
+        };
 
-        // Load texture if exported from Unity (_MainTex / _BaseMap)
-        if (mo.has("texture") && !mo["texture"].str.empty()) {
-            std::string texRelPath = mo["texture"].str;
-            std::string texFullPath = jsonDir + texRelPath;
+        // Helper: load texture from a JSON value
+        auto applyTex = [&](GameObject* pTarget, const JsonVal& src) {
+            if (src.has("texture") && !src["texture"].str.empty()) {
+                std::string texFullPath = jsonDir + src["texture"].str;
+                pTarget->SetTextureName(texFullPath);
+                D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle;
+                D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle;
+                pScene->AllocateDescriptor(&cpuHandle, &gpuHandle);
+                pTarget->LoadTexture(pDevice, pCommandList, cpuHandle);
+                pTarget->SetSrvGpuDescriptorHandle(gpuHandle);
+            }
+            if (src.has("emissiveTexture") && !src["emissiveTexture"].str.empty()) {
+                std::string emTexFullPath = jsonDir + src["emissiveTexture"].str;
+                pTarget->SetEmissiveTextureName(emTexFullPath);
+                D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle;
+                D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle;
+                pScene->AllocateDescriptor(&cpuHandle, &gpuHandle);
+                pTarget->LoadEmissiveTexture(pDevice, pCommandList, cpuHandle);
+                pTarget->SetEmissiveSrvGpuDescriptorHandle(gpuHandle);
+            }
+        };
 
-            pGO->SetTextureName(texFullPath);
-
-            D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle;
-            D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle;
-            pScene->AllocateDescriptor(&cpuHandle, &gpuHandle);
-
-            pGO->LoadTexture(pDevice, pCommandList, cpuHandle);
-            pGO->SetSrvGpuDescriptorHandle(gpuHandle);
+        if (mo.has("materials") && !objRes.subMeshes.empty()) {
+            // Multi-material: override primary GO with sub_0 mesh + materials[0],
+            // then create additional GOs for each remaining submesh.
+            const JsonVal& mats = mo["materials"];
+            size_t count = (std::min)(objRes.subMeshes.size(), mats.size());
+            for (size_t mi = 0; mi < count; mi++) {
+                GameObject* pSubGO = (mi == 0) ? pGO : pScene->CreateGameObject(pDevice, pCommandList);
+                if (mi > 0) {
+                    pSubGO->GetTransform()->SetPosition(
+                        pos[0].f()*MAP_SCALE, pos[1].f()*MAP_SCALE, -pos[2].f()*MAP_SCALE);
+                    pSubGO->GetTransform()->SetRotation(XMFLOAT4(rot[0].f(), rot[1].f(), -rot[2].f(), rot[3].f()));
+                    pSubGO->GetTransform()->SetScale(sx, sy, sz);
+                    auto* pRC2 = pSubGO->AddComponent<RenderComponent>();
+                    pRC2->SetMesh(objRes.subMeshes[mi]);
+                    pRC2->SetCastsShadow(true);
+                    pShader->AddRenderComponent(pRC2);
+                } else {
+                    // Patch the primary GO's RenderComponent to use sub_0 mesh
+                    pGO->SetMesh(objRes.subMeshes[0]);
+                    if (auto* pRC0 = pGO->GetComponent<RenderComponent>())
+                        pRC0->SetMesh(objRes.subMeshes[0]);
+                }
+                applyMat(pSubGO, mats[mi]);
+                applyTex(pSubGO, mats[mi]);
+            }
+        } else {
+            // Single-material path
+            applyMat(pGO, mo);
+            applyTex(pGO, mo);
         }
 
         // Collider: SetExtents uses LOCAL-space extents; ColliderComponent::Update()

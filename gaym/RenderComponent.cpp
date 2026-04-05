@@ -33,26 +33,17 @@ void RenderComponent::Render(ID3D12GraphicsCommandList* pCommandList)
     // Set the per-object descriptor table to root parameter 0 (CBV)
     pCommandList->SetGraphicsRootDescriptorTable(0, m_pOwner->GetGpuDescriptorHandle());
 
-    // NEW: Set the texture descriptor table to root parameter 2 (SRV) if exists
     if (m_pOwner->HasTexture())
-    {
-        // We need to access m_srvGPUDescriptorHandle.
-        // Since it's private in GameObject, we should use a getter or make RenderComponent a friend.
-        // I will assume we can add a getter GetSrvDescriptorHandle() to GameObject.
         pCommandList->SetGraphicsRootDescriptorTable(2, m_pOwner->GetSrvDescriptorHandle());
-    }
 
-    // Set the normal map descriptor table to root parameter 4 (SRV t2) if exists
     if (m_pOwner->HasNormalMap())
-    {
         pCommandList->SetGraphicsRootDescriptorTable(4, m_pOwner->GetNormalMapSrvHandle());
-    }
 
-    // Set the height map descriptor table to root parameter 5 (SRV t3) if exists
     if (m_pOwner->HasHeightMap())
-    {
         pCommandList->SetGraphicsRootDescriptorTable(5, m_pOwner->GetHeightMapSrvHandle());
-    }
+
+    if (m_pOwner->HasEmissiveTexture())
+        pCommandList->SetGraphicsRootDescriptorTable(6, m_pOwner->GetEmissiveSrvDescriptorHandle());
 
     m_pMesh->Render(pCommandList, 0);
 }

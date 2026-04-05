@@ -23,13 +23,12 @@ struct ObjectConstants
 {
 	XMFLOAT4X4 m_xmf4x4World;
 	UINT m_nMaterialIndex = 0;
-    UINT m_bIsSkinned = 0; // 0: Static, 1: Skinned
-    UINT m_bHasTexture = 0; // 0: No texture, 1: Has texture
-    UINT m_bIsLava = 0; // 0: Normal, 1: Lava (UV animation)
-    UINT m_bIsWater = 0; // 0: Normal, 1: Water (UV animation)
-    UINT m_pad0 = 0; // Padding for 16-byte alignment
-    UINT m_pad1 = 0;
-    UINT m_pad2 = 0;
+    UINT m_bIsSkinned = 0;
+    UINT m_bHasTexture = 0;
+    UINT m_bIsLava = 0;
+    UINT m_bIsWater = 0;
+    UINT m_bHasEmissiveTexture = 0;
+    UINT cbPad1 = 0; UINT cbPad2 = 0; UINT cbPad3 = 0;
 	MATERIAL mMaterial;
     XMFLOAT4X4 m_xmf4x4BoneTransforms[128];
 };
@@ -96,6 +95,18 @@ public:
     D3D12_GPU_DESCRIPTOR_HANDLE GetHeightMapSrvHandle() const { return m_heightMapSrvGPUHandle; }
     bool HasHeightMap() const { return m_pd3dHeightMap != nullptr; }
 
+    // Emissive map texture support
+    void SetEmissiveTextureName(const std::string& name) { m_strEmissiveTextureName = name; }
+    void LoadEmissiveTexture(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, D3D12_CPU_DESCRIPTOR_HANDLE srvCpuHandle);
+    void SetEmissiveSrvGpuDescriptorHandle(D3D12_GPU_DESCRIPTOR_HANDLE handle) { m_emissiveSrvGPUDescriptorHandle = handle; }
+    D3D12_GPU_DESCRIPTOR_HANDLE GetEmissiveSrvDescriptorHandle() const { return m_emissiveSrvGPUDescriptorHandle; }
+    bool HasEmissiveTexture() const { return m_pd3dEmissiveTexture != nullptr; }
+    void SetHasEmissiveTexture(bool b)
+    {
+        if (m_pcbMappedGameObject)
+            m_pcbMappedGameObject->m_bHasEmissiveTexture = b ? 1 : 0;
+    }
+
     void SetBoneTransform(int index, const XMFLOAT4X4& matrix)
     {
         if (m_pcbMappedGameObject && index < 128)
@@ -141,14 +152,18 @@ private:
 	ComPtr<ID3D12Resource> m_pd3dcbGameObject = nullptr;
 	ObjectConstants* m_pcbMappedGameObject = nullptr;
 	D3D12_GPU_DESCRIPTOR_HANDLE m_cbvGPUDescriptorHandle;
-    D3D12_GPU_DESCRIPTOR_HANDLE m_srvGPUDescriptorHandle; // Handle for Texture SRV in Main Heap
+    D3D12_GPU_DESCRIPTOR_HANDLE m_srvGPUDescriptorHandle;
+    D3D12_GPU_DESCRIPTOR_HANDLE m_emissiveSrvGPUDescriptorHandle = {};
 
 	UINT m_nMaterialIndex = 0;
-	MATERIAL m_Material; // New material member
+	MATERIAL m_Material;
 	std::string m_strTextureName;
+    std::string m_strEmissiveTextureName;
 
 	ComPtr<ID3D12Resource> m_pd3dTexture = nullptr;
 	ComPtr<ID3D12Resource> m_pd3dTextureUploadBuffer = nullptr;
+    ComPtr<ID3D12Resource> m_pd3dEmissiveTexture = nullptr;
+    ComPtr<ID3D12Resource> m_pd3dEmissiveTextureUploadBuffer = nullptr;
 
     // Normal map texture
     std::string m_strNormalMapName;

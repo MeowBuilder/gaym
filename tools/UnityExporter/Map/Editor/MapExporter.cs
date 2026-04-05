@@ -426,70 +426,7 @@ public class MapExporter : EditorWindow
 
             if (written > 0) { /* 쉼표는 앞 항목 뒤에 붙임 */ }
 
-            // ── 머터리얼 정보 수집 ──────────────────────────────────────────────
-            Color  matColor    = Color.white;
-            float  matSmooth   = 0.5f;
-            float  matMetallic = 0.0f;
-            string texJsonPath = "";   // JSON에 쓸 상대 경로 (없으면 빈 문자열)
-
             var rend = go.GetComponent<Renderer>();
-            if (rend != null && rend.sharedMaterial != null)
-            {
-                var mat = rend.sharedMaterial;
-
-                // 기본 색상 (색조 곱, _BaseColor(URP) 또는 _Color(Built-in))
-                if      (mat.HasProperty("_BaseColor")) matColor = mat.GetColor("_BaseColor");
-                else if (mat.HasProperty("_Color"))     matColor = mat.GetColor("_Color");
-
-                if (mat.HasProperty("_Smoothness")) matSmooth   = mat.GetFloat("_Smoothness");
-                else if (mat.HasProperty("_Glossiness")) matSmooth = mat.GetFloat("_Glossiness");
-                if (mat.HasProperty("_Metallic"))   matMetallic = mat.GetFloat("_Metallic");
-
-                // 알베도(메인) 텍스처 복사
-                Texture2D albedo = null;
-                if      (mat.HasProperty("_BaseMap"))  albedo = mat.GetTexture("_BaseMap")  as Texture2D;
-                else if (mat.HasProperty("_MainTex"))  albedo = mat.GetTexture("_MainTex")  as Texture2D;
-
-                if (albedo != null)
-                {
-                    string assetPath = AssetDatabase.GetAssetPath(albedo);
-                    if (!string.IsNullOrEmpty(assetPath))
-                    {
-                        if (!exportedTextures.TryGetValue(assetPath, out string texFileName))
-                        {
-                            // 확장자 유지하되 DX12가 읽을 수 있는 형식(PNG/JPG)으로 한정
-                            string srcExt = Path.GetExtension(assetPath).ToLower();
-                            // .tga/.psd/.exr → 런타임에서 처리하기 어려우므로 PNG로 재저장
-                            bool needConvert = (srcExt == ".tga" || srcExt == ".psd"
-                                             || srcExt == ".exr" || srcExt == ".hdr");
-
-                            string texBaseName = Path.GetFileNameWithoutExtension(assetPath);
-                            string destExt     = needConvert ? ".png" : srcExt;
-                            texFileName        = texBaseName + destExt;
-                            string destPath    = Path.Combine(texOutputDir, texFileName);
-
-                            if (!File.Exists(destPath))
-                            {
-                                if (needConvert)
-                                {
-                                    // Unity가 이미 임포트한 Texture2D를 PNG로 인코딩
-                                    var readable = MakeTextureReadable(albedo);
-                                    File.WriteAllBytes(destPath, readable.EncodeToPNG());
-                                }
-                                else
-                                {
-                                    // 그대로 복사
-                                    string srcFull = Path.Combine(
-                                        Path.GetDirectoryName(Application.dataPath), assetPath);
-                                    File.Copy(srcFull, destPath, true);
-                                }
-                            }
-                            exportedTextures[assetPath] = texFileName;
-                        }
-                        texJsonPath = $"{m_meshSubfolder}/textures/{texFileName}";
-                    }
-                }
-            }
 
             sb.AppendLine($"    {{");
             sb.AppendLine($"      \"name\": \"{EscapeJson(go.name)}\",");
@@ -497,19 +434,7 @@ public class MapExporter : EditorWindow
             sb.AppendLine($"      \"position\": {V3(go.transform.position)},");
             sb.AppendLine($"      \"rotation\": {Quat(go.transform.rotation)},");
             sb.AppendLine($"      \"scale\": {V3S(go.transform.lossyScale)},");
-            sb.AppendLine($"      \"color\": {Color32Json(matColor)},");
-            sb.AppendLine($"      \"smoothness\": {matSmooth:F3},");
-            sb.AppendLine($"      \"metallic\": {matMetallic:F3},");
-            // prop이면 "texture", 후 "prop": true가 마지막 필드
-            if (isProp)
-            {
-                sb.AppendLine($"      \"texture\": \"{EscapeJson(texJsonPath)}\",");
-                sb.AppendLine($"      \"prop\": true");
-            }
-            else
-            {
-                sb.AppendLine($"      \"texture\": \"{EscapeJson(texJsonPath)}\"");
-            }
+            AppendMaterialFields(sb, rend, isProp, texOutputDir, exportedTextures);
             bool hasNext = (i < meshObjects.Count - 1);
             sb.Append("    }");
             sb.AppendLine(hasNext ? "," : "");
@@ -721,49 +646,7 @@ public class MapExporter : EditorWindow
             exportedMeshes[meshID] = meshFileName;
         }
 
-        Color  matColor    = Color.white;
-        float  matSmooth   = 0.5f;
-        float  matMetallic = 0.0f;
-        string texJsonPath = "";
-
         var rend = go.GetComponent<Renderer>();
-        if (rend != null && rend.sharedMaterial != null)
-        {
-            var mat = rend.sharedMaterial;
-            if      (mat.HasProperty("_BaseColor")) matColor = mat.GetColor("_BaseColor");
-            else if (mat.HasProperty("_Color"))     matColor = mat.GetColor("_Color");
-            if      (mat.HasProperty("_Smoothness"))  matSmooth   = mat.GetFloat("_Smoothness");
-            else if (mat.HasProperty("_Glossiness"))  matSmooth   = mat.GetFloat("_Glossiness");
-            if      (mat.HasProperty("_Metallic"))    matMetallic = mat.GetFloat("_Metallic");
-
-            Texture2D albedo = null;
-            if      (mat.HasProperty("_BaseMap")) albedo = mat.GetTexture("_BaseMap") as Texture2D;
-            else if (mat.HasProperty("_MainTex")) albedo = mat.GetTexture("_MainTex") as Texture2D;
-
-            if (albedo != null)
-            {
-                string assetPath = AssetDatabase.GetAssetPath(albedo);
-                if (!string.IsNullOrEmpty(assetPath))
-                {
-                    if (!exportedTextures.TryGetValue(assetPath, out string texFileName))
-                    {
-                        string srcExt      = Path.GetExtension(assetPath).ToLower();
-                        bool   needConvert = (srcExt == ".tga" || srcExt == ".psd" || srcExt == ".exr" || srcExt == ".hdr");
-                        string texBaseName = Path.GetFileNameWithoutExtension(assetPath);
-                        string destExt     = needConvert ? ".png" : srcExt;
-                        texFileName        = texBaseName + destExt;
-                        string destPath    = Path.Combine(texOutputDir, texFileName);
-                        if (!File.Exists(destPath))
-                        {
-                            if (needConvert) { var r = MakeTextureReadable(albedo); File.WriteAllBytes(destPath, r.EncodeToPNG()); }
-                            else { string srcFull = Path.Combine(Path.GetDirectoryName(Application.dataPath), assetPath); File.Copy(srcFull, destPath, true); }
-                        }
-                        exportedTextures[assetPath] = texFileName;
-                    }
-                    texJsonPath = $"{m_meshSubfolder}/textures/{texFileName}";
-                }
-            }
-        }
 
         sb.AppendLine($"    {{");
         sb.AppendLine($"      \"name\": \"{EscapeJson(go.name)}\",");
@@ -771,18 +654,7 @@ public class MapExporter : EditorWindow
         sb.AppendLine($"      \"position\": {V3(go.transform.position)},");
         sb.AppendLine($"      \"rotation\": {Quat(go.transform.rotation)},");
         sb.AppendLine($"      \"scale\": {V3S(go.transform.lossyScale)},");
-        sb.AppendLine($"      \"color\": {Color32Json(matColor)},");
-        sb.AppendLine($"      \"smoothness\": {matSmooth:F3},");
-        sb.AppendLine($"      \"metallic\": {matMetallic:F3},");
-        if (isProp)
-        {
-            sb.AppendLine($"      \"texture\": \"{EscapeJson(texJsonPath)}\",");
-            sb.AppendLine($"      \"prop\": true");
-        }
-        else
-        {
-            sb.AppendLine($"      \"texture\": \"{EscapeJson(texJsonPath)}\"");
-        }
+        AppendMaterialFields(sb, rend, isProp, texOutputDir, exportedTextures);
         sb.Append($"    }}");
     }
 
@@ -922,6 +794,173 @@ public class MapExporter : EditorWindow
     {
         Color32 c32 = c;
         return $"[{c32.r}, {c32.g}, {c32.b}, {c32.a}]";
+    }
+
+    // 단일 Material에서 데이터 추출 (색상, smoothness, metallic, emissive, 텍스처)
+    struct MatData
+    {
+        public Color  color;
+        public float  smooth;
+        public float  metallic;
+        public Color  emissive;
+        public bool   hasEmissive;
+        public string texJsonPath;
+        public string emissiveTexJsonPath; // _EmissionMap 텍스처 경로
+    }
+
+    MatData ExtractMatData(Material mat, string texOutputDir, Dictionary<string, string> exportedTextures)
+    {
+        var d = new MatData { color = Color.white, smooth = 0.5f, metallic = 0f, emissive = Color.black };
+
+        if (mat == null) return d;
+
+        if      (mat.HasProperty("_BaseColor")) d.color = mat.GetColor("_BaseColor");
+        else if (mat.HasProperty("_Color"))     d.color = mat.GetColor("_Color");
+
+        if      (mat.HasProperty("_Smoothness"))  d.smooth   = mat.GetFloat("_Smoothness");
+        else if (mat.HasProperty("_Glossiness"))  d.smooth   = mat.GetFloat("_Glossiness");
+        if      (mat.HasProperty("_Metallic"))    d.metallic = mat.GetFloat("_Metallic");
+
+        // Emission: Unity _EmissionColor는 HDR(채널값 > 1.0 가능).
+        // maxComponent로 정규화해 Color32 clamp 현상(채널이 255로 뭉개짐)을 방지하고,
+        // 색조(hue)는 보존하면서 최대 채널값을 1.0으로 맞춤.
+        if (mat.HasProperty("_EmissionColor"))
+        {
+            Color em = mat.GetColor("_EmissionColor");
+            float maxC = Mathf.Max(em.r, em.g, em.b);
+            if (maxC > 0.001f)
+            {
+                if (maxC > 1f)
+                    em = new Color(em.r / maxC, em.g / maxC, em.b / maxC, 1f);
+                d.emissive    = em;
+                d.hasEmissive = true;
+            }
+        }
+
+        // Emission Map 텍스처 복사 (_EmissionMap)
+        Texture2D emissionTex = null;
+        if (mat.HasProperty("_EmissionMap")) emissionTex = mat.GetTexture("_EmissionMap") as Texture2D;
+        if (emissionTex != null)
+        {
+            string assetPath = AssetDatabase.GetAssetPath(emissionTex);
+            if (!string.IsNullOrEmpty(assetPath))
+            {
+                if (!exportedTextures.TryGetValue(assetPath, out string texFileName))
+                {
+                    string srcExt      = Path.GetExtension(assetPath).ToLower();
+                    bool   needConvert = (srcExt == ".tga" || srcExt == ".psd" || srcExt == ".exr" || srcExt == ".hdr");
+                    string texBaseName = Path.GetFileNameWithoutExtension(assetPath);
+                    string destExt     = needConvert ? ".png" : srcExt;
+                    texFileName        = texBaseName + destExt;
+                    string destPath    = Path.Combine(texOutputDir, texFileName);
+                    if (!File.Exists(destPath))
+                    {
+                        if (needConvert) { var r = MakeTextureReadable(emissionTex); File.WriteAllBytes(destPath, r.EncodeToPNG()); }
+                        else { string srcFull = Path.Combine(Path.GetDirectoryName(Application.dataPath), assetPath); File.Copy(srcFull, destPath, true); }
+                    }
+                    exportedTextures[assetPath] = texFileName;
+                }
+                d.emissiveTexJsonPath = $"{m_meshSubfolder}/textures/{texFileName}";
+                // Emission Map이 있으면 hasEmissive도 활성화 (_EmissionColor가 검은색이어도)
+                if (!d.hasEmissive) { d.emissive = Color.white; d.hasEmissive = true; }
+            }
+        }
+
+        // 알베도 텍스처 복사
+        Texture2D albedo = null;
+        if      (mat.HasProperty("_BaseMap")) albedo = mat.GetTexture("_BaseMap") as Texture2D;
+        else if (mat.HasProperty("_MainTex")) albedo = mat.GetTexture("_MainTex") as Texture2D;
+
+        if (albedo != null)
+        {
+            string assetPath = AssetDatabase.GetAssetPath(albedo);
+            if (!string.IsNullOrEmpty(assetPath))
+            {
+                if (!exportedTextures.TryGetValue(assetPath, out string texFileName))
+                {
+                    string srcExt      = Path.GetExtension(assetPath).ToLower();
+                    bool   needConvert = (srcExt == ".tga" || srcExt == ".psd" || srcExt == ".exr" || srcExt == ".hdr");
+                    string texBaseName = Path.GetFileNameWithoutExtension(assetPath);
+                    string destExt     = needConvert ? ".png" : srcExt;
+                    texFileName        = texBaseName + destExt;
+                    string destPath    = Path.Combine(texOutputDir, texFileName);
+                    if (!File.Exists(destPath))
+                    {
+                        if (needConvert) { var r = MakeTextureReadable(albedo); File.WriteAllBytes(destPath, r.EncodeToPNG()); }
+                        else { string srcFull = Path.Combine(Path.GetDirectoryName(Application.dataPath), assetPath); File.Copy(srcFull, destPath, true); }
+                    }
+                    exportedTextures[assetPath] = texFileName;
+                }
+                d.texJsonPath = $"{m_meshSubfolder}/textures/{texFileName}";
+            }
+        }
+        return d;
+    }
+
+    // 머터리얼 JSON 필드를 sb에 추가.
+    // 단일 머터리얼이면 color/smoothness/metallic/emissive/texture 플랫 필드,
+    // 복수 머터리얼이면 "materials" 배열.
+    void AppendMaterialFields(StringBuilder sb, Renderer rend, bool isProp,
+                              string texOutputDir, Dictionary<string, string> exportedTextures)
+    {
+        if (rend == null || rend.sharedMaterials == null || rend.sharedMaterials.Length == 0)
+        {
+            // 머터리얼 없음: 기본값
+            sb.AppendLine($"      \"color\": [255, 255, 255, 255],");
+            sb.AppendLine($"      \"smoothness\": 0.500,");
+            sb.AppendLine($"      \"metallic\": 0.000,");
+            if (isProp) { sb.AppendLine($"      \"texture\": \"\","); sb.AppendLine($"      \"prop\": true"); }
+            else          sb.AppendLine($"      \"texture\": \"\"");
+            return;
+        }
+
+        var mats = rend.sharedMaterials;
+
+        if (mats.Length == 1)
+        {
+            // 단일 머터리얼: 기존 플랫 필드
+            var d = ExtractMatData(mats[0], texOutputDir, exportedTextures);
+            sb.AppendLine($"      \"color\": {Color32Json(d.color)},");
+            sb.AppendLine($"      \"smoothness\": {d.smooth:F3},");
+            sb.AppendLine($"      \"metallic\": {d.metallic:F3},");
+            if (d.hasEmissive)
+                sb.AppendLine($"      \"emissive\": {Color32Json(d.emissive)},");
+            if (!string.IsNullOrEmpty(d.emissiveTexJsonPath))
+                sb.AppendLine($"      \"emissiveTexture\": \"{EscapeJson(d.emissiveTexJsonPath)}\",");
+            if (isProp) { sb.AppendLine($"      \"texture\": \"{EscapeJson(d.texJsonPath)}\","); sb.AppendLine($"      \"prop\": true"); }
+            else          sb.AppendLine($"      \"texture\": \"{EscapeJson(d.texJsonPath)}\"");
+        }
+        else
+        {
+            // 복수 머터리얼: "materials" 배열
+            sb.AppendLine($"      \"materials\": [");
+            for (int mi = 0; mi < mats.Length; mi++)
+            {
+                var d = ExtractMatData(mats[mi], texOutputDir, exportedTextures);
+                sb.AppendLine($"        {{");
+                sb.AppendLine($"          \"color\": {Color32Json(d.color)},");
+                sb.AppendLine($"          \"smoothness\": {d.smooth:F3},");
+                sb.AppendLine($"          \"metallic\": {d.metallic:F3},");
+                if (d.hasEmissive)
+                    sb.AppendLine($"          \"emissive\": {Color32Json(d.emissive)},");
+                if (!string.IsNullOrEmpty(d.emissiveTexJsonPath))
+                    sb.AppendLine($"          \"emissiveTexture\": \"{EscapeJson(d.emissiveTexJsonPath)}\",");
+                bool lastMat = (mi == mats.Length - 1);
+                string texLine = $"          \"texture\": \"{EscapeJson(d.texJsonPath)}\"";
+                sb.AppendLine(texLine);
+                sb.Append($"        }}");
+                sb.AppendLine(lastMat ? "" : ",");
+            }
+            if (isProp)
+            {
+                sb.AppendLine($"      ],");
+                sb.AppendLine($"      \"prop\": true");
+            }
+            else
+            {
+                sb.AppendLine($"      ]");  // 마지막 필드 - 쉼표 없음
+            }
+        }
     }
 
     static string EscapeJson(string s)

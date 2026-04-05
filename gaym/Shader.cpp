@@ -71,8 +71,8 @@ void Shader::RenderShadowPass(ID3D12GraphicsCommandList* pCommandList, D3D12_GPU
 
 void Shader::Build(ID3D12Device* pDevice)
 {
-    // Create a root signature with 6 parameters: Object CBV, Pass CBV, Albedo SRV, Shadow Map SRV, Normal Map SRV, Height Map SRV
-    D3D12_ROOT_PARAMETER d3dRootParameters[6];
+    // Create a root signature with 7 parameters: Object CBV, Pass CBV, Albedo SRV(t0), Shadow SRV(t1), Normal SRV(t2), Height SRV(t3), Emissive SRV(t4)
+    D3D12_ROOT_PARAMETER d3dRootParameters[7];
 
     // Parameter 0: Descriptor table for the per-object constant buffer (b0)
     D3D12_DESCRIPTOR_RANGE d3dDescriptorRange;
@@ -178,8 +178,21 @@ void Shader::Build(ID3D12Device* pDevice)
     samplers[1].RegisterSpace = 0;
     samplers[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
+    // Parameter 6: Descriptor table for the emissive texture SRV (t4)
+    D3D12_DESCRIPTOR_RANGE d3dEmissiveRange;
+    d3dEmissiveRange.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+    d3dEmissiveRange.NumDescriptors = 1;
+    d3dEmissiveRange.BaseShaderRegister = 4; // t4
+    d3dEmissiveRange.RegisterSpace = 0;
+    d3dEmissiveRange.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+
+    d3dRootParameters[6].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+    d3dRootParameters[6].DescriptorTable.NumDescriptorRanges = 1;
+    d3dRootParameters[6].DescriptorTable.pDescriptorRanges = &d3dEmissiveRange;
+    d3dRootParameters[6].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+
     D3D12_ROOT_SIGNATURE_DESC d3dRootSignatureDesc;
-    d3dRootSignatureDesc.NumParameters = 6;
+    d3dRootSignatureDesc.NumParameters = 7;
     d3dRootSignatureDesc.pParameters = d3dRootParameters;
     d3dRootSignatureDesc.NumStaticSamplers = 2;
     d3dRootSignatureDesc.pStaticSamplers = samplers;

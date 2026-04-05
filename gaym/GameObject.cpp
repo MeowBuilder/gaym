@@ -76,6 +76,7 @@ void GameObject::Render(ID3D12GraphicsCommandList* pCommandList)
 
 void GameObject::SetMesh(Mesh* pMesh)
 {
+	if (m_pMesh == pMesh) return;  // same pointer: avoid Release() + AddRef() on same object (would delete it)
 	if (m_pMesh) m_pMesh->Release();
 	m_pMesh = pMesh;
 	if (m_pMesh) m_pMesh->AddRef();
@@ -211,9 +212,55 @@ void GameObject::LoadTexture(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
     pd3dDevice->CreateShaderResourceView(m_pd3dTexture.Get(), &srvDesc, srvCpuHandle);
 }
 
+void GameObject::LoadEmissiveTexture(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, D3D12_CPU_DESCRIPTOR_HANDLE srvCpuHandle)
+{
+    if (m_strEmissiveTextureName.empty()) return;
+
+    std::wstring wstrPath(m_strEmissiveTextureName.begin(), m_strEmissiveTextureName.end());
+
+    auto cacheIt = s_textureCache.find(wstrPath);
+    if (cacheIt != s_textureCache.end())
+    {
+        m_pd3dEmissiveTexture = cacheIt->second;
+    }
+    else
+    {
+        std::unique_ptr<uint8_t[]> decodedData;
+        D3D12_SUBRESOURCE_DATA subresource;
+        HRESULT hr = DirectX::LoadWICTextureFromFile(pd3dDevice, wstrPath.c_str(), m_pd3dEmissiveTexture.GetAddressOf(), decodedData, subresource);
+        if (FAILED(hr))
+        {
+            char buf[512];
+            sprintf_s(buf, "[GameObject] Emissive texture not found: %ls\n", wstrPath.c_str());
+            OutputDebugStringA(buf);
+            return;
+        }
+
+        UINT64 nBytes = GetRequiredIntermediateSize(m_pd3dEmissiveTexture.Get(), 0, 1);
+        m_pd3dEmissiveTextureUploadBuffer = CreateBufferResource(pd3dDevice, pd3dCommandList, NULL, nBytes, D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATE_GENERIC_READ, NULL);
+        UpdateSubresources(pd3dCommandList, m_pd3dEmissiveTexture.Get(), m_pd3dEmissiveTextureUploadBuffer.Get(), 0, 0, 1, &subresource);
+
+        D3D12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition(m_pd3dEmissiveTexture.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+        pd3dCommandList->ResourceBarrier(1, &barrier);
+
+        s_textureCache[wstrPath] = m_pd3dEmissiveTexture;
+    }
+
+    D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+    srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    srvDesc.Format = m_pd3dEmissiveTexture->GetDesc().Format;
+    srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+    srvDesc.Texture2D.MipLevels = m_pd3dEmissiveTexture->GetDesc().MipLevels;
+    pd3dDevice->CreateShaderResourceView(m_pd3dEmissiveTexture.Get(), &srvDesc, srvCpuHandle);
+
+    if (m_pcbMappedGameObject)
+        m_pcbMappedGameObject->m_bHasEmissiveTexture = 1;
+}
+
 void GameObject::ReleaseUploadBuffers()
 {
     if (m_pd3dTextureUploadBuffer) m_pd3dTextureUploadBuffer = nullptr;
+    if (m_pd3dEmissiveTextureUploadBuffer) m_pd3dEmissiveTextureUploadBuffer = nullptr;
     if (m_pd3dNormalMapUploadBuffer) m_pd3dNormalMapUploadBuffer = nullptr;
     if (m_pd3dHeightMapUploadBuffer) m_pd3dHeightMapUploadBuffer = nullptr;
 }

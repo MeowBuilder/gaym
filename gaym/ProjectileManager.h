@@ -22,7 +22,8 @@ struct ProjectileConstants
     UINT m_nMaterialIndex = 0;
     UINT m_bIsSkinned = 0;
     UINT m_bHasTexture = 0;
-    float pad3 = 0.0f;
+    UINT m_bIsLava = 0;
+    UINT m_bHasEmissiveTexture = 0; UINT cbPad1 = 0; UINT cbPad2 = 0; UINT cbPad3 = 0;
     // Material embedded directly (same layout as MATERIAL)
     XMFLOAT4 m_cAmbient;
     XMFLOAT4 m_cDiffuse;

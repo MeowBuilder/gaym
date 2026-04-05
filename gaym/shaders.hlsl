@@ -14,12 +14,11 @@ cbuffer cbGameObject : register(b0)
     uint MaterialIndex;
     uint bIsSkinned;
     uint bHasTexture;
-    uint bIsLava; // Lava UV animation flag
-    uint bIsWater; // Water UV animation flag
-    uint objPad0; // Padding for 16-byte alignment
-    uint objPad1;
-    uint objPad2;
-    MATERIAL gMaterial; // Replaced BaseColor with full Material
+    uint bIsLava;
+    uint bIsWater;
+    uint bHasEmissiveTexture;
+    uint cbPad1;
+    MATERIAL gMaterial;
     matrix gBoneTransforms[128];
 };
 
@@ -59,10 +58,11 @@ cbuffer cbPass : register(b1)
     int g_nActiveTorchLights; int g_TorchPad1; int g_TorchPad2; int g_TorchPad3;
 };
 
-Texture2D gAlbedoMap : register(t0);
-Texture2D gShadowMap : register(t1);
-Texture2D gNormalMap : register(t2);  // Water normal map
-Texture2D gHeightMap : register(t3);  // Water height map
+Texture2D gAlbedoMap   : register(t0);
+Texture2D gShadowMap   : register(t1);
+Texture2D gNormalMap   : register(t2);  // Water normal map
+Texture2D gHeightMap   : register(t3);  // Water height map
+Texture2D gEmissiveMap : register(t4);  // Emissive map
 SamplerState gSampler : register(s0);
 SamplerComparisonState gShadowSampler : register(s1);
 
@@ -331,7 +331,13 @@ float4 PS(PS_INPUT input) : SV_TARGET
     float4 ambient = g_AmbientLight * gMaterial.m_cAmbient * albedoColor; // Apply texture to ambient too
     
     // Final color is the sum of all light components + emissive
-    float4 finalColor = directionalTotal + pointTotal + ambient + gMaterial.m_cEmissive;
+    // Emission Map이 있으면 _EmissionColor * EmissionMap, 없으면 _EmissionColor 그대로
+    float4 emissiveContrib;
+    if (bHasEmissiveTexture)
+        emissiveContrib = float4(gMaterial.m_cEmissive.rgb * gEmissiveMap.Sample(gSampler, uv).rgb, 0.0f);
+    else
+        emissiveContrib = float4(gMaterial.m_cEmissive.rgb, 0.0f);
+    float4 finalColor = directionalTotal + pointTotal + ambient + emissiveContrib;
 
     // --- Spot Light Calculation ---
     float3 spotLightVec = g_SpotLightPosition - input.worldPosition;
@@ -389,18 +395,12 @@ float4 PS(PS_INPUT input) : SV_TARGET
         }
     }
 
-    // Apply water fresnel effect (adds reflection-like brightness at glancing angles)
     if (bIsWater)
     {
-        // Fake sky/environment reflection color
         float3 skyColor = float3(0.4f, 0.55f, 0.75f);
-
-        // Blend between water color and sky reflection based on fresnel
         finalColor.rgb = lerp(finalColor.rgb, skyColor, waterFresnel * 0.6f);
-
-        // Add subtle specular highlight
         finalColor.rgb += waterFresnel * 0.15f;
     }
 
-    return finalColor;
+    return float4(finalColor.rgb, 1.0f);
 }
