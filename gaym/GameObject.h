@@ -28,7 +28,7 @@ struct ObjectConstants
     UINT m_bIsLava = 0;
     UINT m_bIsWater = 0;
     UINT m_bHasEmissiveTexture = 0;
-    UINT cbPad1 = 0; UINT cbPad2 = 0; UINT cbPad3 = 0;
+    UINT cbPad1 = 0; UINT cbPad2 = 0;  // HLSL: 7 uints + 4-byte implicit align → MATERIAL at offset 96
 	MATERIAL mMaterial;
     XMFLOAT4X4 m_xmf4x4BoneTransforms[128];
 };
