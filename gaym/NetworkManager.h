@@ -143,7 +143,7 @@ private:
                            uint64 playerId, const std::string& name, int playerType, float x, float y, float z);
     void ProcessDespawnPlayer(Scene* pScene, uint64 playerId);
     void ProcessMovePlayer(uint64 playerId, float x, float y, float z, float dirX, float dirY, float dirZ);
-    void ProcessSkill(uint64 playerId, int skillType, float x, float y, float z, float dirX, float dirY, float dirZ);
+    void ProcessSkill(Scene* pScene, uint64 playerId, int skillType, float x, float y, float z, float dirX, float dirY, float dirZ);
 
     // 원격 플레이어 마지막 이동 시간 (idle 전환용)
     std::unordered_map<uint64, float> m_mapRemotePlayerMoveTime;
@@ -151,7 +151,22 @@ private:
     // idle 전환까지 대기 시간 (초)
     static constexpr float IDLE_TRANSITION_TIME = 0.15f;
 
+    // 원격 플레이어 VFX 상태 (채널링 스킬 방향 추적용)
+    struct RemoteVFXState
+    {
+        int vfxId = -1;
+        int skillType = 0;
+        float lastUpdateTime = 0.0f;
+    };
+    std::unordered_map<uint64, RemoteVFXState> m_mapRemotePlayerVFX;
+
+    // VFX 타임아웃 (초) - 이 시간 동안 스킬 패킷이 없으면 VFX 종료
+    static constexpr float VFX_TIMEOUT = 0.2f;
+
 public:
     // 원격 플레이어 idle 전환 체크 (Update에서 호출)
     void CheckRemotePlayerIdle(float deltaTime);
+
+    // 원격 플레이어 VFX 타임아웃 체크 (Update에서 호출)
+    void CheckRemotePlayerVFXTimeout(Scene* pScene, float deltaTime);
 };

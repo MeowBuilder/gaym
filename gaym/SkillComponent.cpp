@@ -96,6 +96,23 @@ void SkillComponent::Update(float deltaTime)
             }
         }
 
+        // 채널링 중 네트워크 동기화 (방향 업데이트 전송)
+        NetworkManager* pNetMgr = NetworkManager::GetInstance();
+        if (pNetMgr && pNetMgr->IsConnected() && m_pOwner)
+        {
+            TransformComponent* pTransform = m_pOwner->GetTransform();
+            if (pTransform)
+            {
+                int skillType = 2;  // E = SKILL_TYPE_E
+                const DirectX::XMFLOAT3& pos = pTransform->GetPosition();
+                DirectX::XMVECTOR lookVec = pTransform->GetLook();
+                DirectX::XMFLOAT3 lookDir;
+                DirectX::XMStoreFloat3(&lookDir, lookVec);
+
+                pNetMgr->SendSkill(skillType, pos.x, pos.y, pos.z, lookDir.x, lookDir.y, lookDir.z);
+            }
+        }
+
         // Check if channel duration expired
         if (m_fChannelTime >= m_fChannelDuration)
         {

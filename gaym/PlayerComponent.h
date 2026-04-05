@@ -40,5 +40,9 @@ private:
     float m_fAttackTimer = 0.0f;
     static constexpr float kAttackAnimDuration = 0.92f;  // Attack1 clip duration
 
+    // 네트워크 회전 동기화용 (이전 프레임 Y 회전값)
+    float m_fPrevYaw = 0.0f;
+    static constexpr float YAW_SYNC_THRESHOLD = 1.0f;  // 1도 이상 변화 시 동기화
+
     void UpdateAnimation(float deltaTime, bool bMoving, bool bAttackTriggered);
 };

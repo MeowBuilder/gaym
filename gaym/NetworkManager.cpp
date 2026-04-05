@@ -8,6 +8,9 @@
 #include "Shader.h"
 #include "MeshLoader.h"
 #include "AnimationComponent.h"
+#include "FluidSkillVFXManager.h"
+#include "VFXLibrary.h"
+#include "SkillTypes.h"
 
 // 싱글톤 인스턴스
 NetworkManager* NetworkManager::s_pInstance = nullptr;
@@ -249,7 +252,7 @@ void NetworkManager::Update(Scene* pScene, ID3D12Device* pDevice, ID3D12Graphics
             break;
 
         case NetworkCommand::Skill:
-            ProcessSkill(cmd.playerId, cmd.skillType, cmd.x, cmd.y, cmd.z, cmd.dirX, cmd.dirY, cmd.dirZ);
+            ProcessSkill(pScene, cmd.playerId, cmd.skillType, cmd.x, cmd.y, cmd.z, cmd.dirX, cmd.dirY, cmd.dirZ);
             break;
 
         case NetworkCommand::SetLocalPlayerId:
@@ -567,7 +570,34 @@ void NetworkManager::CheckRemotePlayerIdle(float deltaTime)
     }
 }
 
-void NetworkManager::ProcessSkill(uint64 playerId, int skillType, float x, float y, float z, float dirX, float dirY, float dirZ)
+void NetworkManager::CheckRemotePlayerVFXTimeout(Scene* pScene, float deltaTime)
+{
+    FluidSkillVFXManager* pVFXManager = pScene ? pScene->GetFluidVFXManager() : nullptr;
+    if (!pVFXManager)
+        return;
+
+    for (auto it = m_mapRemotePlayerVFX.begin(); it != m_mapRemotePlayerVFX.end(); )
+    {
+        RemoteVFXState& state = it->second;
+        state.lastUpdateTime += deltaTime;
+
+        // 타임아웃 시 VFX 종료
+        if (state.lastUpdateTime >= VFX_TIMEOUT)
+        {
+            if (state.vfxId >= 0)
+            {
+                pVFXManager->StopEffect(state.vfxId);
+            }
+            it = m_mapRemotePlayerVFX.erase(it);
+        }
+        else
+        {
+            ++it;
+        }
+    }
+}
+
+void NetworkManager::ProcessSkill(Scene* pScene, uint64 playerId, int skillType, float x, float y, float z, float dirX, float dirY, float dirZ)
 {
     // 로컬 플레이어라면 무시 (로컬은 자체 처리)
     if (playerId == m_nLocalPlayerId.load())
@@ -599,8 +629,64 @@ void NetworkManager::ProcessSkill(uint64 playerId, int skillType, float x, float
     AnimationComponent* pAnim = pRemotePlayer->GetComponent<AnimationComponent>();
     if (pAnim)
     {
-        // 스킬 애니메이션은 한 번만 재생 (루프 X)
-        pAnim->CrossFade("Attack1", 0.1f, false);
+        // 스킬 애니메이션은 한 번만 재생 (루프 X), forceRestart=true로 연속 공격 시에도 재시작
+        pAnim->CrossFade("Attack1", 0.1f, false, true);
+    }
+
+    // 타 플레이어 스킬 VFX 생성/업데이트
+    FluidSkillVFXManager* pVFXManager = pScene ? pScene->GetFluidVFXManager() : nullptr;
+    if (pVFXManager)
+    {
+        // skillType을 SkillSlot으로 변환 (1=Q, 2=E, 3=R, 4=RightClick)
+        SkillSlot slot = SkillSlot::Q;
+        switch (skillType)
+        {
+        case 1: slot = SkillSlot::Q; break;
+        case 2: slot = SkillSlot::E; break;
+        case 3: slot = SkillSlot::R; break;
+        case 4: slot = SkillSlot::RightClick; break;
+        default: slot = SkillSlot::Q; break;
+        }
+
+        // VFX 원점 (캐릭터 위치 + 높이 오프셋)
+        XMFLOAT3 vfxOrigin = XMFLOAT3(x, y + 1.5f, z);
+        XMFLOAT3 vfxDirection = XMFLOAT3(dirX, dirY, dirZ);
+
+        // 기존 VFX 상태 확인
+        auto vfxIt = m_mapRemotePlayerVFX.find(playerId);
+        bool hasExistingVFX = (vfxIt != m_mapRemotePlayerVFX.end() && vfxIt->second.vfxId >= 0);
+
+        if (hasExistingVFX && vfxIt->second.skillType == skillType)
+        {
+            // 같은 스킬 계속 사용 중 → TrackEffect로 방향 업데이트
+            pVFXManager->TrackEffect(vfxIt->second.vfxId, vfxOrigin, vfxDirection);
+            vfxIt->second.lastUpdateTime = 0.0f;  // 타이머 리셋
+        }
+        else
+        {
+            // 새 스킬이거나 기존 VFX 없음 → 기존 VFX 종료 후 새로 생성
+            if (hasExistingVFX)
+            {
+                pVFXManager->StopEffect(vfxIt->second.vfxId);
+            }
+
+            // 기본 VFX 정의 가져오기 (룬 없음, Fire 속성)
+            VFXSequenceDef seqDef = VFXLibrary::Get().GetDef(slot, RUNE_NONE, ElementType::Fire);
+
+            // VFX 생성
+            int vfxId = pVFXManager->SpawnSequenceEffect(vfxOrigin, vfxDirection, seqDef);
+
+            // 상태 저장
+            RemoteVFXState state;
+            state.vfxId = vfxId;
+            state.skillType = skillType;
+            state.lastUpdateTime = 0.0f;
+            m_mapRemotePlayerVFX[playerId] = state;
+
+            wchar_t vfxBuf[128];
+            swprintf_s(vfxBuf, L"[Network] Spawned VFX for remote player skill: vfxId=%d\n", vfxId);
+            OutputDebugString(vfxBuf);
+        }
     }
 
     wchar_t buf[128];

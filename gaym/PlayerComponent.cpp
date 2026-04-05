@@ -7,6 +7,7 @@
 #include "SkillComponent.h" // Needed for SkillComponent
 #include "AnimationComponent.h"
 #include "Dx12App.h" // For runtime window size
+#include "NetworkManager.h" // For rotation sync
 
 PlayerComponent::PlayerComponent(GameObject* pOwner)
     : Component(pOwner)
@@ -76,11 +77,22 @@ void PlayerComponent::PlayerUpdate(float deltaTime, InputSystem* pInputSystem, C
     lookDir = XMVector3Normalize(lookDir);
 
 	// Check if the look direction is valid before setting it, to prevent generating NaNs
+    bool bRotationChanged = false;
 	if (XMVectorGetX(XMVector3LengthSq(lookDir)) > 0.001f)
 	{
 		// Convert look direction to a yaw angle
         float yawRad = atan2f(XMVectorGetX(lookDir), XMVectorGetZ(lookDir));
         float yawDeg = XMConvertToDegrees(yawRad);
+
+        // 회전 변경 감지 (임계값 이상 변화 시)
+        float yawDiff = fabsf(yawDeg - m_fPrevYaw);
+        // 360도 경계 처리 (예: 359 -> 1도 변화는 2도로 처리)
+        if (yawDiff > 180.0f) yawDiff = 360.0f - yawDiff;
+        if (yawDiff >= YAW_SYNC_THRESHOLD)
+        {
+            bRotationChanged = true;
+            m_fPrevYaw = yawDeg;
+        }
 
         // Get current rotation, only overwrite yaw
         const XMFLOAT3& currentRot = pTransform->GetRotation();
@@ -126,6 +138,21 @@ void PlayerComponent::PlayerUpdate(float deltaTime, InputSystem* pInputSystem, C
     currentPosition += displacement;
     float currentY = pTransform->GetPosition().y;
     pTransform->SetPosition(XMFLOAT3(XMVectorGetX(currentPosition), currentY, XMVectorGetZ(currentPosition)));
+
+    // --- 네트워크 동기화: 이동 또는 회전 변경 시 전송 ---
+    if (bMoving || bRotationChanged)
+    {
+        NetworkManager* pNetMgr = NetworkManager::GetInstance();
+        if (pNetMgr && pNetMgr->IsConnected())
+        {
+            const XMFLOAT3& finalPos = pTransform->GetPosition();
+            XMVECTOR lookVec = pTransform->GetLook();
+            XMFLOAT3 lookDir3;
+            XMStoreFloat3(&lookDir3, lookVec);
+
+            pNetMgr->SendMove(finalPos.x, finalPos.y, finalPos.z, lookDir3.x, lookDir3.y, lookDir3.z);
+        }
+    }
 
     // --- Skill Input Processing ---
     bool bAttackTriggered = pInputSystem->IsKeyPressed('Q')
