@@ -11,6 +11,7 @@
 #include "FluidSkillVFXManager.h"
 #include "VFXLibrary.h"
 #include "SkillTypes.h"
+#include "ProjectileManager.h"
 
 // 싱글톤 인스턴스
 NetworkManager* NetworkManager::s_pInstance = nullptr;
@@ -633,60 +634,159 @@ void NetworkManager::ProcessSkill(Scene* pScene, uint64 playerId, int skillType,
         pAnim->CrossFade("Attack1", 0.1f, false, true);
     }
 
-    // 타 플레이어 스킬 VFX 생성/업데이트
-    FluidSkillVFXManager* pVFXManager = pScene ? pScene->GetFluidVFXManager() : nullptr;
-    if (pVFXManager)
+    // 스킬 원점 (캐릭터 위치 + 높이 오프셋)
+    XMFLOAT3 skillOrigin = XMFLOAT3(x, y + 1.5f, z);
+    XMFLOAT3 skillDirection = XMFLOAT3(dirX, dirY, dirZ);
+
+    // 방향 벡터 정규화
+    float dirLen = sqrtf(dirX * dirX + dirY * dirY + dirZ * dirZ);
+    if (dirLen > 0.001f)
     {
-        // skillType을 SkillSlot으로 변환 (1=Q, 2=E, 3=R, 4=RightClick)
-        SkillSlot slot = SkillSlot::Q;
-        switch (skillType)
-        {
-        case 1: slot = SkillSlot::Q; break;
-        case 2: slot = SkillSlot::E; break;
-        case 3: slot = SkillSlot::R; break;
-        case 4: slot = SkillSlot::RightClick; break;
-        default: slot = SkillSlot::Q; break;
-        }
+        skillDirection.x /= dirLen;
+        skillDirection.y /= dirLen;
+        skillDirection.z /= dirLen;
+    }
+    else
+    {
+        skillDirection = XMFLOAT3(0.0f, 0.0f, 1.0f);  // 기본 방향
+    }
 
-        // VFX 원점 (캐릭터 위치 + 높이 오프셋)
-        XMFLOAT3 vfxOrigin = XMFLOAT3(x, y + 1.5f, z);
-        XMFLOAT3 vfxDirection = XMFLOAT3(dirX, dirY, dirZ);
+    // 스킬 타입에 따라 분기 처리
+    // 1=Q (WaveSlash - VFX), 2=E (FireBeam - 채널링 VFX), 3=R (Meteor - 낙하 VFX), 4=RightClick (Fireball - 투사체)
 
-        // 기존 VFX 상태 확인
-        auto vfxIt = m_mapRemotePlayerVFX.find(playerId);
-        bool hasExistingVFX = (vfxIt != m_mapRemotePlayerVFX.end() && vfxIt->second.vfxId >= 0);
+    FluidSkillVFXManager* pVFXManager = pScene ? pScene->GetFluidVFXManager() : nullptr;
+    ProjectileManager* pProjManager = pScene ? pScene->GetProjectileManager() : nullptr;
 
-        if (hasExistingVFX && vfxIt->second.skillType == skillType)
+    switch (skillType)
+    {
+    case 1:  // Q 스킬 (WaveSlash) - VFX 단발
+        if (pVFXManager)
         {
-            // 같은 스킬 계속 사용 중 → TrackEffect로 방향 업데이트
-            pVFXManager->TrackEffect(vfxIt->second.vfxId, vfxOrigin, vfxDirection);
-            vfxIt->second.lastUpdateTime = 0.0f;  // 타이머 리셋
-        }
-        else
-        {
-            // 새 스킬이거나 기존 VFX 없음 → 기존 VFX 종료 후 새로 생성
-            if (hasExistingVFX)
+            // 수평 방향 VFX
+            XMFLOAT3 horizontalDir = skillDirection;
+            horizontalDir.y = 0.0f;
+            float hLen = sqrtf(horizontalDir.x * horizontalDir.x + horizontalDir.z * horizontalDir.z);
+            if (hLen > 0.001f)
             {
-                pVFXManager->StopEffect(vfxIt->second.vfxId);
+                horizontalDir.x /= hLen;
+                horizontalDir.z /= hLen;
             }
 
-            // 기본 VFX 정의 가져오기 (룬 없음, Fire 속성)
-            VFXSequenceDef seqDef = VFXLibrary::Get().GetDef(slot, RUNE_NONE, ElementType::Fire);
-
-            // VFX 생성
-            int vfxId = pVFXManager->SpawnSequenceEffect(vfxOrigin, vfxDirection, seqDef);
-
-            // 상태 저장
-            RemoteVFXState state;
-            state.vfxId = vfxId;
-            state.skillType = skillType;
-            state.lastUpdateTime = 0.0f;
-            m_mapRemotePlayerVFX[playerId] = state;
+            VFXSequenceDef seqDef = VFXLibrary::Get().GetDef(SkillSlot::Q, RUNE_NONE, ElementType::Fire);
+            int vfxId = pVFXManager->SpawnSequenceEffect(skillOrigin, horizontalDir, seqDef);
 
             wchar_t vfxBuf[128];
-            swprintf_s(vfxBuf, L"[Network] Spawned VFX for remote player skill: vfxId=%d\n", vfxId);
+            swprintf_s(vfxBuf, L"[Network] Spawned Q (WaveSlash) VFX: vfxId=%d\n", vfxId);
             OutputDebugString(vfxBuf);
         }
+        break;
+
+    case 2:  // E 스킬 (FireBeam) - 채널링 VFX (TrackEffect 필요)
+        if (pVFXManager)
+        {
+            // 기존 VFX 상태 확인
+            auto vfxIt = m_mapRemotePlayerVFX.find(playerId);
+            bool hasExistingVFX = (vfxIt != m_mapRemotePlayerVFX.end() && vfxIt->second.vfxId >= 0);
+
+            if (hasExistingVFX && vfxIt->second.skillType == skillType)
+            {
+                // 같은 스킬 계속 사용 중 → TrackEffect로 방향 업데이트
+                pVFXManager->TrackEffect(vfxIt->second.vfxId, skillOrigin, skillDirection);
+                vfxIt->second.lastUpdateTime = 0.0f;
+            }
+            else
+            {
+                // 새 스킬 → 기존 VFX 종료 후 새로 생성
+                if (hasExistingVFX)
+                {
+                    pVFXManager->StopEffect(vfxIt->second.vfxId);
+                }
+
+                VFXSequenceDef seqDef = VFXLibrary::Get().GetDef(SkillSlot::E, RUNE_NONE, ElementType::Fire);
+                int vfxId = pVFXManager->SpawnSequenceEffect(skillOrigin, skillDirection, seqDef);
+
+                RemoteVFXState state;
+                state.vfxId = vfxId;
+                state.skillType = skillType;
+                state.lastUpdateTime = 0.0f;
+                m_mapRemotePlayerVFX[playerId] = state;
+
+                wchar_t vfxBuf[128];
+                swprintf_s(vfxBuf, L"[Network] Spawned E (FireBeam) VFX: vfxId=%d\n", vfxId);
+                OutputDebugString(vfxBuf);
+            }
+        }
+        break;
+
+    case 3:  // R 스킬 (Meteor) - 상공에서 낙하 VFX
+        if (pVFXManager)
+        {
+            // 메테오: 타겟 위치 상공에서 아래로 낙하
+            // 타겟 위치 = 캐릭터 위치 + 방향 * 거리 (지면)
+            float meteorForwardDist = 15.0f;
+            XMFLOAT3 targetPos = XMFLOAT3(
+                x + skillDirection.x * meteorForwardDist,
+                y,  // 지면 높이
+                z + skillDirection.z * meteorForwardDist
+            );
+
+            // 스폰 위치 = 타겟 상공 50m
+            float meteorSpawnHeight = 50.0f;
+            XMFLOAT3 spawnPos = XMFLOAT3(targetPos.x, targetPos.y + meteorSpawnHeight, targetPos.z);
+
+            // 방향 = 아래
+            XMFLOAT3 downDir = XMFLOAT3(0.0f, -1.0f, 0.0f);
+
+            VFXSequenceDef seqDef = VFXLibrary::Get().GetDef(SkillSlot::R, RUNE_NONE, ElementType::Fire);
+            int vfxId = pVFXManager->SpawnSequenceEffect(spawnPos, downDir, seqDef);
+
+            wchar_t vfxBuf[128];
+            swprintf_s(vfxBuf, L"[Network] Spawned R (Meteor) VFX: vfxId=%d, spawn=(%.1f,%.1f,%.1f)\n",
+                vfxId, spawnPos.x, spawnPos.y, spawnPos.z);
+            OutputDebugString(vfxBuf);
+        }
+        break;
+
+    case 4:  // 우클릭 (Fireball) - 실제 투사체
+        if (pProjManager)
+        {
+            // Fireball 파라미터 (FireballBehavior 기준)
+            float speed = 30.0f;
+            float radius = 0.5f;
+            float explosionRadius = 3.0f;
+            float scale = 1.0f;
+
+            // 타겟 위치 (수평 방향으로 50m)
+            XMFLOAT3 targetPos = XMFLOAT3(
+                skillOrigin.x + skillDirection.x * 50.0f,
+                skillOrigin.y,  // 수평 유지
+                skillOrigin.z + skillDirection.z * 50.0f
+            );
+
+            pProjManager->SpawnProjectile(
+                skillOrigin,
+                targetPos,
+                0.0f,               // damage=0 (원격은 데미지 없음)
+                speed,
+                radius,
+                explosionRadius,
+                ElementType::Fire,
+                pRemotePlayer,
+                true,
+                scale,
+                RuneCombo{},
+                0.0f
+            );
+
+            wchar_t projBuf[128];
+            swprintf_s(projBuf, L"[Network] Spawned RightClick (Fireball) projectile\n");
+            OutputDebugString(projBuf);
+        }
+        break;
+
+    default:
+        OutputDebugString(L"[Network] Unknown skill type\n");
+        break;
     }
 
     wchar_t buf[128];
