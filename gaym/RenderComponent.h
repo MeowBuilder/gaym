@@ -21,10 +21,14 @@ public:
     void SetCastsShadow(bool bCasts) { m_bCastsShadow = bCasts; }
     bool CastsShadow() const { return m_bCastsShadow; }
 
+    void SetTransparent(bool bTransparent) { m_bTransparent = bTransparent; }
+    bool IsTransparent() const { return m_bTransparent; }
+
     void SetOwnerShader(Shader* pShader) { m_pOwnerShader = pShader; }
 
 private:
     Mesh* m_pMesh = nullptr;
     bool m_bCastsShadow = false;
+    bool m_bTransparent = false;
     Shader* m_pOwnerShader = nullptr;
 };

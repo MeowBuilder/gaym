@@ -24,6 +24,13 @@
 struct ID3D12Device;
 struct ID3D12GraphicsCommandList;
 
+// Stage theme for different environments
+enum class StageTheme
+{
+    Fire,   // Volcanic/lava theme (default)
+    Water   // Ocean/water theme
+};
+
 // Drop interaction state machine
 enum class DropInteractionState
 {
@@ -110,6 +117,7 @@ public:
     void TriggerPortalInteraction();
     void TransitionToNextRoom();
     void TransitionToBossRoom();  // 보스전 전환 (4스테이지 후 또는 테스트용)
+    void TransitionToWaterStage();  // 물 스테이지 전환 (N키 테스트용)
 
     // Drop interaction system
     DropInteractionState GetDropInteractionState() const { return m_eDropState; }
@@ -162,6 +170,9 @@ public:
 private:
     float m_fTotalTime = 0.0f; // 누적 시간 (용암 애니메이션용)
     float m_fLastDeltaTime = 0.016f; // 최근 deltaTime (GPU SPH dispatch용)
+    StageTheme m_eCurrentTheme = StageTheme::Fire; // 현재 스테이지 테마
+    GameObject* m_pLavaPlane = nullptr; // 용암 바닥 평면
+    GameObject* m_pWaterPlane = nullptr; // 물 바닥 평면
 
     std::vector<std::unique_ptr<GameObject>> m_vGameObjects; // Global Objects (Player, etc.)
     std::vector<GameObject*> m_vPendingDeletions; // Objects marked for deletion (processed at end of frame)

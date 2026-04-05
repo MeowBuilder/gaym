@@ -214,4 +214,98 @@ void GameObject::LoadTexture(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 void GameObject::ReleaseUploadBuffers()
 {
     if (m_pd3dTextureUploadBuffer) m_pd3dTextureUploadBuffer = nullptr;
+    if (m_pd3dNormalMapUploadBuffer) m_pd3dNormalMapUploadBuffer = nullptr;
+    if (m_pd3dHeightMapUploadBuffer) m_pd3dHeightMapUploadBuffer = nullptr;
+}
+
+void GameObject::LoadNormalMap(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, D3D12_CPU_DESCRIPTOR_HANDLE srvCpuHandle)
+{
+    if (m_strNormalMapName.empty()) return;
+
+    std::wstring wstrNormalMap(m_strNormalMapName.begin(), m_strNormalMapName.end());
+
+    // Check if file exists
+    if (GetFileAttributesW(wstrNormalMap.c_str()) == INVALID_FILE_ATTRIBUTES)
+    {
+        char buffer[256];
+        sprintf_s(buffer, "Normal map not found: %s\n", m_strNormalMapName.c_str());
+        OutputDebugStringA(buffer);
+        return;
+    }
+
+    // Load texture
+    std::unique_ptr<uint8_t[]> decodedData;
+    D3D12_SUBRESOURCE_DATA subresource;
+
+    HRESULT hr = DirectX::LoadWICTextureFromFile(pd3dDevice, wstrNormalMap.c_str(), m_pd3dNormalMap.GetAddressOf(), decodedData, subresource);
+    if (FAILED(hr))
+    {
+        char buffer[512];
+        sprintf_s(buffer, "Failed to load normal map: %ls\n", wstrNormalMap.c_str());
+        OutputDebugStringA(buffer);
+        return;
+    }
+
+    UINT64 nBytes = GetRequiredIntermediateSize(m_pd3dNormalMap.Get(), 0, 1);
+    m_pd3dNormalMapUploadBuffer = CreateBufferResource(pd3dDevice, pd3dCommandList, NULL, nBytes, D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATE_GENERIC_READ, NULL);
+    UpdateSubresources(pd3dCommandList, m_pd3dNormalMap.Get(), m_pd3dNormalMapUploadBuffer.Get(), 0, 0, 1, &subresource);
+
+    D3D12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition(m_pd3dNormalMap.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+    pd3dCommandList->ResourceBarrier(1, &barrier);
+
+    // Create SRV
+    D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+    srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    srvDesc.Format = m_pd3dNormalMap->GetDesc().Format;
+    srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+    srvDesc.Texture2D.MipLevels = m_pd3dNormalMap->GetDesc().MipLevels;
+    pd3dDevice->CreateShaderResourceView(m_pd3dNormalMap.Get(), &srvDesc, srvCpuHandle);
+
+    OutputDebugStringA("Normal map loaded successfully\n");
+}
+
+void GameObject::LoadHeightMap(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, D3D12_CPU_DESCRIPTOR_HANDLE srvCpuHandle)
+{
+    if (m_strHeightMapName.empty()) return;
+
+    std::wstring wstrHeightMap(m_strHeightMapName.begin(), m_strHeightMapName.end());
+
+    // Check if file exists
+    if (GetFileAttributesW(wstrHeightMap.c_str()) == INVALID_FILE_ATTRIBUTES)
+    {
+        char buffer[256];
+        sprintf_s(buffer, "Height map not found: %s\n", m_strHeightMapName.c_str());
+        OutputDebugStringA(buffer);
+        return;
+    }
+
+    // Load texture
+    std::unique_ptr<uint8_t[]> decodedData;
+    D3D12_SUBRESOURCE_DATA subresource;
+
+    HRESULT hr = DirectX::LoadWICTextureFromFile(pd3dDevice, wstrHeightMap.c_str(), m_pd3dHeightMap.GetAddressOf(), decodedData, subresource);
+    if (FAILED(hr))
+    {
+        char buffer[512];
+        sprintf_s(buffer, "Failed to load height map: %ls\n", wstrHeightMap.c_str());
+        OutputDebugStringA(buffer);
+        return;
+    }
+
+    UINT64 nBytes = GetRequiredIntermediateSize(m_pd3dHeightMap.Get(), 0, 1);
+    m_pd3dHeightMapUploadBuffer = CreateBufferResource(pd3dDevice, pd3dCommandList, NULL, nBytes, D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATE_GENERIC_READ, NULL);
+    UpdateSubresources(pd3dCommandList, m_pd3dHeightMap.Get(), m_pd3dHeightMapUploadBuffer.Get(), 0, 0, 1, &subresource);
+
+    D3D12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition(m_pd3dHeightMap.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+    pd3dCommandList->ResourceBarrier(1, &barrier);
+
+    // Create SRV
+    D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+    srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    srvDesc.Format = m_pd3dHeightMap->GetDesc().Format;
+    srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+    srvDesc.Texture2D.MipLevels = m_pd3dHeightMap->GetDesc().MipLevels;
+    pd3dDevice->CreateShaderResourceView(m_pd3dHeightMap.Get(), &srvDesc, srvCpuHandle);
+
+    OutputDebugStringA("Height map loaded successfully\n");
 }

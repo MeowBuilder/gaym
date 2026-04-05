@@ -347,20 +347,20 @@ void Scene::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList)
         CRoom* pTempRoom = m_pCurrentRoom;
         m_pCurrentRoom = nullptr;
 
-        GameObject* pLavaPlane = CreateGameObject(pDevice, pCommandList);
+        m_pLavaPlane = CreateGameObject(pDevice, pCommandList);
         m_pCurrentRoom = pTempRoom;
 
-        if (pLavaPlane)
+        if (m_pLavaPlane)
         {
             // 하나의 큰 평면 메쉬 (타일 아래 전체를 덮음)
             CubeMesh* pPlaneMesh = new CubeMesh(pDevice, pCommandList, 1.0f, 0.1f, 1.0f);
-            pLavaPlane->SetMesh(pPlaneMesh);
+            m_pLavaPlane->SetMesh(pPlaneMesh);
 
             // 타일보다 약간 아래에 배치, 맵 + 화산 외곽까지 충분히 덮음
-            pLavaPlane->GetTransform()->SetPosition(0.0f, -3.5f, -200.0f);
-            pLavaPlane->GetTransform()->SetScale(2000.0f, 1.0f, 2000.0f);
+            m_pLavaPlane->GetTransform()->SetPosition(0.0f, -3.5f, -200.0f);
+            m_pLavaPlane->GetTransform()->SetScale(2000.0f, 1.0f, 2000.0f);
 
-            pLavaPlane->SetLava(true);
+            m_pLavaPlane->SetLava(true);
 
             // 용암 머티리얼 (텍스쳐 원본 색상 유지)
             MATERIAL lavaMat;
@@ -368,17 +368,17 @@ void Scene::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList)
             lavaMat.m_cDiffuse  = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
             lavaMat.m_cSpecular = XMFLOAT4(0.85f, 0.85f, 0.85f, 8.0f);  // smoothness 0.85
             lavaMat.m_cEmissive = XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f);
-            pLavaPlane->SetMaterial(lavaMat);
+            m_pLavaPlane->SetMaterial(lavaMat);
 
             // 텍스쳐 로드
-            pLavaPlane->SetTextureName("Assets/MapData/meshes/textures/lava-texture.png");
+            m_pLavaPlane->SetTextureName("Assets/MapData/meshes/textures/lava-texture.png");
             D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle;
             D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle;
             AllocateDescriptor(&cpuHandle, &gpuHandle);
-            pLavaPlane->LoadTexture(pDevice, pCommandList, cpuHandle);
-            pLavaPlane->SetSrvGpuDescriptorHandle(gpuHandle);
+            m_pLavaPlane->LoadTexture(pDevice, pCommandList, cpuHandle);
+            m_pLavaPlane->SetSrvGpuDescriptorHandle(gpuHandle);
 
-            auto* pRC = pLavaPlane->AddComponent<RenderComponent>();
+            auto* pRC = m_pLavaPlane->AddComponent<RenderComponent>();
             pRC->SetMesh(pPlaneMesh);
             pRC->SetCastsShadow(false);
             m_vShaders[0]->AddRenderComponent(pRC);
@@ -511,6 +511,13 @@ void Scene::Update(float deltaTime, InputSystem* pInputSystem)
         TransitionToBossRoom();
     }
 
+    // N 키: 물 스테이지 테스트 (즉시 물 맵으로 전환)
+    if (pInputSystem && pInputSystem->IsKeyPressed('N'))
+    {
+        OutputDebugString(L"[Scene] Water stage test key pressed - entering water stage!\n");
+        TransitionToWaterStage();
+    }
+
     // 0 키: 다음 방 / 9 키: 이전 방 (개발용 직접 이동)
     if (pInputSystem && !m_vMapPool.empty())
     {
@@ -533,8 +540,17 @@ void Scene::Update(float deltaTime, InputSystem* pInputSystem)
     XMMATRIX mViewProj = mView * mProjection;
     XMStoreFloat4x4(&m_pcbMappedPass->m_xmf4x4ViewProj, XMMatrixTranspose(mViewProj));
 
-    // Set lighting parameters for a more realistic look
-    m_pcbMappedPass->m_xmf4LightColor = XMFLOAT4(1.0f, 0.6f, 0.35f, 1.0f); // Warm orange light (volcanic)
+    // Set lighting parameters based on current theme
+    if (m_eCurrentTheme == StageTheme::Water)
+    {
+        // Cool blue light for water stage
+        m_pcbMappedPass->m_xmf4LightColor = XMFLOAT4(0.6f, 0.75f, 1.0f, 1.0f);
+    }
+    else
+    {
+        // Warm orange light for fire/volcanic stage
+        m_pcbMappedPass->m_xmf4LightColor = XMFLOAT4(1.0f, 0.6f, 0.35f, 1.0f);
+    }
     XMVECTOR lightDir = XMVector3Normalize(XMVectorSet(-0.6f, -0.7f, 0.3f, 0.0f)); // 비스듬한 조명 (옆으로 긴 그림자)
     XMStoreFloat3(&m_pcbMappedPass->m_xmf3LightDirection, lightDir);
 
@@ -1783,4 +1799,141 @@ void Scene::RegisterPlayersToEnemy(EnemyComponent* pEnemy)
 
     std::vector<GameObject*> players = GetAllPlayers();
     pEnemy->RegisterAllPlayers(players);
+}
+
+void Scene::TransitionToWaterStage()
+{
+    OutputDebugString(L"[Scene] ========== WATER STAGE ==========\n");
+
+    // ── 1. 테마 변경 (조명 색상에 영향)
+    m_eCurrentTheme = StageTheme::Water;
+
+    // ── 2. 셰이더 RC 목록 전체 클리어
+    m_vShaders[0]->ClearRenderComponents();
+    ProcessPendingDeletions();
+
+    // ── 3. 기존 룸 전체 파기
+    m_vRooms.clear();
+    m_pCurrentRoom = nullptr;
+
+    // ── 4. 디스크립터 인덱스를 워터마크로 리셋
+    m_nNextDescriptorIndex = m_nPersistentDescriptorEnd;
+
+    // ── 5. 횃불 시스템 클리어
+    if (m_pTorchSystem) m_pTorchSystem->Clear();
+
+    // ── 6. 용암 평면 숨기기 (렌더링에서 제외)
+    if (m_pLavaPlane)
+    {
+        m_pLavaPlane->GetTransform()->SetPosition(0.0f, -10000.0f, 0.0f);  // 화면 밖으로 이동
+    }
+
+    // ── 7. 영속 오브젝트의 RC를 셰이더에 다시 등록 (용암 제외)
+    for (auto& pGO : m_vGameObjects)
+    {
+        if (pGO.get() != m_pLavaPlane)  // 용암은 제외
+            ReAddRenderComponentsToShader(pGO.get());
+    }
+
+    ID3D12Device*              pDevice      = Dx12App::GetInstance()->GetDevice();
+    ID3D12GraphicsCommandList* pCommandList = Dx12App::GetInstance()->GetCommandList();
+
+    // ── 7. 기존 맵 로드 (일반 맵 사용)
+    m_strCurrentMap = m_vMapPool[0];
+    bool bLoaded = MapLoader::LoadIntoScene(
+        m_strCurrentMap.c_str(), this, pDevice, pCommandList, m_vShaders[0].get());
+
+    if (!bLoaded)
+    {
+        OutputDebugString(L"[Scene] Water stage map load failed!\n");
+        return;
+    }
+
+    // ── 8. 물 바닥 평면 생성 (용암 대신 물)
+    {
+        CRoom* pTempRoom = m_pCurrentRoom;
+        m_pCurrentRoom = nullptr;
+
+        m_pWaterPlane = CreateGameObject(pDevice, pCommandList);
+        m_pCurrentRoom = pTempRoom;
+
+        if (m_pWaterPlane)
+        {
+            // 큰 평면 메쉬 (용암 평면과 동일한 크기)
+            CubeMesh* pPlaneMesh = new CubeMesh(pDevice, pCommandList, 1.0f, 0.1f, 1.0f);
+            m_pWaterPlane->SetMesh(pPlaneMesh);
+
+            // 타일보다 약간 아래에 배치
+            m_pWaterPlane->GetTransform()->SetPosition(0.0f, -3.5f, -200.0f);
+            m_pWaterPlane->GetTransform()->SetScale(2000.0f, 1.0f, 2000.0f);
+
+            m_pWaterPlane->SetWater(true);
+
+            // 물 머티리얼 (파란색, 높은 광택)
+            MATERIAL waterMat;
+            waterMat.m_cAmbient  = XMFLOAT4(0.1f, 0.15f, 0.25f, 1.0f);
+            waterMat.m_cDiffuse  = XMFLOAT4(0.8f, 0.9f, 1.0f, 1.0f);
+            waterMat.m_cSpecular = XMFLOAT4(0.95f, 0.95f, 0.95f, 64.0f);
+            waterMat.m_cEmissive = XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f);
+            m_pWaterPlane->SetMaterial(waterMat);
+
+            // 물 텍스쳐 로드
+            m_pWaterPlane->SetTextureName("Assets/Stylize Water Texture/Textures/Vol_36_5_Base_Color.png");
+            D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle;
+            D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle;
+            AllocateDescriptor(&cpuHandle, &gpuHandle);
+            m_pWaterPlane->LoadTexture(pDevice, pCommandList, cpuHandle);
+            m_pWaterPlane->SetSrvGpuDescriptorHandle(gpuHandle);
+
+            // 물 노말맵 로드
+            m_pWaterPlane->SetNormalMapName("Assets/Stylize Water Texture/Textures/Vol_36_5_Normal.png");
+            D3D12_CPU_DESCRIPTOR_HANDLE normalCpuHandle;
+            D3D12_GPU_DESCRIPTOR_HANDLE normalGpuHandle;
+            AllocateDescriptor(&normalCpuHandle, &normalGpuHandle);
+            m_pWaterPlane->LoadNormalMap(pDevice, pCommandList, normalCpuHandle);
+            m_pWaterPlane->SetNormalMapSrvGpuHandle(normalGpuHandle);
+
+            // 물 높이맵 로드
+            m_pWaterPlane->SetHeightMapName("Assets/Stylize Water Texture/Textures/Vol_36_5_Height.png");
+            D3D12_CPU_DESCRIPTOR_HANDLE heightCpuHandle;
+            D3D12_GPU_DESCRIPTOR_HANDLE heightGpuHandle;
+            AllocateDescriptor(&heightCpuHandle, &heightGpuHandle);
+            m_pWaterPlane->LoadHeightMap(pDevice, pCommandList, heightCpuHandle);
+            m_pWaterPlane->SetHeightMapSrvGpuHandle(heightGpuHandle);
+
+            auto* pRC = m_pWaterPlane->AddComponent<RenderComponent>();
+            pRC->SetMesh(pPlaneMesh);
+            pRC->SetCastsShadow(false);
+            // pRC->SetTransparent(true);  // 투명도 비활성화 - 바닥 아래에 볼 게 없음
+            m_vShaders[0]->AddRenderComponent(pRC);
+        }
+        OutputDebugString(L"[Scene] Water floor plane placed\n");
+    }
+
+    // ── 9. 맵 정적 오브젝트 상수 버퍼 초기화
+    if (m_pCurrentRoom)
+    {
+        for (const auto& pGO : m_pCurrentRoom->GetGameObjects())
+            pGO->Update(0.0f);
+
+        // 룸 활성화 (적 스폰)
+        m_pCurrentRoom->SetState(RoomState::Active);
+    }
+
+    // ── 10. 인터랙션 큐브 숨김
+    if (m_pInteractionCube)
+    {
+        auto* pInteractable = m_pInteractionCube->GetComponent<InteractableComponent>();
+        if (pInteractable) pInteractable->Hide();
+        m_bInteractionCubeActive = false;
+    }
+
+    // ── 11. 플레이어 groundY 리셋
+    if (m_pPlayerGameObject)
+    {
+        auto* pPC = m_pPlayerGameObject->GetComponent<PlayerComponent>();
+        if (pPC) pPC->ResetGroundY();
+    }
+
+    OutputDebugString(L"[Scene] Water stage ready!\n");
 }

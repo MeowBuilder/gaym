@@ -26,7 +26,6 @@ void Shader::RemoveRenderComponent(RenderComponent* pRenderComponent)
 
 void Shader::Render(ID3D12GraphicsCommandList* pCommandList, D3D12_GPU_VIRTUAL_ADDRESS d3dPassCBVAddress, D3D12_GPU_DESCRIPTOR_HANDLE shadowSrvHandle)
 {
-    pCommandList->SetPipelineState(m_pd3dPipelineState.Get());
     pCommandList->SetGraphicsRootSignature(m_pd3dRootSignature.Get());
 
     // Set the pass constant buffer view for root parameter 1
@@ -35,9 +34,20 @@ void Shader::Render(ID3D12GraphicsCommandList* pCommandList, D3D12_GPU_VIRTUAL_A
     // Set the shadow map SRV for root parameter 3
     pCommandList->SetGraphicsRootDescriptorTable(3, shadowSrvHandle);
 
+    // 1. Render opaque objects first
+    pCommandList->SetPipelineState(m_pd3dPipelineState.Get());
     for (auto& pRenderComp : m_vRenderComponents)
     {
-        pRenderComp->Render(pCommandList);
+        if (!pRenderComp->IsTransparent())
+            pRenderComp->Render(pCommandList);
+    }
+
+    // 2. Render transparent objects (water) with alpha blending PSO
+    pCommandList->SetPipelineState(m_pd3dWaterPSO.Get());
+    for (auto& pRenderComp : m_vRenderComponents)
+    {
+        if (pRenderComp->IsTransparent())
+            pRenderComp->Render(pCommandList);
     }
 }
 
@@ -61,8 +71,8 @@ void Shader::RenderShadowPass(ID3D12GraphicsCommandList* pCommandList, D3D12_GPU
 
 void Shader::Build(ID3D12Device* pDevice)
 {
-    // Create a root signature with 4 parameters: Object CBV, Pass CBV, Albedo SRV, Shadow Map SRV
-    D3D12_ROOT_PARAMETER d3dRootParameters[4];
+    // Create a root signature with 6 parameters: Object CBV, Pass CBV, Albedo SRV, Shadow Map SRV, Normal Map SRV, Height Map SRV
+    D3D12_ROOT_PARAMETER d3dRootParameters[6];
 
     // Parameter 0: Descriptor table for the per-object constant buffer (b0)
     D3D12_DESCRIPTOR_RANGE d3dDescriptorRange;
@@ -109,6 +119,32 @@ void Shader::Build(ID3D12Device* pDevice)
     d3dRootParameters[3].DescriptorTable.pDescriptorRanges = &d3dShadowRange;
     d3dRootParameters[3].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
+    // Parameter 4: Descriptor table for the normal map SRV (t2)
+    D3D12_DESCRIPTOR_RANGE d3dNormalMapRange;
+    d3dNormalMapRange.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+    d3dNormalMapRange.NumDescriptors = 1;
+    d3dNormalMapRange.BaseShaderRegister = 2; // t2
+    d3dNormalMapRange.RegisterSpace = 0;
+    d3dNormalMapRange.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+
+    d3dRootParameters[4].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+    d3dRootParameters[4].DescriptorTable.NumDescriptorRanges = 1;
+    d3dRootParameters[4].DescriptorTable.pDescriptorRanges = &d3dNormalMapRange;
+    d3dRootParameters[4].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+
+    // Parameter 5: Descriptor table for the height map SRV (t3)
+    D3D12_DESCRIPTOR_RANGE d3dHeightMapRange;
+    d3dHeightMapRange.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+    d3dHeightMapRange.NumDescriptors = 1;
+    d3dHeightMapRange.BaseShaderRegister = 3; // t3
+    d3dHeightMapRange.RegisterSpace = 0;
+    d3dHeightMapRange.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+
+    d3dRootParameters[5].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+    d3dRootParameters[5].DescriptorTable.NumDescriptorRanges = 1;
+    d3dRootParameters[5].DescriptorTable.pDescriptorRanges = &d3dHeightMapRange;
+    d3dRootParameters[5].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+
     // Static Samplers
     D3D12_STATIC_SAMPLER_DESC samplers[2] = {};
 
@@ -143,7 +179,7 @@ void Shader::Build(ID3D12Device* pDevice)
     samplers[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
     D3D12_ROOT_SIGNATURE_DESC d3dRootSignatureDesc;
-    d3dRootSignatureDesc.NumParameters = 4;
+    d3dRootSignatureDesc.NumParameters = 6;
     d3dRootSignatureDesc.pParameters = d3dRootParameters;
     d3dRootSignatureDesc.NumStaticSamplers = 2;
     d3dRootSignatureDesc.pStaticSamplers = samplers;
@@ -209,4 +245,17 @@ void Shader::Build(ID3D12Device* pDevice)
     shadowPsoDesc.RasterizerState.SlopeScaledDepthBias = 1.0f;
 
     CHECK_HR(pDevice->CreateGraphicsPipelineState(&shadowPsoDesc, __uuidof(ID3D12PipelineState), (void**)&m_pd3dShadowPSO));
+
+    // Water PSO (alpha blending enabled)
+    D3D12_GRAPHICS_PIPELINE_STATE_DESC waterPsoDesc = psoDesc;
+    waterPsoDesc.BlendState.RenderTarget[0].BlendEnable = TRUE;
+    waterPsoDesc.BlendState.RenderTarget[0].SrcBlend = D3D12_BLEND_SRC_ALPHA;
+    waterPsoDesc.BlendState.RenderTarget[0].DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
+    waterPsoDesc.BlendState.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
+    waterPsoDesc.BlendState.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_ONE;
+    waterPsoDesc.BlendState.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ZERO;
+    waterPsoDesc.BlendState.RenderTarget[0].BlendOpAlpha = D3D12_BLEND_OP_ADD;
+    waterPsoDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;  // Don't write to depth for transparent
+
+    CHECK_HR(pDevice->CreateGraphicsPipelineState(&waterPsoDesc, __uuidof(ID3D12PipelineState), (void**)&m_pd3dWaterPSO));
 }

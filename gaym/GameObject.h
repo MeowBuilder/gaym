@@ -26,6 +26,10 @@ struct ObjectConstants
     UINT m_bIsSkinned = 0; // 0: Static, 1: Skinned
     UINT m_bHasTexture = 0; // 0: No texture, 1: Has texture
     UINT m_bIsLava = 0; // 0: Normal, 1: Lava (UV animation)
+    UINT m_bIsWater = 0; // 0: Normal, 1: Water (UV animation)
+    UINT m_pad0 = 0; // Padding for 16-byte alignment
+    UINT m_pad1 = 0;
+    UINT m_pad2 = 0;
 	MATERIAL mMaterial;
     XMFLOAT4X4 m_xmf4x4BoneTransforms[128];
 };
@@ -78,6 +82,20 @@ public:
     D3D12_GPU_DESCRIPTOR_HANDLE GetSrvDescriptorHandle() const { return m_srvGPUDescriptorHandle; }
     bool HasTexture() const { return m_pd3dTexture != nullptr; }
 
+    // Normal map texture support
+    void SetNormalMapName(const std::string& strName) { m_strNormalMapName = strName; }
+    void LoadNormalMap(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, D3D12_CPU_DESCRIPTOR_HANDLE srvCpuHandle);
+    void SetNormalMapSrvGpuHandle(D3D12_GPU_DESCRIPTOR_HANDLE handle) { m_normalMapSrvGPUHandle = handle; }
+    D3D12_GPU_DESCRIPTOR_HANDLE GetNormalMapSrvHandle() const { return m_normalMapSrvGPUHandle; }
+    bool HasNormalMap() const { return m_pd3dNormalMap != nullptr; }
+
+    // Height map texture support
+    void SetHeightMapName(const std::string& strName) { m_strHeightMapName = strName; }
+    void LoadHeightMap(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, D3D12_CPU_DESCRIPTOR_HANDLE srvCpuHandle);
+    void SetHeightMapSrvGpuHandle(D3D12_GPU_DESCRIPTOR_HANDLE handle) { m_heightMapSrvGPUHandle = handle; }
+    D3D12_GPU_DESCRIPTOR_HANDLE GetHeightMapSrvHandle() const { return m_heightMapSrvGPUHandle; }
+    bool HasHeightMap() const { return m_pd3dHeightMap != nullptr; }
+
     void SetBoneTransform(int index, const XMFLOAT4X4& matrix)
     {
         if (m_pcbMappedGameObject && index < 128)
@@ -97,6 +115,13 @@ public:
         if (m_pcbMappedGameObject)
         {
             m_pcbMappedGameObject->m_bIsLava = bIsLava ? 1 : 0;
+        }
+    }
+    void SetWater(bool bIsWater)
+    {
+        if (m_pcbMappedGameObject)
+        {
+            m_pcbMappedGameObject->m_bIsWater = bIsWater ? 1 : 0;
         }
     }
 
@@ -121,9 +146,21 @@ private:
 	UINT m_nMaterialIndex = 0;
 	MATERIAL m_Material; // New material member
 	std::string m_strTextureName;
-	
+
 	ComPtr<ID3D12Resource> m_pd3dTexture = nullptr;
 	ComPtr<ID3D12Resource> m_pd3dTextureUploadBuffer = nullptr;
+
+    // Normal map texture
+    std::string m_strNormalMapName;
+    ComPtr<ID3D12Resource> m_pd3dNormalMap = nullptr;
+    ComPtr<ID3D12Resource> m_pd3dNormalMapUploadBuffer = nullptr;
+    D3D12_GPU_DESCRIPTOR_HANDLE m_normalMapSrvGPUHandle = {};
+
+    // Height map texture
+    std::string m_strHeightMapName;
+    ComPtr<ID3D12Resource> m_pd3dHeightMap = nullptr;
+    ComPtr<ID3D12Resource> m_pd3dHeightMapUploadBuffer = nullptr;
+    D3D12_GPU_DESCRIPTOR_HANDLE m_heightMapSrvGPUHandle = {};
 
 	Mesh* m_pMesh = nullptr; // Re-added m_pMesh member
 };

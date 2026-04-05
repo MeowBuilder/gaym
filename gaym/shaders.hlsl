@@ -15,6 +15,10 @@ cbuffer cbGameObject : register(b0)
     uint bIsSkinned;
     uint bHasTexture;
     uint bIsLava; // Lava UV animation flag
+    uint bIsWater; // Water UV animation flag
+    uint objPad0; // Padding for 16-byte alignment
+    uint objPad1;
+    uint objPad2;
     MATERIAL gMaterial; // Replaced BaseColor with full Material
     matrix gBoneTransforms[128];
 };
@@ -57,6 +61,8 @@ cbuffer cbPass : register(b1)
 
 Texture2D gAlbedoMap : register(t0);
 Texture2D gShadowMap : register(t1);
+Texture2D gNormalMap : register(t2);  // Water normal map
+Texture2D gHeightMap : register(t3);  // Water height map
 SamplerState gSampler : register(s0);
 SamplerComparisonState gShadowSampler : register(s1);
 
@@ -194,14 +200,88 @@ float4 PS(PS_INPUT input) : SV_TARGET
     float3 normal = normalize(input.worldNormal);
     float3 vToCamera = normalize(g_CameraPosition - input.worldPosition); // Vector from fragment to camera
 
-    // UV animation for lava
+    // UV animation for lava or water
     float2 uv = input.uv;
+    float3 waterNormal = normal;  // Default to geometry normal
+    float waterFresnel = 0.0f;
+
     if (bIsLava)
     {
         // Very slow flowing lava effect
         float2 flow1 = float2(g_Time * 0.003f, g_Time * 0.002f);
         float2 flow2 = float2(-g_Time * 0.002f, g_Time * 0.0025f);
         uv = input.uv + flow1 + flow2 * 0.5f;
+    }
+    else if (bIsWater)
+    {
+        // UV tiling
+        float uvScale = 12.0f;
+        float2 tiledUV = input.uv * uvScale;
+
+        // === 부드러운 파도 (Gerstner-like) ===
+        // 주 파도 - 한 방향으로 일관되게
+        float waveFreq1 = 0.8f;
+        float waveSpeed1 = 0.6f;
+        float wave1 = sin(tiledUV.x * waveFreq1 + g_Time * waveSpeed1);
+
+        // 보조 파도 - 약간 다른 각도
+        float waveFreq2 = 1.2f;
+        float waveSpeed2 = 0.8f;
+        float wave2 = sin((tiledUV.x * 0.7f + tiledUV.y * 0.5f) * waveFreq2 + g_Time * waveSpeed2);
+
+        // 잔물결
+        float ripple = sin(tiledUV.x * 3.0f + g_Time * 1.5f) * cos(tiledUV.y * 2.5f + g_Time * 1.2f);
+
+        // 파도 합성 (0~1 범위로 정규화)
+        float combinedWave = (wave1 * 0.5f + wave2 * 0.3f + ripple * 0.1f) * 0.5f + 0.5f;
+
+        // === 자연스러운 흐름 ===
+        float2 mainFlow = float2(g_Time * 0.03f, g_Time * 0.015f);  // 느린 주 흐름
+
+        // Parallax mapping
+        float heightScale = 0.025f;
+        float2 parallaxUV = tiledUV + mainFlow;
+        float height = gHeightMap.Sample(gSampler, parallaxUV).r;
+        float2 parallaxOffset = vToCamera.xz * (height * heightScale);
+        tiledUV += parallaxOffset;
+
+        // UV for albedo
+        uv = tiledUV + mainFlow;
+
+        // === 노말맵 - 단순하지만 효과적인 블렌딩 ===
+        float2 normalUV1 = tiledUV + mainFlow;
+        float2 normalUV2 = tiledUV * 0.7f + mainFlow * 1.3f + float2(0.5f, 0.0f);
+
+        float3 normal1 = gNormalMap.Sample(gSampler, normalUV1).rgb * 2.0f - 1.0f;
+        float3 normal2 = gNormalMap.Sample(gSampler, normalUV2).rgb * 2.0f - 1.0f;
+
+        // 부드럽게 블렌딩
+        float3 blendedNormal = normalize(normal1 + normal2 * 0.5f);
+
+        // 노말 강도
+        float normalStrength = 0.35f;
+
+        float3 tangent = float3(1, 0, 0);
+        float3 bitangent = float3(0, 0, 1);
+        waterNormal = normalize(
+            tangent * blendedNormal.x * normalStrength +
+            normal +
+            bitangent * blendedNormal.y * normalStrength
+        );
+
+        // Fresnel
+        float NdotV = saturate(dot(waterNormal, vToCamera));
+        waterFresnel = pow(1.0f - NdotV, 3.0f) * 0.5f;
+
+        // === 절차적 거품 (파도 정점에서) ===
+        // 파도 기울기가 급한 곳에서 거품 생성
+        float waveSlope = abs(wave1 - wave2);
+        float foam = smoothstep(0.3f, 0.6f, waveSlope) * 0.2f;
+
+        // 높이맵의 밝은 부분에서 추가 거품
+        foam += smoothstep(0.7f, 0.9f, height) * 0.15f;
+
+        waterFresnel += foam;
     }
 
     float4 albedoColor;
@@ -217,13 +297,16 @@ float4 PS(PS_INPUT input) : SV_TARGET
     // Combine with material diffuse (optional: multiply)
     float4 baseColor = albedoColor * gMaterial.m_cDiffuse;
 
+    // Use water normal for lighting if water, otherwise use geometry normal
+    float3 shadingNormal = bIsWater ? waterNormal : normal;
+
     // --- Shadow Calculation ---
     float shadowFactor = CalculateShadow(input.posLightSpace);
 
     // --- Directional Light Calculation ---
-    float directionalDiffuseFactor = saturate(dot(normal, -g_LightDirection));
+    float directionalDiffuseFactor = saturate(dot(shadingNormal, -g_LightDirection));
     float3 vHalfDirectional = normalize(vToCamera + (-g_LightDirection)); // Half vector for directional specular
-    float directionalSpecularFactor = pow(max(dot(vHalfDirectional, normal), 0.0f), gMaterial.m_cSpecular.a);
+    float directionalSpecularFactor = pow(max(dot(vHalfDirectional, shadingNormal), 0.0f), gMaterial.m_cSpecular.a);
 
     float4 directionalDiffuse = directionalDiffuseFactor * g_LightColor * baseColor;
     float4 directionalSpecular = directionalSpecularFactor * g_LightColor * gMaterial.m_cSpecular;
@@ -236,9 +319,9 @@ float4 PS(PS_INPUT input) : SV_TARGET
 
     float attenuation = saturate(1.0f - dist / g_PointLightRange);
     
-    float pointDiffuseFactor = saturate(dot(normal, pointLightDir));
+    float pointDiffuseFactor = saturate(dot(shadingNormal, pointLightDir));
     float3 vHalfPoint = normalize(vToCamera + pointLightDir); // Half vector for point specular
-    float pointSpecularFactor = pow(max(dot(vHalfPoint, normal), 0.0f), gMaterial.m_cSpecular.a);
+    float pointSpecularFactor = pow(max(dot(vHalfPoint, shadingNormal), 0.0f), gMaterial.m_cSpecular.a);
 
     float4 pointDiffuse = pointDiffuseFactor * g_PointLightColor * baseColor * attenuation;
     float4 pointSpecular = pointSpecularFactor * g_PointLightColor * gMaterial.m_cSpecular * attenuation;
@@ -266,9 +349,9 @@ float4 PS(PS_INPUT input) : SV_TARGET
 
     if (spotAttenuation > 0.0f)
     {
-        float spotDiffuseFactor = saturate(dot(normal, spotLightDir));
+        float spotDiffuseFactor = saturate(dot(shadingNormal, spotLightDir));
         float3 vHalfSpot = normalize(vToCamera + spotLightDir);
-        float spotSpecularFactor = pow(max(dot(vHalfSpot, normal), 0.0f), gMaterial.m_cSpecular.a);
+        float spotSpecularFactor = pow(max(dot(vHalfSpot, shadingNormal), 0.0f), gMaterial.m_cSpecular.a);
 
         float4 spotDiffuse = spotDiffuseFactor * g_SpotLightColor * baseColor * spotAttenuation;
         float4 spotSpecular = spotSpecularFactor * g_SpotLightColor * gMaterial.m_cSpecular * spotAttenuation;
@@ -292,11 +375,11 @@ float4 PS(PS_INPUT input) : SV_TARGET
             float torchAtten = saturate(1.0f - normalizedDist * normalizedDist) * g_TorchLights[t].Intensity;
 
             // Diffuse
-            float torchDiffuseFactor = saturate(dot(normal, torchDir));
+            float torchDiffuseFactor = saturate(dot(shadingNormal, torchDir));
 
             // Specular
             float3 vHalfTorch = normalize(vToCamera + torchDir);
-            float torchSpecularFactor = pow(max(dot(vHalfTorch, normal), 0.0f), gMaterial.m_cSpecular.a);
+            float torchSpecularFactor = pow(max(dot(vHalfTorch, shadingNormal), 0.0f), gMaterial.m_cSpecular.a);
 
             float4 torchColor = float4(g_TorchLights[t].Color, 1.0f);
             float4 torchDiffuse = torchDiffuseFactor * torchColor * baseColor * torchAtten;
@@ -304,6 +387,19 @@ float4 PS(PS_INPUT input) : SV_TARGET
 
             finalColor += torchDiffuse + torchSpecular;
         }
+    }
+
+    // Apply water fresnel effect (adds reflection-like brightness at glancing angles)
+    if (bIsWater)
+    {
+        // Fake sky/environment reflection color
+        float3 skyColor = float3(0.4f, 0.55f, 0.75f);
+
+        // Blend between water color and sky reflection based on fresnel
+        finalColor.rgb = lerp(finalColor.rgb, skyColor, waterFresnel * 0.6f);
+
+        // Add subtle specular highlight
+        finalColor.rgb += waterFresnel * 0.15f;
     }
 
     return finalColor;

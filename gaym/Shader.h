@@ -25,6 +25,7 @@ private:
     ComPtr<ID3D12RootSignature> m_pd3dRootSignature;
     ComPtr<ID3D12PipelineState> m_pd3dPipelineState;
     ComPtr<ID3D12PipelineState> m_pd3dShadowPSO;  // Shadow Pass PSO
+    ComPtr<ID3D12PipelineState> m_pd3dWaterPSO;   // Water PSO (alpha blending)
 
     std::vector<RenderComponent*> m_vRenderComponents;
 };
