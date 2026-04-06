@@ -14,6 +14,9 @@
 #include "MathUtils.h"
 #include "Dx12App.h"
 #include "Camera.h"
+#include "FluidSkillVFXManager.h"
+#include "VFXLibrary.h"
+#include "MapLoader.h"
 
 MegaBreathAttackBehavior::MegaBreathAttackBehavior(
     float fDamagePerTick,
@@ -237,13 +240,8 @@ void MegaBreathAttackBehavior::Update(float dt, EnemyComponent* pEnemy)
             AnimationComponent* pAnim = pEnemy->GetAnimationComponent();
             if (pAnim)
             {
-                OutputDebugString(L"[MegaBreath] AnimationComponent found, calling CrossFade\n");
                 pAnim->CrossFade("Flame Attack", 0.2f, true);  // 루프로 재생
                 m_bBreathAnimStarted = true;
-            }
-            else
-            {
-                OutputDebugString(L"[MegaBreath] ERROR: AnimationComponent is NULL!\n");
             }
 
             // 카메라 쉐이킹 시작
@@ -251,11 +249,39 @@ void MegaBreathAttackBehavior::Update(float dt, EnemyComponent* pEnemy)
             {
                 if (CCamera* pCamera = pScene->GetCamera())
                 {
-                    pCamera->StartShake(1.5f, m_fBreathDuration);  // 브레스 지속시간 동안 쉐이킹
+                    pCamera->StartShake(1.5f, m_fBreathDuration);
+                }
+
+                // 입에서 불 내뿜는 유체 VFX 생성
+                m_pFluidVFXManager = pScene->GetFluidVFXManager();
+                if (m_pFluidVFXManager)
+                {
+                    // VFXLibrary에서 Boss Mega Breath 정의 가져오기 (키 999 사용)
+                    VFXSequenceDef bossDef = VFXLibrary::Get().GetDef((SkillSlot)0, 999, ElementType::Fire);
+                    
+                    GameObject* pOwner = pEnemy->GetOwner();
+                    TransformComponent* pTransform = pOwner->GetTransform();
+                    XMFLOAT3 pos = pTransform->GetPosition();
+                    XMFLOAT3 rot = pTransform->GetRotation();
+                    float yawRad = XMConvertToRadians(rot.y);
+
+                    // 입 위치: 지면에 더 가깝게 (1.0f)
+                    XMFLOAT3 mouthPos;
+                    mouthPos.x = pos.x + sinf(yawRad) * 12.0f;
+                    mouthPos.y = pos.y + 1.0f;
+                    mouthPos.z = pos.z + cosf(yawRad) * 12.0f;
+
+                    // 전방 방향: 지면을 향해 더 깊게 (-0.4f) 꺾음
+                    XMVECTOR fwdV = XMVectorSet(sinf(yawRad), -0.4f, cosf(yawRad), 0.0f);
+                    XMFLOAT3 fwd;
+                    XMStoreFloat3(&fwd, XMVector3Normalize(fwdV));
+
+                    m_nFluidVFXId = m_pFluidVFXManager->SpawnSequenceEffect(mouthPos, fwd, bossDef);
+                    OutputDebugString(L"[MegaBreath] Fluid MegaBreath VFX started!\n");
                 }
             }
 
-            OutputDebugString(L"[MegaBreath] Breath phase - FIRING! (Animation + Camera shake started)\n");
+            OutputDebugString(L"[MegaBreath] Breath phase - FIRING!\n");
         }
         break;
 
@@ -265,6 +291,33 @@ void MegaBreathAttackBehavior::Update(float dt, EnemyComponent* pEnemy)
         {
             ApplyBreathDamage(pEnemy);
             m_fDamageTickTimer = 0.0f;
+        }
+
+        // 유체 VFX 위치/방향 업데이트 (보스 고개 방향 추적)
+        if (m_pFluidVFXManager && m_nFluidVFXId >= 0)
+        {
+            GameObject* pOwner = pEnemy->GetOwner();
+            if (pOwner)
+            {
+                TransformComponent* pTransform = pOwner->GetTransform();
+                if (pTransform)
+                {
+                    XMFLOAT3 pos = pTransform->GetPosition();
+                    XMFLOAT3 rot = pTransform->GetRotation();
+                    float yawRad = XMConvertToRadians(rot.y);
+
+                    // 입 위치
+                    XMFLOAT3 mouthPos;
+                    mouthPos.x = pos.x + sinf(yawRad) * 8.0f;
+                    mouthPos.y = pos.y + 4.0f;
+                    mouthPos.z = pos.z + cosf(yawRad) * 8.0f;
+
+                    // 전방 방향
+                    XMFLOAT3 fwd = { sinf(yawRad), 0.0f, cosf(yawRad) };
+
+                    m_pFluidVFXManager->TrackEffect(m_nFluidVFXId, mouthPos, fwd);
+                }
+            }
         }
 
         if (m_fTimer >= m_fBreathDuration)
@@ -288,8 +341,15 @@ void MegaBreathAttackBehavior::Update(float dt, EnemyComponent* pEnemy)
                 }
             }
 
+            // 브레스 유체 VFX 중지
+            if (m_pFluidVFXManager && m_nFluidVFXId >= 0)
+            {
+                m_pFluidVFXManager->StopEffect(m_nFluidVFXId);
+                m_nFluidVFXId = -1;
+                OutputDebugString(L"[MegaBreath] Fluid MegaBreath VFX stopped\n");
+            }
+
             m_bBreathAnimStarted = false;
-            OutputDebugString(L"[MegaBreath] Camera shake stopped, waiting for recovery\n");
         }
 
         if (m_fTimer >= m_fRecoveryTime)
@@ -323,6 +383,14 @@ void MegaBreathAttackBehavior::Reset()
     m_xmf3BreathOrigin = { 0.0f, 0.0f, 0.0f };
     m_nWallDirection = 0;
     m_bBreathAnimStarted = false;
+
+    // 유체 VFX 정리
+    if (m_pFluidVFXManager && m_nFluidVFXId >= 0)
+    {
+        m_pFluidVFXManager->StopEffect(m_nFluidVFXId);
+        m_nFluidVFXId = -1;
+    }
+    m_pFluidVFXManager = nullptr;
 
     // 남아있는 엄폐물이 있으면 정리
     DestroyCoverObjects();
@@ -460,69 +528,75 @@ void MegaBreathAttackBehavior::SpawnCoverObjects(EnemyComponent* pEnemy)
                 if (pTransform)
                 {
                     pTransform->SetPosition(coverPositions[i].x, coverPositions[i].y, coverPositions[i].z);
-                    pTransform->SetScale(m_fCoverObjectSize, m_fCoverObjectSize * 2.0f, m_fCoverObjectSize);
+                    // 우물 모델에 맞는 거대한 스케일 설정
+                    pTransform->SetScale(5.0f, 5.0f, 5.0f);
                 }
 
-                // 큐브 메쉬 생성
-                CubeMesh* pCubeMesh = new CubeMesh(pDevice, pCommandList, 2.0f, 2.0f, 2.0f);
-                pCubeMesh->AddRef();
-                pCover->SetMesh(pCubeMesh);
+                // WellSmall_001.obj 모델 로드
+                Mesh* pWellMesh = MapLoader::LoadMesh("Assets/MapData/meshes/ColumnBig_001.obj", pDevice, pCommandList);
+                if (pWellMesh)
+                {
+                    pWellMesh->AddRef();
+                    pCover->SetMesh(pWellMesh);
+                }
 
                 // 돌 느낌 재질
                 MATERIAL material;
-                material.m_cAmbient = XMFLOAT4(0.2f, 0.2f, 0.2f, 1.0f);
-                material.m_cDiffuse = XMFLOAT4(0.5f, 0.5f, 0.5f, 1.0f);
-                material.m_cSpecular = XMFLOAT4(0.3f, 0.3f, 0.3f, 16.0f);
+                material.m_cAmbient = XMFLOAT4(0.3f, 0.3f, 0.3f, 1.0f);
+                material.m_cDiffuse = XMFLOAT4(0.7f, 0.7f, 0.7f, 1.0f);
+                material.m_cSpecular = XMFLOAT4(0.2f, 0.2f, 0.2f, 8.0f);
                 material.m_cEmissive = XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f);
                 pCover->SetMaterial(material);
 
                 // 렌더 컴포넌트
                 auto* pRenderComp = pCover->AddComponent<RenderComponent>();
-                pRenderComp->SetMesh(pCubeMesh);
+                if (pWellMesh) pRenderComp->SetMesh(pWellMesh);
                 pShader->AddRenderComponent(pRenderComp);
 
-                // 콜라이더 (Wall 레이어)
+                // 콜라이더 (Wall 레이어) - 모델 비주얼에 맞춰 히트박스 축소
                 auto* pCollider = pCover->AddComponent<ColliderComponent>();
-                pCollider->SetExtents(m_fCoverObjectSize, m_fCoverObjectSize * 2.0f, m_fCoverObjectSize);
-                pCollider->SetCenter(0.0f, m_fCoverObjectSize * 2.0f, 0.0f);
+                // 가로 폭을 4.5 -> 1.5로 줄여 이동 방해 최소화, 높이는 유지
+                pCollider->SetExtents(1.5f, 6.0f, 1.5f);
+                pCollider->SetCenter(0.0f, 3.0f, 0.0f);
                 pCollider->SetLayer(CollisionLayer::Wall);
                 pCollider->SetCollisionMask(CollisionMask::Wall);
 
-                m_vCoverObjects.push_back(pCover);
+                // 엄폐 판정용 리스트에도 업데이트된 크기 반영
+                coverBox.Extents = { 1.5f, 6.0f, 1.5f };
+                m_vObstacles.back() = coverBox;
+
+                pScene->SetCurrentRoom(pPrevRoom);
             }
 
-            pScene->SetCurrentRoom(pPrevRoom);
+            wchar_t buf[128];
+            swprintf_s(buf, L"[MegaBreath] Cover %d at (%.1f, %.1f, %.1f)\n",
+                i, coverPositions[i].x, coverPositions[i].y, coverPositions[i].z);
+            OutputDebugString(buf);
         }
 
-        wchar_t buf[128];
-        swprintf_s(buf, L"[MegaBreath] Cover %d at (%.1f, %.1f, %.1f)\n",
-                   i, coverPositions[i].x, coverPositions[i].y, coverPositions[i].z);
-        OutputDebugString(buf);
-    }
-
-    // 방 내 기존 장애물(Wall 레이어)도 장애물 목록에 추가
-    const auto& gameObjects = m_pRoom->GetGameObjects();
-    for (const auto& pObj : gameObjects)
-    {
-        if (!pObj) continue;
-
-        ColliderComponent* pCollider = pObj->GetComponent<ColliderComponent>();
-        if (pCollider && pCollider->GetLayer() == CollisionLayer::Wall)
+        // 방 내 기존 장애물(Wall 레이어)도 장애물 목록에 추가
+        const auto& gameObjects = m_pRoom->GetGameObjects();
+        for (const auto& pObj : gameObjects)
         {
-            const BoundingOrientedBox& obb = pCollider->GetBoundingBox();
-            // OBB를 AABB로 변환 (간단화)
-            BoundingBox aabb;
-            aabb.Center = obb.Center;
-            aabb.Extents = obb.Extents;
-            m_vObstacles.push_back(aabb);
+            if (!pObj) continue;
+
+            ColliderComponent* pCollider = pObj->GetComponent<ColliderComponent>();
+            if (pCollider && pCollider->GetLayer() == CollisionLayer::Wall)
+            {
+                const BoundingOrientedBox& obb = pCollider->GetBoundingBox();
+                // OBB를 AABB로 변환 (간단화)
+                BoundingBox aabb;
+                aabb.Center = obb.Center;
+                aabb.Extents = obb.Extents;
+                m_vObstacles.push_back(aabb);
+            }
         }
+
+        wchar_t buf2[64];
+        swprintf_s(buf2, L"[MegaBreath] Total obstacles: %zu\n", m_vObstacles.size());
+        OutputDebugString(buf2);
     }
-
-    wchar_t buf2[64];
-    swprintf_s(buf2, L"[MegaBreath] Total obstacles: %zu\n", m_vObstacles.size());
-    OutputDebugString(buf2);
 }
-
 void MegaBreathAttackBehavior::DestroyCoverObjects()
 {
     // 엄폐물을 화면 밖으로 이동 (삭제 대신 - Update 루프 중 삭제 시 크래시 방지)

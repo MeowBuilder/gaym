@@ -81,9 +81,16 @@ void ProjectileManager::SpawnProjectile(const Projectile& projectile)
     if (m_pFluidVFXManager)
     {
         auto& proj = m_Projectiles.back();
-        proj.fluidVFXId = m_pFluidVFXManager->SpawnEffect(
-            proj.position, proj.direction,
-            FluidSkillVFXManager::GetVFXDef(proj.element, proj.runeCombo, proj.chargeRatio));
+        FluidSkillVFXDef vfxDef = FluidSkillVFXManager::GetVFXDef(proj.element, proj.runeCombo, proj.chargeRatio);
+        
+        // 적 투사체(드래곤 브레스 등)인 경우 파티클 수를 대폭 줄여 렉 방지
+        if (!proj.isPlayerProjectile)
+        {
+            vfxDef.particleCount = static_cast<int>(vfxDef.particleCount * 0.3f);
+            if (vfxDef.particleCount < 100) vfxDef.particleCount = 100;
+        }
+
+        proj.fluidVFXId = m_pFluidVFXManager->SpawnEffect(proj.position, proj.direction, vfxDef);
     }
 
     wchar_t buffer[256];
@@ -429,51 +436,52 @@ void ProjectileManager::SpawnExplosionParticles(const XMFLOAT3& position, Elemen
 
     ParticleEmitterConfig config;
 
+    // Reduced particle counts for better performance
     switch (element)
     {
     case ElementType::Fire:
         config = FireParticlePresets::FireballExplosion();
         break;
     case ElementType::Water:
-        config.burstCount = 25;
+        config.burstCount = 10;  // Reduced from 25
         config.emissionRate = 0.0f;
-        config.minLifetime = 0.2f;
-        config.maxLifetime = 0.5f;
-        config.minStartSize = 0.3f;
-        config.maxStartSize = 0.6f;
-        config.minVelocity = { -4.0f, -2.0f, -4.0f };
-        config.maxVelocity = { 4.0f, 4.0f, 4.0f };
+        config.minLifetime = 0.15f;
+        config.maxLifetime = 0.35f;
+        config.minStartSize = 0.25f;
+        config.maxStartSize = 0.5f;
+        config.minVelocity = { -3.0f, -1.5f, -3.0f };
+        config.maxVelocity = { 3.0f, 3.0f, 3.0f };
         config.startColor = { 0.4f, 0.7f, 1.0f, 1.0f };
         config.endColor = { 0.2f, 0.4f, 0.8f, 0.0f };
         config.gravity = { 0.0f, -5.0f, 0.0f };
         break;
     case ElementType::Wind:
-        config.burstCount = 20;
+        config.burstCount = 8;  // Reduced from 20
         config.emissionRate = 0.0f;
-        config.minLifetime = 0.2f;
-        config.maxLifetime = 0.4f;
-        config.minStartSize = 0.2f;
-        config.maxStartSize = 0.5f;
-        config.minVelocity = { -6.0f, -6.0f, -6.0f };
-        config.maxVelocity = { 6.0f, 6.0f, 6.0f };
+        config.minLifetime = 0.15f;
+        config.maxLifetime = 0.3f;
+        config.minStartSize = 0.18f;
+        config.maxStartSize = 0.4f;
+        config.minVelocity = { -5.0f, -5.0f, -5.0f };
+        config.maxVelocity = { 5.0f, 5.0f, 5.0f };
         config.startColor = { 0.9f, 1.0f, 0.9f, 0.9f };
         config.endColor = { 0.7f, 0.95f, 0.7f, 0.0f };
         break;
     case ElementType::Earth:
-        config.burstCount = 20;
+        config.burstCount = 8;  // Reduced from 20
         config.emissionRate = 0.0f;
-        config.minLifetime = 0.4f;
-        config.maxLifetime = 0.7f;
-        config.minStartSize = 0.4f;
-        config.maxStartSize = 0.8f;
-        config.minVelocity = { -3.0f, 0.0f, -3.0f };
-        config.maxVelocity = { 3.0f, 5.0f, 3.0f };
+        config.minLifetime = 0.3f;
+        config.maxLifetime = 0.5f;
+        config.minStartSize = 0.35f;
+        config.maxStartSize = 0.6f;
+        config.minVelocity = { -2.5f, 0.0f, -2.5f };
+        config.maxVelocity = { 2.5f, 4.0f, 2.5f };
         config.startColor = { 0.8f, 0.6f, 0.4f, 1.0f };
         config.endColor = { 0.5f, 0.35f, 0.2f, 0.0f };
         config.gravity = { 0.0f, -8.0f, 0.0f };
         break;
     default:
-        config.burstCount = 15;
+        config.burstCount = 6;  // Reduced from 15
         config.emissionRate = 0.0f;
         config.startColor = { 1.0f, 1.0f, 1.0f, 1.0f };
         config.endColor = { 0.5f, 0.5f, 0.5f, 0.0f };

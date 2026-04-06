@@ -27,6 +27,8 @@ struct BeamDesc {
     float speedMin = 8.f;
     float speedMax = 16.f;
     float spreadRadius = 0.3f; // 빔 폭 (시작점 랜덤 오프셋)
+    float verticalScale = 1.0f; // 수직 배율 (기본 1.0 = 원형, 보스 브레스 등은 낮춰서 납작하게 만듦)
+    bool  enableFlow = false;   // 입자 흐름 활성화 (false = 정적 레이저, true = 흐르는 브레스)
     XMFLOAT3 prevDir = { 0.f, 0.f, 1.f }; // 이전 프레임 방향 (빔 전체 회전 계산용)
 };
 

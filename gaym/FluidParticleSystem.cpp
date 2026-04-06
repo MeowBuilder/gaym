@@ -104,13 +104,13 @@ static const char* g_FluidShaderCode = R"(
         float2 centered = input.uv * 2.0f - 1.0f;
         float  d        = length(centered);
 
-        // Soft disc alpha
-        float alpha = 1.0f - smoothstep(0.5f, 1.0f, d);
-        clip(alpha - 0.02f);
+        // Soft disc alpha - 더 부드럽게 처리하여 경계면 검은 선 방지
+        float alpha = 1.0f - smoothstep(0.4f, 1.0f, d);
+        clip(alpha - 0.01f);
 
-        // Inner glow boost
-        float glow = 1.0f - smoothstep(0.0f, 0.4f, d);
-        float3 col = input.color.rgb * (1.0f + glow * 0.8f);
+        // Inner glow boost - 중심부를 더 밝게 하여 겹쳐도 화염처럼 보이게
+        float glow = 1.0f - d;
+        float3 col = input.color.rgb * (1.0f + glow * 1.5f);
 
         return float4(col, input.color.a * alpha);
     }
@@ -959,15 +959,18 @@ void FluidParticleSystem::Update(float deltaTime)
         for (auto& p : m_Particles) {
             if (!p.active) continue;
 
-            // 빔 축 방향으로 전진
-            p.beamT += p.beamSpeed * dt;
+            // 빔 축 방향으로 전진 (enableFlow가 설정된 경우에만)
+            if (m_BeamDesc.enableFlow) {
+                p.beamT += p.beamSpeed * dt;
 
-            // 끝 도달 또는 범위 이탈 → 시작으로 리셋 (새 퍼짐 오프셋 할당)
-            if (p.beamT >= totalDist || p.beamT < 0.f) {
-                p.beamT     = 0.f;
-                p.beamRx    = (Rand01() - 0.5f) * 2.f * m_BeamDesc.spreadRadius;
-                p.beamRy    = (Rand01() - 0.5f) * 2.f * m_BeamDesc.spreadRadius;
-                p.beamSpeed = m_BeamDesc.speedMin + Rand01() * (m_BeamDesc.speedMax - m_BeamDesc.speedMin);
+                // 끝 도달 또는 범위 이탈 → 시작으로 리셋 (새 퍼짐 오프셋 할당)
+                if (p.beamT >= totalDist || p.beamT < 0.f) {
+                    p.beamT     = 0.f;
+                    p.beamRx    = (Rand01() - 0.5f) * 2.f * m_BeamDesc.spreadRadius;
+                    // 설정된 수직 배율(verticalScale)을 적용하여 형태 제어
+                    p.beamRy    = (Rand01() - 0.5f) * 2.f * (m_BeamDesc.spreadRadius * m_BeamDesc.verticalScale); 
+                    p.beamSpeed = m_BeamDesc.speedMin + Rand01() * (m_BeamDesc.speedMax - m_BeamDesc.speedMin);
+                }
             }
 
             // 빔-로컬 → 월드 좌표 변환: 방향이 바뀌면 즉시 반영, 늘어남 없음
@@ -1115,34 +1118,46 @@ void FluidParticleSystem::SetGlobalGravity(float strength)
 
 void FluidParticleSystem::InitBeamParticles()
 {
-    // Beam 모드용 파티클 초기화: startPos 주변에서 endPos 방향으로 분산 배치
+    // Beam 모드용 파티클 초기화: startPos에서 endPos까지 전체 길이에 균등하게 배치
     XMVECTOR start = XMLoadFloat3(&m_BeamDesc.startPos);
     XMVECTOR end   = XMLoadFloat3(&m_BeamDesc.endPos);
-    XMVECTOR dir   = XMVector3Normalize(XMVectorSubtract(end, start));
+    XMVECTOR dir   = XMVectorSubtract(end, start);
+    float totalDist = XMVectorGetX(XMVector3Length(dir));
+    XMVECTOR dirNorm = XMVector3Normalize(dir);
 
     // prevDir을 현재 방향으로 초기화 (첫 프레임에 불필요한 회전 방지)
-    XMStoreFloat3(&m_BeamDesc.prevDir, dir);
-    float totalDist = XMVectorGetX(XMVector3Length(XMVectorSubtract(end, start)));
+    XMStoreFloat3(&m_BeamDesc.prevDir, dirNorm);
 
-    XMVECTOR perpX = XMVector3Normalize(XMVectorSet(-XMVectorGetZ(dir), 0, XMVectorGetX(dir), 0));
-    XMVECTOR perpY = XMVector3Cross(dir, perpX);
+    XMVECTOR perpX = XMVector3Normalize(XMVectorSet(-XMVectorGetZ(dirNorm), 0, XMVectorGetX(dirNorm), 0));
+    XMVECTOR perpY = XMVector3Cross(dirNorm, perpX);
 
+    // 활성 파티클 수 계산
+    int activeCount = 0;
+    for (auto& p : m_Particles) if (p.active) activeCount++;
+    if (activeCount == 0) return;
+
+    int i = 0;
     for (auto& p : m_Particles) {
         if (!p.active) continue;
-        // 빔-로컬 좌표 초기화: 빔 전체 길이에 균등 분포
-        p.beamT     = Rand01() * totalDist;
+
+        // 빔 전체 길이에 균등하게 배치 (중간 끊김 방지)
+        float t = (float)i / (float)activeCount;
+        p.beamT     = t * totalDist;
         p.beamRx    = (Rand01() - 0.5f) * 2.f * m_BeamDesc.spreadRadius;
-        p.beamRy    = (Rand01() - 0.5f) * 2.f * m_BeamDesc.spreadRadius;
+        // 설정된 수직 배율(verticalScale)을 적용하여 형태 제어
+        p.beamRy    = (Rand01() - 0.5f) * 2.f * (m_BeamDesc.spreadRadius * m_BeamDesc.verticalScale); 
         p.beamSpeed = m_BeamDesc.speedMin + Rand01() * (m_BeamDesc.speedMax - m_BeamDesc.speedMin);
 
         // 초기 월드 좌표 설정
         XMVECTOR pos = XMVectorAdd(
-            XMVectorAdd(start, XMVectorScale(dir, p.beamT)),
+            XMVectorAdd(start, XMVectorScale(dirNorm, p.beamT)),
             XMVectorAdd(XMVectorScale(perpX, p.beamRx), XMVectorScale(perpY, p.beamRy))
         );
         XMStoreFloat3(&p.position, pos);
         p.velocity = { 0, 0, 0 };
+        i++;
     }
+    m_bNeedsUpload = true;
 }
 
 void FluidParticleSystem::ApplyDirectionalForce(const XMFLOAT3& direction, float impulse)

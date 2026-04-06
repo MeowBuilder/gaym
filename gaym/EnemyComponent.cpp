@@ -286,24 +286,38 @@ void EnemyComponent::FaceTarget(float dt, bool bInstant)
     float targetYawDeg = XMConvertToDegrees(targetYawRad);
 
     const XMFLOAT3& currentRot = pMyTransform->GetRotation();
+    float currentYaw = currentRot.y;
+
+    // Calculate shortest angle difference (-180 to 180)
+    float angleDiff = targetYawDeg - currentYaw;
+    while (angleDiff > 180.0f) angleDiff -= 360.0f;
+    while (angleDiff < -180.0f) angleDiff += 360.0f;
 
     if (bInstant || dt <= 0.0f)
     {
-        // Instant rotation (for attack start, etc.)
+        // Boss: limit instant rotation to prevent sudden 180 degree turns
+        // This prevents the jarring "snap" when player moves behind boss
+        if (m_bIsBoss)
+        {
+            const float MAX_INSTANT_ROTATION = 90.0f;  // Max 90 degree turn at once
+            if (fabsf(angleDiff) > MAX_INSTANT_ROTATION)
+            {
+                // Clamp the rotation
+                float rotation = (angleDiff > 0.0f) ? MAX_INSTANT_ROTATION : -MAX_INSTANT_ROTATION;
+                float newYaw = currentYaw + rotation;
+                pMyTransform->SetRotation(currentRot.x, newYaw, currentRot.z);
+                return;
+            }
+        }
+        // Non-boss or small angle: instant rotation
         pMyTransform->SetRotation(currentRot.x, targetYawDeg, currentRot.z);
     }
     else
     {
         // Smooth rotation
-        float currentYaw = currentRot.y;
-
-        // Calculate shortest angle difference (-180 to 180)
-        float angleDiff = targetYawDeg - currentYaw;
-        while (angleDiff > 180.0f) angleDiff -= 360.0f;
-        while (angleDiff < -180.0f) angleDiff += 360.0f;
-
-        // Rotate towards target at rotation speed
-        float maxRotation = m_fRotationSpeed * dt;
+        // Boss has faster rotation speed for better tracking
+        float rotSpeed = m_bIsBoss ? m_fRotationSpeed * 1.5f : m_fRotationSpeed;
+        float maxRotation = rotSpeed * dt;
         float rotation = 0.0f;
 
         if (fabsf(angleDiff) <= maxRotation)

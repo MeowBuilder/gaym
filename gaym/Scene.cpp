@@ -6,6 +6,9 @@
 #include "ColliderComponent.h"
 #include "TransformComponent.h"
 #include "InputSystem.h" // Added for InputSystem
+#include "EnemyComponent.h"
+#include "MegaBreathAttackBehavior.h"
+#include "Room.h"
 #include "PlayerComponent.h"
 #include "AnimationComponent.h"
 #include "CollisionManager.h"
@@ -516,6 +519,29 @@ void Scene::Update(float deltaTime, InputSystem* pInputSystem)
     {
         OutputDebugString(L"[Scene] Water stage test key pressed - entering water stage!\n");
         TransitionToWaterStage();
+    }
+
+    // L 키: 보스 메가 브레스 강제 실행 (테스트용)
+    if (pInputSystem && pInputSystem->IsKeyPressed('L'))
+    {
+        if (m_pCurrentRoom)
+        {
+            const auto& gameObjects = m_pCurrentRoom->GetGameObjects();
+            for (const auto& pObj : gameObjects)
+            {
+                if (!pObj) continue;
+                EnemyComponent* pEnemy = pObj->GetComponent<EnemyComponent>();
+                if (pEnemy && pEnemy->IsBoss() && !pEnemy->IsDead())
+                {
+                    OutputDebugString(L"[Scene] Debug key 'L' pressed - Forcing Mega Breath!\n");
+                    // 즉시 메가 브레스 주입 및 실행
+                    auto megaBreath = std::make_unique<MegaBreathAttackBehavior>();
+                    megaBreath->Execute(pEnemy); // 즉시 초기화 및 애니메이션 시작
+                    pEnemy->SetAttackBehavior(std::move(megaBreath));
+                    pEnemy->ChangeState(EnemyState::Attack); // 공격 상태로 강제 전이
+                }
+            }
+        }
     }
 
     // 0 키: 다음 방 / 9 키: 이전 방 (개발용 직접 이동)

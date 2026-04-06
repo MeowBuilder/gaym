@@ -761,3 +761,9 @@ bool MapLoader::LoadIntoScene(
     OutputDebugStringA(buf);
     return true;
 }
+
+Mesh* MapLoader::LoadMesh(const char* path, ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList)
+{
+    ObjResult res = LoadObjMesh(pDevice, pCommandList, path);
+    return res.valid ? res.pMesh : nullptr;
+}

@@ -204,6 +204,36 @@ void VFXLibrary::Initialize() {
 
         RegisterBase(SkillSlot::RightClick, def);
     }
+
+    // ──────────────────────────────────────────────────────────
+    // Boss - 드래곤 메가 브레스 (Beam 모드, 대규모 파티클)
+    // ──────────────────────────────────────────────────────────
+    {
+        VFXSequenceDef def;
+        def.name          = "Dragon_MegaBreath";
+        def.element       = ElementType::Fire;
+        def.particleCount = 4096; // 시스템 한계치 적용
+        def.spawnRadius   = 8.0f; // 더 거대한 발사구
+
+        VFXPhase p0;
+        p0.startTime  = 0.f;
+        p0.duration   = 99.f; 
+        p0.motionMode = ParticleMotionMode::Beam;
+        
+        // 보스 브레스: 가로로 압도적인 스케일 + 끊임없는 흐름
+        p0.beamDesc.speedMin      = 55.f; 
+        p0.beamDesc.speedMax      = 110.f;
+        p0.beamDesc.spreadRadius  = 35.0f; // 가로 폭 최적화
+        p0.beamDesc.verticalScale = 0.15f; // 보스 브레스만 납작하게 설정 (중요)
+        
+        // 가로 확산력 및 중력 유지
+        p0.randomSidewaysImpulse = 25.0f; 
+        p0.globalGravityStrength = 45.0f; 
+        def.phases.push_back(p0);
+
+        // SkillSlot::None(0)과 999번 룬 플래그를 조합하여 보스 전용 키로 등록
+        RegisterExactCombo((SkillSlot)0, 999, std::move(def));
+    }
 }
 
 void VFXLibrary::RegisterBase(SkillSlot slot, VFXSequenceDef def) {

@@ -59,4 +59,10 @@ public:
         ID3D12Device*                   pDevice,
         ID3D12GraphicsCommandList*      pCommandList,
         Shader*                         pShader);
+
+    // Manually load an OBJ mesh from file (cached)
+    static class Mesh* LoadMesh(
+        const char*                     path,
+        ID3D12Device*                   pDevice,
+        ID3D12GraphicsCommandList*      pCommandList);
 };
