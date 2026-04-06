@@ -95,6 +95,20 @@ public:
     D3D12_GPU_DESCRIPTOR_HANDLE GetHeightMapSrvHandle() const { return m_heightMapSrvGPUHandle; }
     bool HasHeightMap() const { return m_pd3dHeightMap != nullptr; }
 
+    // AO map texture support (for stylized water)
+    void SetAOMapName(const std::string& strName) { m_strAOMapName = strName; }
+    void LoadAOMap(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, D3D12_CPU_DESCRIPTOR_HANDLE srvCpuHandle);
+    void SetAOMapSrvGpuHandle(D3D12_GPU_DESCRIPTOR_HANDLE handle) { m_aoMapSrvGPUHandle = handle; }
+    D3D12_GPU_DESCRIPTOR_HANDLE GetAOMapSrvHandle() const { return m_aoMapSrvGPUHandle; }
+    bool HasAOMap() const { return m_pd3dAOMap != nullptr; }
+
+    // Roughness map texture support (for stylized water)
+    void SetRoughnessMapName(const std::string& strName) { m_strRoughnessMapName = strName; }
+    void LoadRoughnessMap(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, D3D12_CPU_DESCRIPTOR_HANDLE srvCpuHandle);
+    void SetRoughnessMapSrvGpuHandle(D3D12_GPU_DESCRIPTOR_HANDLE handle) { m_roughnessMapSrvGPUHandle = handle; }
+    D3D12_GPU_DESCRIPTOR_HANDLE GetRoughnessMapSrvHandle() const { return m_roughnessMapSrvGPUHandle; }
+    bool HasRoughnessMap() const { return m_pd3dRoughnessMap != nullptr; }
+
     // Emissive map texture support
     void SetEmissiveTextureName(const std::string& name) { m_strEmissiveTextureName = name; }
     void LoadEmissiveTexture(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, D3D12_CPU_DESCRIPTOR_HANDLE srvCpuHandle);
@@ -176,6 +190,18 @@ private:
     ComPtr<ID3D12Resource> m_pd3dHeightMap = nullptr;
     ComPtr<ID3D12Resource> m_pd3dHeightMapUploadBuffer = nullptr;
     D3D12_GPU_DESCRIPTOR_HANDLE m_heightMapSrvGPUHandle = {};
+
+    // AO map texture (for stylized water)
+    std::string m_strAOMapName;
+    ComPtr<ID3D12Resource> m_pd3dAOMap = nullptr;
+    ComPtr<ID3D12Resource> m_pd3dAOMapUploadBuffer = nullptr;
+    D3D12_GPU_DESCRIPTOR_HANDLE m_aoMapSrvGPUHandle = {};
+
+    // Roughness map texture (for stylized water)
+    std::string m_strRoughnessMapName;
+    ComPtr<ID3D12Resource> m_pd3dRoughnessMap = nullptr;
+    ComPtr<ID3D12Resource> m_pd3dRoughnessMapUploadBuffer = nullptr;
+    D3D12_GPU_DESCRIPTOR_HANDLE m_roughnessMapSrvGPUHandle = {};
 
 	Mesh* m_pMesh = nullptr; // Re-added m_pMesh member
 };

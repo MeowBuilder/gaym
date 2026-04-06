@@ -71,8 +71,8 @@ void Shader::RenderShadowPass(ID3D12GraphicsCommandList* pCommandList, D3D12_GPU
 
 void Shader::Build(ID3D12Device* pDevice)
 {
-    // Create a root signature with 7 parameters: Object CBV, Pass CBV, Albedo SRV(t0), Shadow SRV(t1), Normal SRV(t2), Height SRV(t3), Emissive SRV(t4)
-    D3D12_ROOT_PARAMETER d3dRootParameters[7];
+    // Create a root signature with 9 parameters: Object CBV, Pass CBV, Albedo SRV(t0), Shadow SRV(t1), Normal SRV(t2), Height SRV(t3), Emissive SRV(t4), AO SRV(t5), Roughness SRV(t6)
+    D3D12_ROOT_PARAMETER d3dRootParameters[9];
 
     // Parameter 0: Descriptor table for the per-object constant buffer (b0)
     D3D12_DESCRIPTOR_RANGE d3dDescriptorRange;
@@ -143,7 +143,7 @@ void Shader::Build(ID3D12Device* pDevice)
     d3dRootParameters[5].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
     d3dRootParameters[5].DescriptorTable.NumDescriptorRanges = 1;
     d3dRootParameters[5].DescriptorTable.pDescriptorRanges = &d3dHeightMapRange;
-    d3dRootParameters[5].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+    d3dRootParameters[5].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL; // VS에서도 접근 가능 (정점 변위용)
 
     // Static Samplers
     D3D12_STATIC_SAMPLER_DESC samplers[2] = {};
@@ -161,7 +161,7 @@ void Shader::Build(ID3D12Device* pDevice)
     samplers[0].MaxLOD = D3D12_FLOAT32_MAX;
     samplers[0].ShaderRegister = 0;
     samplers[0].RegisterSpace = 0;
-    samplers[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+    samplers[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL; // VS에서도 텍스처 샘플링 필요 (물 정점 변위)
 
     // Sampler 1: Shadow map comparison sampler (s1)
     samplers[1].Filter = D3D12_FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT;
@@ -191,8 +191,34 @@ void Shader::Build(ID3D12Device* pDevice)
     d3dRootParameters[6].DescriptorTable.pDescriptorRanges = &d3dEmissiveRange;
     d3dRootParameters[6].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
+    // Parameter 7: Descriptor table for the AO map SRV (t5)
+    D3D12_DESCRIPTOR_RANGE d3dAORange;
+    d3dAORange.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+    d3dAORange.NumDescriptors = 1;
+    d3dAORange.BaseShaderRegister = 5; // t5
+    d3dAORange.RegisterSpace = 0;
+    d3dAORange.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+
+    d3dRootParameters[7].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+    d3dRootParameters[7].DescriptorTable.NumDescriptorRanges = 1;
+    d3dRootParameters[7].DescriptorTable.pDescriptorRanges = &d3dAORange;
+    d3dRootParameters[7].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+
+    // Parameter 8: Descriptor table for the Roughness map SRV (t6)
+    D3D12_DESCRIPTOR_RANGE d3dRoughnessRange;
+    d3dRoughnessRange.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+    d3dRoughnessRange.NumDescriptors = 1;
+    d3dRoughnessRange.BaseShaderRegister = 6; // t6
+    d3dRoughnessRange.RegisterSpace = 0;
+    d3dRoughnessRange.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+
+    d3dRootParameters[8].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+    d3dRootParameters[8].DescriptorTable.NumDescriptorRanges = 1;
+    d3dRootParameters[8].DescriptorTable.pDescriptorRanges = &d3dRoughnessRange;
+    d3dRootParameters[8].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+
     D3D12_ROOT_SIGNATURE_DESC d3dRootSignatureDesc;
-    d3dRootSignatureDesc.NumParameters = 7;
+    d3dRootSignatureDesc.NumParameters = 9;
     d3dRootSignatureDesc.pParameters = d3dRootParameters;
     d3dRootSignatureDesc.NumStaticSamplers = 2;
     d3dRootSignatureDesc.pStaticSamplers = samplers;

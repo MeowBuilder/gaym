@@ -58,11 +58,13 @@ cbuffer cbPass : register(b1)
     int g_nActiveTorchLights; int g_TorchPad1; int g_TorchPad2; int g_TorchPad3;
 };
 
-Texture2D gAlbedoMap   : register(t0);
-Texture2D gShadowMap   : register(t1);
-Texture2D gNormalMap   : register(t2);  // Water normal map
-Texture2D gHeightMap   : register(t3);  // Water height map
-Texture2D gEmissiveMap : register(t4);  // Emissive map
+Texture2D gAlbedoMap    : register(t0);
+Texture2D gShadowMap    : register(t1);
+Texture2D gNormalMap    : register(t2);  // Water normal map
+Texture2D gHeightMap    : register(t3);  // Water height map
+Texture2D gEmissiveMap  : register(t4);  // Emissive map
+Texture2D gAOMap        : register(t5);  // Ambient Occlusion map (stylized water)
+Texture2D gRoughnessMap : register(t6);  // Roughness map (stylized water)
 SamplerState gSampler : register(s0);
 SamplerComparisonState gShadowSampler : register(s1);
 
@@ -107,6 +109,31 @@ PS_INPUT VS(VS_INPUT input)
                 normalL += weight * mul(input.normal, (float3x3)gBoneTransforms[idx]);
             }
         }
+    }
+
+    // Water vertex displacement using height map
+    if (bIsWater)
+    {
+        // UV 설정 (PS와 동일)
+        float uvScale = 3.0f;
+        float2 tiledUV = input.uv * uvScale;
+
+        // 느린 흐름 (PS와 동일)
+        float2 flow = float2(g_Time * 0.015f, g_Time * 0.01f);
+
+        // Height map 샘플링
+        float2 heightUV1 = tiledUV + flow;
+        float2 heightUV2 = tiledUV * 1.3f - flow * 0.7f;
+
+        float height1 = gHeightMap.SampleLevel(gSampler, heightUV1, 0).r;
+        float height2 = gHeightMap.SampleLevel(gSampler, heightUV2, 0).r;
+
+        // 부드러운 파도
+        float combinedHeight = (height1 + height2) * 0.5f - 0.5f;
+
+        // 완만한 변위 (원신 스타일은 과격하지 않음)
+        float displacementScale = 2.5f;
+        posL.y += combinedHeight * displacementScale;
     }
 
     // Transform the position from object space to clip space
@@ -204,6 +231,8 @@ float4 PS(PS_INPUT input) : SV_TARGET
     float2 uv = input.uv;
     float3 waterNormal = normal;  // Default to geometry normal
     float waterFresnel = 0.0f;
+    float waterAO = 1.0f;           // Default AO (no darkening)
+    float waterSpecularPower = 0.0f; // 0 means use material default
 
     if (bIsLava)
     {
@@ -214,53 +243,26 @@ float4 PS(PS_INPUT input) : SV_TARGET
     }
     else if (bIsWater)
     {
-        // UV tiling
-        float uvScale = 12.0f;
+        // === 원신 스타일 물 셰이더 (깔끔하고 단순하게) ===
+
+        // UV 설정
+        float uvScale = 3.0f;
         float2 tiledUV = input.uv * uvScale;
 
-        // === 부드러운 파도 (Gerstner-like) ===
-        // 주 파도 - 한 방향으로 일관되게
-        float waveFreq1 = 0.8f;
-        float waveSpeed1 = 0.6f;
-        float wave1 = sin(tiledUV.x * waveFreq1 + g_Time * waveSpeed1);
+        // 느린 단일 방향 흐름
+        float2 flow = float2(g_Time * 0.015f, g_Time * 0.01f);
 
-        // 보조 파도 - 약간 다른 각도
-        float waveFreq2 = 1.2f;
-        float waveSpeed2 = 0.8f;
-        float wave2 = sin((tiledUV.x * 0.7f + tiledUV.y * 0.5f) * waveFreq2 + g_Time * waveSpeed2);
-
-        // 잔물결
-        float ripple = sin(tiledUV.x * 3.0f + g_Time * 1.5f) * cos(tiledUV.y * 2.5f + g_Time * 1.2f);
-
-        // 파도 합성 (0~1 범위로 정규화)
-        float combinedWave = (wave1 * 0.5f + wave2 * 0.3f + ripple * 0.1f) * 0.5f + 0.5f;
-
-        // === 자연스러운 흐름 ===
-        float2 mainFlow = float2(g_Time * 0.03f, g_Time * 0.015f);  // 느린 주 흐름
-
-        // Parallax mapping
-        float heightScale = 0.025f;
-        float2 parallaxUV = tiledUV + mainFlow;
-        float height = gHeightMap.Sample(gSampler, parallaxUV).r;
-        float2 parallaxOffset = vToCamera.xz * (height * heightScale);
-        tiledUV += parallaxOffset;
-
-        // UV for albedo
-        uv = tiledUV + mainFlow;
-
-        // === 노말맵 - 단순하지만 효과적인 블렌딩 ===
-        float2 normalUV1 = tiledUV + mainFlow;
-        float2 normalUV2 = tiledUV * 0.7f + mainFlow * 1.3f + float2(0.5f, 0.0f);
+        // === 노말맵 (부드럽게) ===
+        float2 normalUV1 = tiledUV + flow;
+        float2 normalUV2 = tiledUV * 1.3f - flow * 0.7f;
 
         float3 normal1 = gNormalMap.Sample(gSampler, normalUV1).rgb * 2.0f - 1.0f;
         float3 normal2 = gNormalMap.Sample(gSampler, normalUV2).rgb * 2.0f - 1.0f;
 
-        // 부드럽게 블렌딩
         float3 blendedNormal = normalize(normal1 + normal2 * 0.5f);
 
-        // 노말 강도
-        float normalStrength = 0.35f;
-
+        // 노말 강도 약하게 (부드러운 물결)
+        float normalStrength = 0.25f;
         float3 tangent = float3(1, 0, 0);
         float3 bitangent = float3(0, 0, 1);
         waterNormal = normalize(
@@ -269,19 +271,23 @@ float4 PS(PS_INPUT input) : SV_TARGET
             bitangent * blendedNormal.y * normalStrength
         );
 
-        // Fresnel
+        // === Fresnel (가장자리 밝게) ===
         float NdotV = saturate(dot(waterNormal, vToCamera));
-        waterFresnel = pow(1.0f - NdotV, 3.0f) * 0.5f;
+        waterFresnel = pow(1.0f - NdotV, 3.0f);
 
-        // === 절차적 거품 (파도 정점에서) ===
-        // 파도 기울기가 급한 곳에서 거품 생성
-        float waveSlope = abs(wave1 - wave2);
-        float foam = smoothstep(0.3f, 0.6f, waveSlope) * 0.2f;
+        // === 절차적 Caustics (물 아래 빛 패턴) ===
+        float2 causticsUV1 = tiledUV * 2.0f + flow * 2.0f;
+        float2 causticsUV2 = tiledUV * 2.3f - flow * 1.5f;
+        float caustics1 = sin(causticsUV1.x * 6.28f) * sin(causticsUV1.y * 6.28f);
+        float caustics2 = sin(causticsUV2.x * 6.28f + 1.0f) * sin(causticsUV2.y * 6.28f + 1.0f);
+        float caustics = (caustics1 + caustics2) * 0.5f;
+        caustics = smoothstep(0.3f, 0.8f, caustics * 0.5f + 0.5f) * 0.15f;
 
-        // 높이맵의 밝은 부분에서 추가 거품
-        foam += smoothstep(0.7f, 0.9f, height) * 0.15f;
+        // Caustics를 fresnel에 추가 (밝은 부분)
+        waterFresnel += caustics;
 
-        waterFresnel += foam;
+        // UV는 사용 안 함 (색상은 절차적으로)
+        uv = input.uv;
     }
 
     float4 albedoColor;
@@ -297,8 +303,15 @@ float4 PS(PS_INPUT input) : SV_TARGET
     // Combine with material diffuse (optional: multiply)
     float4 baseColor = albedoColor * gMaterial.m_cDiffuse;
 
+    // Apply water AO to base color
+    if (bIsWater)
+        baseColor.rgb *= waterAO;
+
     // Use water normal for lighting if water, otherwise use geometry normal
     float3 shadingNormal = bIsWater ? waterNormal : normal;
+
+    // Specular power: use roughness-based power for water, material default otherwise
+    float specPower = (bIsWater && waterSpecularPower > 0.0f) ? waterSpecularPower : gMaterial.m_cSpecular.a;
 
     // --- Shadow Calculation ---
     float shadowFactor = CalculateShadow(input.posLightSpace);
@@ -306,7 +319,7 @@ float4 PS(PS_INPUT input) : SV_TARGET
     // --- Directional Light Calculation ---
     float directionalDiffuseFactor = saturate(dot(shadingNormal, -g_LightDirection));
     float3 vHalfDirectional = normalize(vToCamera + (-g_LightDirection)); // Half vector for directional specular
-    float directionalSpecularFactor = pow(max(dot(vHalfDirectional, shadingNormal), 0.0f), gMaterial.m_cSpecular.a);
+    float directionalSpecularFactor = pow(max(dot(vHalfDirectional, shadingNormal), 0.0f), specPower);
 
     float4 directionalDiffuse = directionalDiffuseFactor * g_LightColor * baseColor;
     float4 directionalSpecular = directionalSpecularFactor * g_LightColor * gMaterial.m_cSpecular;
@@ -321,7 +334,7 @@ float4 PS(PS_INPUT input) : SV_TARGET
     
     float pointDiffuseFactor = saturate(dot(shadingNormal, pointLightDir));
     float3 vHalfPoint = normalize(vToCamera + pointLightDir); // Half vector for point specular
-    float pointSpecularFactor = pow(max(dot(vHalfPoint, shadingNormal), 0.0f), gMaterial.m_cSpecular.a);
+    float pointSpecularFactor = pow(max(dot(vHalfPoint, shadingNormal), 0.0f), specPower);
 
     float4 pointDiffuse = pointDiffuseFactor * g_PointLightColor * baseColor * attenuation;
     float4 pointSpecular = pointSpecularFactor * g_PointLightColor * gMaterial.m_cSpecular * attenuation;
@@ -357,7 +370,7 @@ float4 PS(PS_INPUT input) : SV_TARGET
     {
         float spotDiffuseFactor = saturate(dot(shadingNormal, spotLightDir));
         float3 vHalfSpot = normalize(vToCamera + spotLightDir);
-        float spotSpecularFactor = pow(max(dot(vHalfSpot, shadingNormal), 0.0f), gMaterial.m_cSpecular.a);
+        float spotSpecularFactor = pow(max(dot(vHalfSpot, shadingNormal), 0.0f), specPower);
 
         float4 spotDiffuse = spotDiffuseFactor * g_SpotLightColor * baseColor * spotAttenuation;
         float4 spotSpecular = spotSpecularFactor * g_SpotLightColor * gMaterial.m_cSpecular * spotAttenuation;
@@ -385,7 +398,7 @@ float4 PS(PS_INPUT input) : SV_TARGET
 
             // Specular
             float3 vHalfTorch = normalize(vToCamera + torchDir);
-            float torchSpecularFactor = pow(max(dot(vHalfTorch, shadingNormal), 0.0f), gMaterial.m_cSpecular.a);
+            float torchSpecularFactor = pow(max(dot(vHalfTorch, shadingNormal), 0.0f), specPower);
 
             float4 torchColor = float4(g_TorchLights[t].Color, 1.0f);
             float4 torchDiffuse = torchDiffuseFactor * torchColor * baseColor * torchAtten;
@@ -397,9 +410,50 @@ float4 PS(PS_INPUT input) : SV_TARGET
 
     if (bIsWater)
     {
-        float3 skyColor = float3(0.4f, 0.55f, 0.75f);
-        finalColor.rgb = lerp(finalColor.rgb, skyColor, waterFresnel * 0.6f);
-        finalColor.rgb += waterFresnel * 0.15f;
+        // === 원신 스타일 깔끔한 물 색상 ===
+
+        // 색상 정의 (청록 ↔ 파랑)
+        float3 shallowColor = float3(0.2f, 0.65f, 0.7f);   // 청록색 (얕은 곳)
+        float3 deepColor = float3(0.05f, 0.2f, 0.4f);      // 진한 파랑 (깊은 곳)
+        float3 highlightColor = float3(0.85f, 0.95f, 1.0f); // 하이라이트 (거의 흰색)
+
+        // Fresnel 기반 색상 블렌딩
+        float3 waterColor = lerp(deepColor, shallowColor, waterFresnel);
+
+        // 조명 영향 (약하게)
+        float lighting = saturate(dot(shadingNormal, -g_LightDirection)) * 0.3f + 0.7f;
+        waterColor *= lighting;
+
+        // === SSS 역광 효과 (Subsurface Scattering 근사) ===
+        // 카메라가 태양 반대편에 있을 때 물이 밝게 빛남
+        float3 backLightDir = g_LightDirection + shadingNormal * 0.3f;
+        float sss = saturate(dot(vToCamera, backLightDir));
+        sss = pow(sss, 3.0f) * 0.6f;
+        float3 sssColor = float3(0.3f, 0.8f, 0.7f);  // 청록빛 투과광
+        waterColor += sss * sssColor * shadowFactor;
+
+        // === 큰 태양 스펙큘러 (원신 스타일 - 크고 강하게) ===
+        float3 halfVec = normalize(vToCamera + (-g_LightDirection));
+        float spec = pow(max(dot(shadingNormal, halfVec), 0.0f), 32.0f);  // 넓게
+        float specSharp = pow(max(dot(shadingNormal, halfVec), 0.0f), 256.0f);  // 중심은 날카롭게
+        spec = spec * 0.5f + specSharp * 2.0f;  // 합성
+
+        // === 가장자리 밝게 (Fresnel 림 라이트) ===
+        float rim = waterFresnel * 0.4f;
+
+        // === 파도 거품 (밝은 부분 강조) ===
+        float waveTop = smoothstep(0.6f, 0.9f, waterFresnel);
+        float foam = waveTop * 0.3f;
+
+        // === 최종 합성 ===
+        finalColor.rgb = waterColor;
+        finalColor.rgb = lerp(finalColor.rgb, highlightColor, rim);
+        finalColor.rgb += spec * highlightColor * 1.5f * shadowFactor;  // 스펙큘러 강화
+        finalColor.rgb += foam * highlightColor;  // 거품
+
+        // 투명도: 깊은 곳은 더 불투명, 가장자리는 살짝 투명
+        float waterAlpha = lerp(0.85f, 0.65f, waterFresnel);
+        return float4(finalColor.rgb, waterAlpha);
     }
 
     return float4(finalColor.rgb, 1.0f);

@@ -45,5 +45,11 @@ void RenderComponent::Render(ID3D12GraphicsCommandList* pCommandList)
     if (m_pOwner->HasEmissiveTexture())
         pCommandList->SetGraphicsRootDescriptorTable(6, m_pOwner->GetEmissiveSrvDescriptorHandle());
 
+    if (m_pOwner->HasAOMap())
+        pCommandList->SetGraphicsRootDescriptorTable(7, m_pOwner->GetAOMapSrvHandle());
+
+    if (m_pOwner->HasRoughnessMap())
+        pCommandList->SetGraphicsRootDescriptorTable(8, m_pOwner->GetRoughnessMapSrvHandle());
+
     m_pMesh->Render(pCommandList, 0);
 }

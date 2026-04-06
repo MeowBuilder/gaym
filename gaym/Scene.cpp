@@ -541,17 +541,20 @@ void Scene::Update(float deltaTime, InputSystem* pInputSystem)
     XMStoreFloat4x4(&m_pcbMappedPass->m_xmf4x4ViewProj, XMMatrixTranspose(mViewProj));
 
     // Set lighting parameters based on current theme
+    XMVECTOR lightDir;
     if (m_eCurrentTheme == StageTheme::Water)
     {
-        // Cool blue light for water stage
-        m_pcbMappedPass->m_xmf4LightColor = XMFLOAT4(0.6f, 0.75f, 1.0f, 1.0f);
+        // 밝은 태양빛 for water stage
+        m_pcbMappedPass->m_xmf4LightColor = XMFLOAT4(1.2f, 1.15f, 1.0f, 1.0f);  // HDR 밝기
+        // 낮은 각도 조명 (석양 느낌) - 스펙큘러가 잘 보이도록
+        lightDir = XMVector3Normalize(XMVectorSet(-0.8f, -0.3f, 0.5f, 0.0f));
     }
     else
     {
         // Warm orange light for fire/volcanic stage
         m_pcbMappedPass->m_xmf4LightColor = XMFLOAT4(1.0f, 0.6f, 0.35f, 1.0f);
+        lightDir = XMVector3Normalize(XMVectorSet(-0.6f, -0.7f, 0.3f, 0.0f)); // 비스듬한 조명 (옆으로 긴 그림자)
     }
-    XMVECTOR lightDir = XMVector3Normalize(XMVectorSet(-0.6f, -0.7f, 0.3f, 0.0f)); // 비스듬한 조명 (옆으로 긴 그림자)
     XMStoreFloat3(&m_pcbMappedPass->m_xmf3LightDirection, lightDir);
 
     // Calculate Light View-Projection for Shadow Mapping
@@ -597,7 +600,16 @@ void Scene::Update(float deltaTime, InputSystem* pInputSystem)
     m_pcbMappedPass->m_fPad3 = 0.0f; // Padding
     m_pcbMappedPass->m_fPad4 = 0.0f; // Padding
 
-    m_pcbMappedPass->m_xmf4AmbientLight = XMFLOAT4(0.12f, 0.05f, 0.02f, 1.0f); // Darker ambient for torch visibility
+    if (m_eCurrentTheme == StageTheme::Water)
+    {
+        // 밝은 앰비언트 for water stage (맑은 날씨)
+        m_pcbMappedPass->m_xmf4AmbientLight = XMFLOAT4(0.35f, 0.4f, 0.5f, 1.0f);
+    }
+    else
+    {
+        // 어두운 앰비언트 for fire stage (횃불 가시성용)
+        m_pcbMappedPass->m_xmf4AmbientLight = XMFLOAT4(0.12f, 0.05f, 0.02f, 1.0f);
+    }
 
     // Set Camera Position for Specular Calculation
     XMFLOAT3 cameraPosition = m_pCamera->GetPosition();
@@ -1859,12 +1871,12 @@ void Scene::TransitionToWaterStage()
 
         if (m_pWaterPlane)
         {
-            // 큰 평면 메쉬 (용암 평면과 동일한 크기)
-            CubeMesh* pPlaneMesh = new CubeMesh(pDevice, pCommandList, 1.0f, 0.1f, 1.0f);
+            // 세분화된 평면 메쉬 (128x128 그리드 = 16641 정점, 정점 변위용)
+            GridPlaneMesh* pPlaneMesh = new GridPlaneMesh(pDevice, pCommandList, 1.0f, 1.0f, 128, 128);
             m_pWaterPlane->SetMesh(pPlaneMesh);
 
-            // 타일보다 약간 아래에 배치
-            m_pWaterPlane->GetTransform()->SetPosition(0.0f, -3.5f, -200.0f);
+            // 맵이 살짝 잠기도록 높이 조정
+            m_pWaterPlane->GetTransform()->SetPosition(0.0f, -1.0f, -200.0f);
             m_pWaterPlane->GetTransform()->SetScale(2000.0f, 1.0f, 2000.0f);
 
             m_pWaterPlane->SetWater(true);
@@ -1877,7 +1889,7 @@ void Scene::TransitionToWaterStage()
             waterMat.m_cEmissive = XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f);
             m_pWaterPlane->SetMaterial(waterMat);
 
-            // 물 텍스쳐 로드
+            // 물 텍스쳐 로드 (Base Color)
             m_pWaterPlane->SetTextureName("Assets/Stylize Water Texture/Textures/Vol_36_5_Base_Color.png");
             D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle;
             D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle;
@@ -1901,10 +1913,35 @@ void Scene::TransitionToWaterStage()
             m_pWaterPlane->LoadHeightMap(pDevice, pCommandList, heightCpuHandle);
             m_pWaterPlane->SetHeightMapSrvGpuHandle(heightGpuHandle);
 
+            // 물 AO 맵 로드 (스타일라이즈드 패턴 깊이감)
+            m_pWaterPlane->SetAOMapName("Assets/Stylize Water Texture/Textures/Vol_36_5_Ambient_Occlusion.png");
+            D3D12_CPU_DESCRIPTOR_HANDLE aoCpuHandle;
+            D3D12_GPU_DESCRIPTOR_HANDLE aoGpuHandle;
+            AllocateDescriptor(&aoCpuHandle, &aoGpuHandle);
+            m_pWaterPlane->LoadAOMap(pDevice, pCommandList, aoCpuHandle);
+            m_pWaterPlane->SetAOMapSrvGpuHandle(aoGpuHandle);
+
+            // 물 Roughness 맵 로드 (날카로운 스펙큘러)
+            m_pWaterPlane->SetRoughnessMapName("Assets/Stylize Water Texture/Textures/Vol_36_5_Roughness.png");
+            D3D12_CPU_DESCRIPTOR_HANDLE roughCpuHandle;
+            D3D12_GPU_DESCRIPTOR_HANDLE roughGpuHandle;
+            AllocateDescriptor(&roughCpuHandle, &roughGpuHandle);
+            m_pWaterPlane->LoadRoughnessMap(pDevice, pCommandList, roughCpuHandle);
+            m_pWaterPlane->SetRoughnessMapSrvGpuHandle(roughGpuHandle);
+
+            // 물 Emissive 맵 로드 (빛나는 물결 효과)
+            m_pWaterPlane->SetEmissiveTextureName("Assets/Stylize Water Texture/Textures/Vol_36_5_Emissive.png");
+            D3D12_CPU_DESCRIPTOR_HANDLE emissiveCpuHandle;
+            D3D12_GPU_DESCRIPTOR_HANDLE emissiveGpuHandle;
+            AllocateDescriptor(&emissiveCpuHandle, &emissiveGpuHandle);
+            m_pWaterPlane->LoadEmissiveTexture(pDevice, pCommandList, emissiveCpuHandle);
+            m_pWaterPlane->SetEmissiveSrvGpuDescriptorHandle(emissiveGpuHandle);
+            m_pWaterPlane->SetHasEmissiveTexture(true);
+
             auto* pRC = m_pWaterPlane->AddComponent<RenderComponent>();
             pRC->SetMesh(pPlaneMesh);
             pRC->SetCastsShadow(false);
-            // pRC->SetTransparent(true);  // 투명도 비활성화 - 바닥 아래에 볼 게 없음
+            pRC->SetTransparent(true);  // 물 투명 렌더링 활성화
             m_vShaders[0]->AddRenderComponent(pRC);
         }
         OutputDebugString(L"[Scene] Water floor plane placed\n");

@@ -263,6 +263,8 @@ void GameObject::ReleaseUploadBuffers()
     if (m_pd3dEmissiveTextureUploadBuffer) m_pd3dEmissiveTextureUploadBuffer = nullptr;
     if (m_pd3dNormalMapUploadBuffer) m_pd3dNormalMapUploadBuffer = nullptr;
     if (m_pd3dHeightMapUploadBuffer) m_pd3dHeightMapUploadBuffer = nullptr;
+    if (m_pd3dAOMapUploadBuffer) m_pd3dAOMapUploadBuffer = nullptr;
+    if (m_pd3dRoughnessMapUploadBuffer) m_pd3dRoughnessMapUploadBuffer = nullptr;
 }
 
 void GameObject::LoadNormalMap(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, D3D12_CPU_DESCRIPTOR_HANDLE srvCpuHandle)
@@ -355,4 +357,90 @@ void GameObject::LoadHeightMap(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandLi
     pd3dDevice->CreateShaderResourceView(m_pd3dHeightMap.Get(), &srvDesc, srvCpuHandle);
 
     OutputDebugStringA("Height map loaded successfully\n");
+}
+
+void GameObject::LoadAOMap(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, D3D12_CPU_DESCRIPTOR_HANDLE srvCpuHandle)
+{
+    if (m_strAOMapName.empty()) return;
+
+    std::wstring wstrAOMap(m_strAOMapName.begin(), m_strAOMapName.end());
+
+    if (GetFileAttributesW(wstrAOMap.c_str()) == INVALID_FILE_ATTRIBUTES)
+    {
+        char buffer[256];
+        sprintf_s(buffer, "AO map not found: %s\n", m_strAOMapName.c_str());
+        OutputDebugStringA(buffer);
+        return;
+    }
+
+    std::unique_ptr<uint8_t[]> decodedData;
+    D3D12_SUBRESOURCE_DATA subresource;
+
+    HRESULT hr = DirectX::LoadWICTextureFromFile(pd3dDevice, wstrAOMap.c_str(), m_pd3dAOMap.GetAddressOf(), decodedData, subresource);
+    if (FAILED(hr))
+    {
+        char buffer[512];
+        sprintf_s(buffer, "Failed to load AO map: %ls\n", wstrAOMap.c_str());
+        OutputDebugStringA(buffer);
+        return;
+    }
+
+    UINT64 nBytes = GetRequiredIntermediateSize(m_pd3dAOMap.Get(), 0, 1);
+    m_pd3dAOMapUploadBuffer = CreateBufferResource(pd3dDevice, pd3dCommandList, NULL, nBytes, D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATE_GENERIC_READ, NULL);
+    UpdateSubresources(pd3dCommandList, m_pd3dAOMap.Get(), m_pd3dAOMapUploadBuffer.Get(), 0, 0, 1, &subresource);
+
+    D3D12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition(m_pd3dAOMap.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+    pd3dCommandList->ResourceBarrier(1, &barrier);
+
+    D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+    srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    srvDesc.Format = m_pd3dAOMap->GetDesc().Format;
+    srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+    srvDesc.Texture2D.MipLevels = m_pd3dAOMap->GetDesc().MipLevels;
+    pd3dDevice->CreateShaderResourceView(m_pd3dAOMap.Get(), &srvDesc, srvCpuHandle);
+
+    OutputDebugStringA("AO map loaded successfully\n");
+}
+
+void GameObject::LoadRoughnessMap(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, D3D12_CPU_DESCRIPTOR_HANDLE srvCpuHandle)
+{
+    if (m_strRoughnessMapName.empty()) return;
+
+    std::wstring wstrRoughnessMap(m_strRoughnessMapName.begin(), m_strRoughnessMapName.end());
+
+    if (GetFileAttributesW(wstrRoughnessMap.c_str()) == INVALID_FILE_ATTRIBUTES)
+    {
+        char buffer[256];
+        sprintf_s(buffer, "Roughness map not found: %s\n", m_strRoughnessMapName.c_str());
+        OutputDebugStringA(buffer);
+        return;
+    }
+
+    std::unique_ptr<uint8_t[]> decodedData;
+    D3D12_SUBRESOURCE_DATA subresource;
+
+    HRESULT hr = DirectX::LoadWICTextureFromFile(pd3dDevice, wstrRoughnessMap.c_str(), m_pd3dRoughnessMap.GetAddressOf(), decodedData, subresource);
+    if (FAILED(hr))
+    {
+        char buffer[512];
+        sprintf_s(buffer, "Failed to load Roughness map: %ls\n", wstrRoughnessMap.c_str());
+        OutputDebugStringA(buffer);
+        return;
+    }
+
+    UINT64 nBytes = GetRequiredIntermediateSize(m_pd3dRoughnessMap.Get(), 0, 1);
+    m_pd3dRoughnessMapUploadBuffer = CreateBufferResource(pd3dDevice, pd3dCommandList, NULL, nBytes, D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATE_GENERIC_READ, NULL);
+    UpdateSubresources(pd3dCommandList, m_pd3dRoughnessMap.Get(), m_pd3dRoughnessMapUploadBuffer.Get(), 0, 0, 1, &subresource);
+
+    D3D12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition(m_pd3dRoughnessMap.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+    pd3dCommandList->ResourceBarrier(1, &barrier);
+
+    D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+    srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    srvDesc.Format = m_pd3dRoughnessMap->GetDesc().Format;
+    srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+    srvDesc.Texture2D.MipLevels = m_pd3dRoughnessMap->GetDesc().MipLevels;
+    pd3dDevice->CreateShaderResourceView(m_pd3dRoughnessMap.Get(), &srvDesc, srvCpuHandle);
+
+    OutputDebugStringA("Roughness map loaded successfully\n");
 }
