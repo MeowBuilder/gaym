@@ -712,3 +712,14 @@ XMFLOAT4 FluidSkillVFXManager::GetDominantFluidColor() const
     // 활성 슬롯 없으면 기본 파란색
     return { 0.15f, 0.55f, 1.0f, 0.85f };
 }
+
+FluidElementColor FluidSkillVFXManager::GetDominantFluidColors() const
+{
+    for (const auto& slot : m_Slots)
+    {
+        if (!slot.isActive) continue;
+        ElementType elem = slot.useSequence ? slot.sequenceDef.element : slot.def.element;
+        return FluidElementColors::Get(elem);
+    }
+    return FluidElementColors::Get(ElementType::None);
+}

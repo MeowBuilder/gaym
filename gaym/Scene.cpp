@@ -907,15 +907,11 @@ void Scene::Render(ID3D12GraphicsCommandList* pCommandList, D3D12_GPU_DESCRIPTOR
         XMFLOAT4 fluidColorInner = { 1.0f,  0.88f, 0.25f, 1.0f };  // 기본: 밝은 노란-흰색
         if (m_pFluidVFXManager)
         {
-            XMFLOAT4 dominant = m_pFluidVFXManager->GetDominantFluidColor();
-            fluidColorOuter = dominant;
-            // inner = outer를 밝게 + 채도 낮춤 (코어는 더 하얗게)
-            fluidColorInner = {
-                (std::min)(dominant.x * 1.0f + 0.3f, 1.0f),
-                (std::min)(dominant.y * 1.2f + 0.3f, 1.0f),
-                (std::min)(dominant.z * 1.0f + 0.3f, 1.0f),
-                1.0f
-            };
+            FluidElementColor colors = m_pFluidVFXManager->GetDominantFluidColors();
+            // outer = 얇은 외곽 (edgeColor), inner = 두꺼운 코어 (coreColor)
+            fluidColorOuter = colors.edgeColor;
+            fluidColorOuter.w = (std::max)(fluidColorOuter.w, 0.6f);  // emit strength 최소 보장
+            fluidColorInner = colors.coreColor;
         }
 
         // 뷰포트/시저렉트를 메인 크기로 복원

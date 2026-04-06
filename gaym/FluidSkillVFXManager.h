@@ -82,6 +82,7 @@ public:
 
     // 현재 활성 슬롯의 대표 유체 색상 (composite fluidColor용)
     XMFLOAT4 GetDominantFluidColor() const;
+    FluidElementColor GetDominantFluidColors() const;
 
 private:
     void PushControlPoints(FluidVFXSlot& slot) const;

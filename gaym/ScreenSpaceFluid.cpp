@@ -194,10 +194,12 @@ static const char* g_CompositeShader = R"(
         float3 gLightDirVS;         // 뷰 공간 조명 방향 (정규화)
         float  gRefractionStr;      // 굴절 강도 (기본 0.04)
         float3 gAbsorption;         // Beer-Lambert 흡수 계수 (채널별)
-        float  gPad0;
+        float  gProjA;              // proj._33 (view Z → NDC depth 변환용)
         float4 gSpecularColor;      // rgb=색상, a=강도
         float4 gFluidColorOuter;    // rgb=외곽(얇은 부분) 색상, a=발광 강도
         float4 gFluidColorInner;    // rgb=코어(두꺼운 부분) 색상, a=미사용
+        float  gProjB;              // proj._43
+        float3 gPad1;
     };
 
     Texture2D<float>  gSmoothedDepth : register(t0);  // 스무딩된 깊이
@@ -212,6 +214,12 @@ static const char* g_CompositeShader = R"(
         float2 uv  : TEXCOORD0;
     };
 
+    struct CompositeOut
+    {
+        float4 color   : SV_TARGET;
+        float  svDepth : SV_Depth;
+    };
+
     // 풀스크린 삼각형 (Smooth pass와 동일)
     VSOut Composite_Fullscreen_VS(uint vid : SV_VertexID)
     {
@@ -221,7 +229,7 @@ static const char* g_CompositeShader = R"(
         return o;
     }
 
-    float4 Composite_PS(VSOut input) : SV_TARGET
+    CompositeOut Composite_PS(VSOut input)
     {
         float2 uv = input.uv;
         float depth = gSmoothedDepth.Sample(gPointSamp, uv);
@@ -266,9 +274,10 @@ static const char* g_CompositeShader = R"(
 
         // ---- 두께 × NdotV 기반 색상 그라디언트 ----
         // kSphereScale=4.5 + 파티클 겹침 → thickness는 실제로 20~40 범위
-        // divisor를 그에 맞게 높여야 외곽(outer)이 보임
         float thickT  = saturate(thickness / 25.0f);
-        float colorT  = saturate(thickT * (0.3f + 0.7f * NdotV));
+        float rawT    = saturate(thickT * (0.3f + 0.7f * NdotV));
+        // [0.2, 0.8]로 리매핑: 얇은 곳도 inner 20%, 두꺼운 곳도 outer 20% 항상 섞임
+        float colorT  = lerp(0.2f, 0.8f, rawT);
         float3 fluidColor = lerp(gFluidColorOuter.rgb, gFluidColorInner.rgb, colorT);
 
         // ---- 발광: floor 제거, 두꺼울수록 선형 증가 ----
@@ -289,7 +298,13 @@ static const char* g_CompositeShader = R"(
                           + specColor * (fresnel + 0.3f)
                           + emission + foamHighlight;
 
-        return float4(finalColor, edgeAlpha);
+        // 씬 DSV와 깊이 비교용: view-space depth → NDC depth
+        float ndcZ = (gProjA * depth + gProjB) / depth;
+
+        CompositeOut o;
+        o.color   = float4(finalColor, edgeAlpha);
+        o.svDepth = ndcZ;
+        return o;
     }
 )";
 
@@ -314,12 +329,14 @@ struct CompositeCB
     XMFLOAT3 lightDirVS;
     float    refractionStr;
     XMFLOAT3 absorption;        // Beer-Lambert 채널별 흡수 계수
-    float    pad0;
+    float    projA;             // proj._33 (view Z → NDC depth)
     XMFLOAT4 specularColor;     // rgb=색상, a=강도
     XMFLOAT4 fluidColorOuter;   // rgb=외곽(얇은 부분) 색상, a=발광 강도
     XMFLOAT4 fluidColorInner;   // rgb=코어(두꺼운 부분) 색상
+    float    projB;             // proj._43
+    float    pad1[3];
 };
-static_assert(sizeof(CompositeCB) == 96, "CompositeCB 크기 확인");
+static_assert(sizeof(CompositeCB) == 112, "CompositeCB 크기 확인");
 
 // ============================================================================
 // 소멸자
@@ -1151,13 +1168,17 @@ void ScreenSpaceFluid::CreatePipelines(ID3D12Device* pDevice)
         psoDesc.RasterizerState.FrontCounterClockwise = FALSE;
         psoDesc.RasterizerState.DepthClipEnable       = FALSE;
 
-        psoDesc.DepthStencilState.DepthEnable = FALSE;
+        // 씬 DSV와 깊이 비교 (캐릭터/오브젝트 뒤 유체 가림), 깊이 쓰기는 하지 않음
+        psoDesc.DepthStencilState.DepthEnable      = TRUE;
+        psoDesc.DepthStencilState.DepthWriteMask   = D3D12_DEPTH_WRITE_MASK_ZERO;
+        psoDesc.DepthStencilState.DepthFunc        = D3D12_COMPARISON_FUNC_LESS;
+        psoDesc.DepthStencilState.StencilEnable    = FALSE;
 
         psoDesc.SampleMask            = UINT_MAX;
         psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
         psoDesc.NumRenderTargets      = 1;
         psoDesc.RTVFormats[0]         = DXGI_FORMAT_R8G8B8A8_UNORM;
-        psoDesc.DSVFormat             = DXGI_FORMAT_UNKNOWN;
+        psoDesc.DSVFormat             = DXGI_FORMAT_D24_UNORM_S8_UINT;
         psoDesc.SampleDesc.Count      = 1;
 
         hr = pDevice->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_pCompositePSO));
@@ -1340,10 +1361,11 @@ void ScreenSpaceFluid::SmoothAndComposite(
             (1.0f - fluidColorOuter.z / maxComp) * 0.8f + 0.05f
         };
 
-        cb.pad0            = 0.0f;
+        cb.projA           = proj._33;
         cb.specularColor   = { 1.0f, 0.95f, 0.8f, 0.9f };   // 태양빛 색 스페큘러
         cb.fluidColorOuter = fluidColorOuter;
         cb.fluidColorInner = fluidColorInner;
+        cb.projB           = proj._43;
         memcpy(m_pMappedCB + 512, &cb, sizeof(cb));
     }
 
@@ -1465,7 +1487,7 @@ void ScreenSpaceFluid::SmoothAndComposite(
     // SRV 힙 인덱스: Smoothed(2), Thickness(3), SceneColor(4) -> 연속 3개
     // ================================================================
     {
-        pCmdList->OMSetRenderTargets(1, &mainRTV, FALSE, nullptr);
+        pCmdList->OMSetRenderTargets(1, &mainRTV, FALSE, &mainDSV);
 
         pCmdList->SetPipelineState(m_pCompositePSO.Get());
         pCmdList->SetGraphicsRootSignature(m_pCompositeRootSig.Get());
