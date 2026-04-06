@@ -6764,6 +6764,7 @@
           "smoothness": 0.071,
           "metallic": 0.000,
           "emissive": [255, 255, 255, 255],
+          "emissiveTexture": "meshes/textures/Texture_02.png",
           "texture": "meshes/textures/Texture_02.png"
         }
       ]
@@ -6786,6 +6787,7 @@
           "smoothness": 0.071,
           "metallic": 0.000,
           "emissive": [255, 255, 255, 255],
+          "emissiveTexture": "meshes/textures/Texture_02.png",
           "texture": "meshes/textures/Texture_02.png"
         }
       ]
@@ -6807,10 +6809,11 @@
       "position": [-16.0000, 2.0000, -19.3000],
       "rotation": [-0.353553, -0.612373, 0.000000, 0.707107],
       "scale": [1.0000, 1.0000, 1.0000],
-      "color": [0, 0, 0, 255],
-      "smoothness": 1.000,
+      "color": [227, 252, 255, 255],
+      "smoothness": 0.000,
       "metallic": 0.000,
-      "emissive": [255, 0, 0, 255],
+      "emissive": [255, 255, 255, 255],
+      "emissiveTexture": "meshes/textures/lm_magic_stone_emit_02.png",
       "texture": "meshes/textures/tile_02_dif.png",
       "prop": true
     },

@@ -1,42 +1,178 @@
 ﻿{
   "playerSpawn": {
-    "position": [6.0000, 1.0000, -12.0000],
+    "position": [-2.0000, 1.0000, -41.0000],
     "rotationY": 0
   },
   "rooms": [
     {
       "id": 0,
       "name": "Room6",
-      "boundsMin": [-36.9961, -2.4174, 2.9961],
-      "boundsMax": [36.9961, 1.1157, -52.9961],
-      "center": [0.0000, -0.6509, -25.0000]
+      "boundsMin": [-36.9961, -16.1973, 2.9961],
+      "boundsMax": [36.9961, 4.1973, -52.9961],
+      "center": [0.0000, -6.0000, -25.0000]
     }
   ],
   "enemySpawns": [
     {
-      "presetName": "MagmaElemental_Rd",
-      "count": 1,
+      "presetName": "FireGolem_Rd",
+      "count": 2,
       "activationDelay": 0.00,
-      "position": [-6.0000, 0.0000, -10.0000],
+      "position": [11.0800, 0.0000, -38.9800],
+      "rotationY": 0.00,
+      "stats": {
+        "maxHP": 150.0,
+        "moveSpeed": 5.00,
+        "attackRange": 8.00,
+        "attackCooldown": 1.00,
+        "detectionRange": 50.00
+      },
+      "attackType": "Melee",
+      "indicator": {
+        "type": "Circle",
+        "rushDistance": 0.00,
+        "hitRadius": 8.00,
+        "coneAngle": 0.00
+      },
+      "visual": {
+        "meshPath": "Assets/Enemies/Elementals/FireGolem_Rd/FireGolem_Rd.bin",
+        "animationPath": "Assets/Enemies/Elementals/FireGolem_Rd/FireGolem_Rd_Anim.bin",
+        "scale": [2.0000, 2.0000, 2.0000],
+        "color": [255, 255, 255, 255]
+      },
+      "animClips": {
+        "idle": "idle",
+        "chase": "Run_Forward",
+        "attack": "Combat_Unarmed_Attack",
+        "stagger": "Combat_Stun",
+        "death": "Death"
+      }
+    },
+    {
+      "presetName": "ChaosElemental_Rd",
+      "count": 3,
+      "activationDelay": 5.00,
+      "position": [15.8500, 0.0000, -28.2500],
       "rotationY": 0.00,
       "stats": {
         "maxHP": 100.0,
-        "moveSpeed": 5.00,
-        "attackRange": 16.00,
+        "moveSpeed": 8.00,
+        "attackRange": 8.00,
+        "attackCooldown": 1.00,
+        "detectionRange": 50.00
+      },
+      "attackType": "RushFront",
+      "indicator": {
+        "type": "RushCone",
+        "rushDistance": 8.00,
+        "hitRadius": 2.00,
+        "coneAngle": 60.00
+      },
+      "visual": {
+        "meshPath": "Assets/Enemies/Elementals/ChaosElemental_Rd/ChaosElemental_Rd.bin",
+        "animationPath": "Assets/Enemies/Elementals/ChaosElemental_Rd/ChaosElemental_Rd_Anim.bin",
+        "scale": [2.0000, 2.0000, 2.0000],
+        "color": [255, 255, 255, 255]
+      },
+      "animClips": {
+        "idle": "idle",
+        "chase": "Run_Forward",
+        "attack": "Combat_Unarmed_Attack",
+        "stagger": "Combat_Stun",
+        "death": "Death"
+      }
+    },
+    {
+      "presetName": "MoltenElemental_Rd",
+      "count": 4,
+      "activationDelay": 10.00,
+      "position": [10.9100, 0.0000, -17.1600],
+      "rotationY": 0.00,
+      "stats": {
+        "maxHP": 125.0,
+        "moveSpeed": 7.00,
+        "attackRange": 8.00,
         "attackCooldown": 1.00,
         "detectionRange": 50.00
       },
       "attackType": "RushAoE",
       "indicator": {
         "type": "RushCircle",
-        "rushDistance": 16.00,
-        "hitRadius": 6.00,
-        "coneAngle": 0.00
+        "rushDistance": 8.00,
+        "hitRadius": 3.00,
+        "coneAngle": 60.00
+      },
+      "visual": {
+        "meshPath": "Assets/Enemies/Elementals/MoltenElemental_Rd/MoltenElemental_Rd.bin",
+        "animationPath": "Assets/Enemies/Elementals/MoltenElemental_Rd/MoltenElemental_Rd_Anim.bin",
+        "scale": [2.0000, 2.0000, 2.0000],
+        "color": [255, 255, 255, 255]
+      },
+      "animClips": {
+        "idle": "idle",
+        "chase": "Run_Forward",
+        "attack": "Combat_Unarmed_Attack",
+        "stagger": "Combat_Stun",
+        "death": "Death"
+      }
+    },
+    {
+      "presetName": "LavaMan_Rd",
+      "count": 4,
+      "activationDelay": 1.00,
+      "position": [-1.3500, 0.0000, -8.0200],
+      "rotationY": 0.00,
+      "stats": {
+        "maxHP": 125.0,
+        "moveSpeed": 7.00,
+        "attackRange": 16.00,
+        "attackCooldown": 1.00,
+        "detectionRange": 50.00
+      },
+      "attackType": "Melee",
+      "indicator": {
+        "type": "Circle",
+        "rushDistance": 8.00,
+        "hitRadius": 16.00,
+        "coneAngle": 60.00
+      },
+      "visual": {
+        "meshPath": "Assets/Enemies/Elementals/LavaMan_Rd/LavaMan_Rd.bin",
+        "animationPath": "Assets/Enemies/Elementals/LavaMan_Rd/LavaMan_Rd_Anim.bin",
+        "scale": [2.0000, 2.0000, 2.0000],
+        "color": [255, 255, 255, 255]
+      },
+      "animClips": {
+        "idle": "idle",
+        "chase": "Run_Forward",
+        "attack": "Combat_Unarmed_Attack",
+        "stagger": "Combat_Stun",
+        "death": "Death"
+      }
+    },
+    {
+      "presetName": "MagmaElemental_Rd",
+      "count": 4,
+      "activationDelay": 1.00,
+      "position": [-19.2200, 0.0000, -12.5300],
+      "rotationY": 0.00,
+      "stats": {
+        "maxHP": 125.0,
+        "moveSpeed": 7.00,
+        "attackRange": 16.00,
+        "attackCooldown": 1.00,
+        "detectionRange": 50.00
+      },
+      "attackType": "Ranged",
+      "indicator": {
+        "type": "None",
+        "rushDistance": 8.00,
+        "hitRadius": 3.00,
+        "coneAngle": 60.00
       },
       "visual": {
         "meshPath": "Assets/Enemies/Elementals/MagmaElemental_Rd/MagmaElemental_Rd.bin",
         "animationPath": "Assets/Enemies/Elementals/MagmaElemental_Rd/MagmaElemental_Rd_Anim.bin",
-        "scale": [4.0000, 4.0000, 4.0000],
+        "scale": [2.0000, 2.0000, 2.0000],
         "color": [255, 255, 255, 255]
       },
       "animClips": {
@@ -9531,6 +9667,870 @@
       "smoothness": 0.500,
       "metallic": 0.000,
       "texture": "meshes/textures/lm_grid_tile_01_dif.png"
+    },
+    {
+      "name": "CirclePlatformSmall_001",
+      "meshFile": "meshes/CirclePlatformSmall_001.obj",
+      "position": [-2.0000, 0.0000, -41.0000],
+      "rotation": [0.000000, 0.000000, 0.000000, 1.000000],
+      "scale": [0.3000, 0.3000, 0.3000],
+      "color": [255, 255, 255, 255],
+      "smoothness": 0.223,
+      "metallic": 0.000,
+      "texture": "meshes/textures/Texture_02.png"
+    },
+    {
+      "name": "Brazier_002",
+      "meshFile": "meshes/Brazier_002.obj",
+      "position": [-1.8318, 0.0000, -37.0000],
+      "rotation": [0.000000, 0.000000, 0.000000, 1.000000],
+      "scale": [1.0000, 1.0000, 1.0000],
+      "color": [255, 255, 255, 255],
+      "smoothness": 0.223,
+      "metallic": 0.000,
+      "texture": "meshes/textures/Texture_02.png"
+    },
+    {
+      "name": "Coal_002.007",
+      "meshFile": "meshes/Coal_002.007.obj",
+      "position": [-1.8318, 0.0000, -37.0000],
+      "rotation": [0.000000, 0.000000, 0.000000, 1.000000],
+      "scale": [1.0000, 1.0000, 1.0000],
+      "color": [255, 255, 255, 255],
+      "smoothness": 0.223,
+      "metallic": 0.000,
+      "texture": "meshes/textures/Texture_02.png"
+    },
+    {
+      "name": "Spike_001.008",
+      "meshFile": "meshes/Spike_001.008.obj",
+      "position": [-1.8318, 0.0000, -37.0000],
+      "rotation": [0.000000, 0.000000, 0.000000, 1.000000],
+      "scale": [1.0000, 1.0000, 1.0000],
+      "color": [255, 255, 255, 255],
+      "smoothness": 0.223,
+      "metallic": 0.000,
+      "texture": "meshes/textures/Texture_02.png"
+    },
+    {
+      "name": "Brazier_002 (1)",
+      "meshFile": "meshes/Brazier_002.obj",
+      "position": [-1.8318, 0.0000, -45.0000],
+      "rotation": [0.000000, 0.000000, 0.000000, 1.000000],
+      "scale": [1.0000, 1.0000, 1.0000],
+      "color": [255, 255, 255, 255],
+      "smoothness": 0.223,
+      "metallic": 0.000,
+      "texture": "meshes/textures/Texture_02.png"
+    },
+    {
+      "name": "Coal_002.007",
+      "meshFile": "meshes/Coal_002.007.obj",
+      "position": [-1.8318, 0.0000, -45.0000],
+      "rotation": [0.000000, 0.000000, 0.000000, 1.000000],
+      "scale": [1.0000, 1.0000, 1.0000],
+      "color": [255, 255, 255, 255],
+      "smoothness": 0.223,
+      "metallic": 0.000,
+      "texture": "meshes/textures/Texture_02.png"
+    },
+    {
+      "name": "Spike_001.008",
+      "meshFile": "meshes/Spike_001.008.obj",
+      "position": [-1.8318, 0.0000, -45.0000],
+      "rotation": [0.000000, 0.000000, 0.000000, 1.000000],
+      "scale": [1.0000, 1.0000, 1.0000],
+      "color": [255, 255, 255, 255],
+      "smoothness": 0.223,
+      "metallic": 0.000,
+      "texture": "meshes/textures/Texture_02.png"
+    },
+    {
+      "name": "Gear_001",
+      "meshFile": "meshes/Gear_001.obj",
+      "position": [-7.0000, -6.0000, -25.0000],
+      "rotation": [0.000000, 0.000000, 0.000000, 1.000000],
+      "scale": [2.0000, 2.0000, 2.0000],
+      "color": [255, 255, 255, 255],
+      "smoothness": 0.223,
+      "metallic": 0.000,
+      "texture": "meshes/textures/Texture_02.png"
+    },
+    {
+      "name": "Grass_004",
+      "meshFile": "meshes/Grass_004.obj",
+      "position": [4.0800, -1.0500, -29.0100],
+      "rotation": [0.000000, 0.000000, -0.435056, 0.900404],
+      "scale": [1.0000, 1.0000, 1.0000],
+      "color": [255, 255, 255, 255],
+      "smoothness": 0.223,
+      "metallic": 0.000,
+      "texture": "meshes/textures/Texture_02.png",
+      "prop": true
+    },
+    {
+      "name": "Box_001",
+      "meshFile": "meshes/Box_001.obj",
+      "position": [17.2631, 0.0000, -5.6500],
+      "rotation": [0.000000, 0.000000, 0.000000, 1.000000],
+      "scale": [2.0000, 2.0000, 2.0000],
+      "materials": [
+        {
+          "color": [255, 255, 255, 255],
+          "smoothness": 0.223,
+          "metallic": 0.000,
+          "texture": "meshes/textures/Texture_02.png"
+        },
+        {
+          "color": [255, 255, 255, 255],
+          "smoothness": 0.071,
+          "metallic": 0.000,
+          "emissive": [255, 255, 255, 255],
+          "emissiveTexture": "meshes/textures/Texture_02.png",
+          "texture": "meshes/textures/Texture_02.png"
+        }
+      ]
+    },
+    {
+      "name": "GoldPile_002",
+      "meshFile": "meshes/GoldPile_002.obj",
+      "position": [15.2919, 0.0000, -7.0550],
+      "rotation": [0.000000, 0.000000, 0.000000, 1.000000],
+      "scale": [1.0000, 1.0000, 1.0000],
+      "materials": [
+        {
+          "color": [255, 255, 255, 255],
+          "smoothness": 0.706,
+          "metallic": 0.709,
+          "texture": "meshes/textures/Coin_Base_Color.png"
+        },
+        {
+          "color": [255, 255, 255, 255],
+          "smoothness": 0.223,
+          "metallic": 0.000,
+          "texture": "meshes/textures/Texture_02.png"
+        }
+      ],
+      "prop": true
+    },
+    {
+      "name": "Coal_002",
+      "meshFile": "meshes/Coal_002.007.obj",
+      "position": [18.4000, -1.1400, -7.7500],
+      "rotation": [0.000000, 0.000000, 0.000000, 1.000000],
+      "scale": [1.0000, 1.0000, 1.0000],
+      "color": [255, 255, 255, 255],
+      "smoothness": 0.223,
+      "metallic": 0.000,
+      "texture": "meshes/textures/Texture_02.png",
+      "prop": true
+    },
+    {
+      "name": "lm_rock_08",
+      "meshFile": "meshes/lm_rock_08.obj",
+      "position": [6.1841, -0.0120, -43.7296],
+      "rotation": [0.000000, 0.000000, 0.000000, 1.000000],
+      "scale": [0.6148, 0.6148, 0.6148],
+      "color": [255, 255, 255, 255],
+      "smoothness": 0.500,
+      "metallic": 0.000,
+      "texture": "meshes/textures/tile_04_dif.png",
+      "prop": true
+    },
+    {
+      "name": "lm_rock_07",
+      "meshFile": "meshes/lm_rock_07.obj",
+      "position": [5.8311, -0.0220, -43.4026],
+      "rotation": [0.000000, 0.000000, 0.000000, 1.000000],
+      "scale": [0.8016, 0.8016, 0.8016],
+      "color": [255, 255, 255, 255],
+      "smoothness": 0.500,
+      "metallic": 0.000,
+      "texture": "meshes/textures/tile_04_dif.png",
+      "prop": true
+    },
+    {
+      "name": "lm_rock_08 (1)",
+      "meshFile": "meshes/lm_rock_08.obj",
+      "position": [5.6101, -0.0230, -43.7186],
+      "rotation": [0.000000, -0.404871, 0.000000, 0.914374],
+      "scale": [0.4428, 0.4908, 0.4428],
+      "color": [255, 255, 255, 255],
+      "smoothness": 0.500,
+      "metallic": 0.000,
+      "texture": "meshes/textures/tile_04_dif.png",
+      "prop": true
+    },
+    {
+      "name": "lm_rock_08 (2)",
+      "meshFile": "meshes/lm_rock_08.obj",
+      "position": [5.7891, -0.0250, -43.8856],
+      "rotation": [0.000000, -0.404871, 0.000000, 0.914374],
+      "scale": [0.2682, 0.2973, 0.2682],
+      "color": [255, 255, 255, 255],
+      "smoothness": 0.500,
+      "metallic": 0.000,
+      "texture": "meshes/textures/tile_04_dif.png",
+      "prop": true
+    },
+    {
+      "name": "lm_rock_08",
+      "meshFile": "meshes/lm_rock_08.obj",
+      "position": [24.4334, -0.0120, -30.9841],
+      "rotation": [0.000000, 0.000000, 0.000000, 1.000000],
+      "scale": [0.6148, 0.6148, 0.6148],
+      "color": [255, 255, 255, 255],
+      "smoothness": 0.500,
+      "metallic": 0.000,
+      "texture": "meshes/textures/tile_04_dif.png",
+      "prop": true
+    },
+    {
+      "name": "lm_rock_07",
+      "meshFile": "meshes/lm_rock_07.obj",
+      "position": [24.0804, -0.0220, -30.6571],
+      "rotation": [0.000000, 0.000000, 0.000000, 1.000000],
+      "scale": [0.8016, 0.8016, 0.8016],
+      "color": [255, 255, 255, 255],
+      "smoothness": 0.500,
+      "metallic": 0.000,
+      "texture": "meshes/textures/tile_04_dif.png",
+      "prop": true
+    },
+    {
+      "name": "lm_rock_08 (1)",
+      "meshFile": "meshes/lm_rock_08.obj",
+      "position": [23.8594, -0.0230, -30.9731],
+      "rotation": [0.000000, -0.404871, 0.000000, 0.914374],
+      "scale": [0.4428, 0.4908, 0.4428],
+      "color": [255, 255, 255, 255],
+      "smoothness": 0.500,
+      "metallic": 0.000,
+      "texture": "meshes/textures/tile_04_dif.png",
+      "prop": true
+    },
+    {
+      "name": "lm_rock_08 (2)",
+      "meshFile": "meshes/lm_rock_08.obj",
+      "position": [24.0384, -0.0250, -31.1401],
+      "rotation": [0.000000, -0.404871, 0.000000, 0.914374],
+      "scale": [0.2682, 0.2973, 0.2682],
+      "color": [255, 255, 255, 255],
+      "smoothness": 0.500,
+      "metallic": 0.000,
+      "texture": "meshes/textures/tile_04_dif.png",
+      "prop": true
+    },
+    {
+      "name": "lm_rock_08",
+      "meshFile": "meshes/lm_rock_08.obj",
+      "position": [17.4226, -0.0120, -21.3424],
+      "rotation": [0.000000, 0.000000, 0.000000, 1.000000],
+      "scale": [0.6148, 0.6148, 0.6148],
+      "color": [255, 255, 255, 255],
+      "smoothness": 0.500,
+      "metallic": 0.000,
+      "texture": "meshes/textures/tile_04_dif.png",
+      "prop": true
+    },
+    {
+      "name": "lm_rock_07",
+      "meshFile": "meshes/lm_rock_07.obj",
+      "position": [17.0696, -0.0220, -21.0154],
+      "rotation": [0.000000, 0.000000, 0.000000, 1.000000],
+      "scale": [0.8016, 0.8016, 0.8016],
+      "color": [255, 255, 255, 255],
+      "smoothness": 0.500,
+      "metallic": 0.000,
+      "texture": "meshes/textures/tile_04_dif.png",
+      "prop": true
+    },
+    {
+      "name": "lm_rock_08 (1)",
+      "meshFile": "meshes/lm_rock_08.obj",
+      "position": [16.8486, -0.0230, -21.3314],
+      "rotation": [0.000000, -0.404871, 0.000000, 0.914374],
+      "scale": [0.4428, 0.4908, 0.4428],
+      "color": [255, 255, 255, 255],
+      "smoothness": 0.500,
+      "metallic": 0.000,
+      "texture": "meshes/textures/tile_04_dif.png",
+      "prop": true
+    },
+    {
+      "name": "lm_rock_08 (2)",
+      "meshFile": "meshes/lm_rock_08.obj",
+      "position": [17.0276, -0.0250, -21.4984],
+      "rotation": [0.000000, -0.404871, 0.000000, 0.914374],
+      "scale": [0.2682, 0.2973, 0.2682],
+      "color": [255, 255, 255, 255],
+      "smoothness": 0.500,
+      "metallic": 0.000,
+      "texture": "meshes/textures/tile_04_dif.png",
+      "prop": true
+    },
+    {
+      "name": "lm_rock_08",
+      "meshFile": "meshes/lm_rock_08.obj",
+      "position": [6.4230, -0.0120, -11.8269],
+      "rotation": [0.000000, 0.000000, 0.000000, 1.000000],
+      "scale": [0.6148, 0.6148, 0.6148],
+      "color": [255, 255, 255, 255],
+      "smoothness": 0.500,
+      "metallic": 0.000,
+      "texture": "meshes/textures/tile_04_dif.png",
+      "prop": true
+    },
+    {
+      "name": "lm_rock_07",
+      "meshFile": "meshes/lm_rock_07.obj",
+      "position": [6.0700, -0.0220, -11.4999],
+      "rotation": [0.000000, 0.000000, 0.000000, 1.000000],
+      "scale": [0.8016, 0.8016, 0.8016],
+      "color": [255, 255, 255, 255],
+      "smoothness": 0.500,
+      "metallic": 0.000,
+      "texture": "meshes/textures/tile_04_dif.png",
+      "prop": true
+    },
+    {
+      "name": "lm_rock_08 (1)",
+      "meshFile": "meshes/lm_rock_08.obj",
+      "position": [5.8490, -0.0230, -11.8159],
+      "rotation": [0.000000, -0.404871, 0.000000, 0.914374],
+      "scale": [0.4428, 0.4908, 0.4428],
+      "color": [255, 255, 255, 255],
+      "smoothness": 0.500,
+      "metallic": 0.000,
+      "texture": "meshes/textures/tile_04_dif.png",
+      "prop": true
+    },
+    {
+      "name": "lm_rock_08 (2)",
+      "meshFile": "meshes/lm_rock_08.obj",
+      "position": [6.0280, -0.0250, -11.9829],
+      "rotation": [0.000000, -0.404871, 0.000000, 0.914374],
+      "scale": [0.2682, 0.2973, 0.2682],
+      "color": [255, 255, 255, 255],
+      "smoothness": 0.500,
+      "metallic": 0.000,
+      "texture": "meshes/textures/tile_04_dif.png",
+      "prop": true
+    },
+    {
+      "name": "lm_rock_08",
+      "meshFile": "meshes/lm_rock_08.obj",
+      "position": [-2.8229, -0.0120, -6.7546],
+      "rotation": [0.000000, 0.000000, 0.000000, 1.000000],
+      "scale": [0.6148, 0.6148, 0.6148],
+      "color": [255, 255, 255, 255],
+      "smoothness": 0.500,
+      "metallic": 0.000,
+      "texture": "meshes/textures/tile_04_dif.png",
+      "prop": true
+    },
+    {
+      "name": "lm_rock_07",
+      "meshFile": "meshes/lm_rock_07.obj",
+      "position": [-3.1759, -0.0220, -6.4276],
+      "rotation": [0.000000, 0.000000, 0.000000, 1.000000],
+      "scale": [0.8016, 0.8016, 0.8016],
+      "color": [255, 255, 255, 255],
+      "smoothness": 0.500,
+      "metallic": 0.000,
+      "texture": "meshes/textures/tile_04_dif.png",
+      "prop": true
+    },
+    {
+      "name": "lm_rock_08 (1)",
+      "meshFile": "meshes/lm_rock_08.obj",
+      "position": [-3.3969, -0.0230, -6.7436],
+      "rotation": [0.000000, -0.404871, 0.000000, 0.914374],
+      "scale": [0.4428, 0.4908, 0.4428],
+      "color": [255, 255, 255, 255],
+      "smoothness": 0.500,
+      "metallic": 0.000,
+      "texture": "meshes/textures/tile_04_dif.png",
+      "prop": true
+    },
+    {
+      "name": "lm_rock_08 (2)",
+      "meshFile": "meshes/lm_rock_08.obj",
+      "position": [-3.2179, -0.0250, -6.9106],
+      "rotation": [0.000000, -0.404871, 0.000000, 0.914374],
+      "scale": [0.2682, 0.2973, 0.2682],
+      "color": [255, 255, 255, 255],
+      "smoothness": 0.500,
+      "metallic": 0.000,
+      "texture": "meshes/textures/tile_04_dif.png",
+      "prop": true
+    },
+    {
+      "name": "lm_rock_08",
+      "meshFile": "meshes/lm_rock_08.obj",
+      "position": [-13.0044, -0.0120, -10.6740],
+      "rotation": [0.000000, 0.000000, 0.000000, 1.000000],
+      "scale": [0.6148, 0.6148, 0.6148],
+      "color": [255, 255, 255, 255],
+      "smoothness": 0.500,
+      "metallic": 0.000,
+      "texture": "meshes/textures/tile_04_dif.png",
+      "prop": true
+    },
+    {
+      "name": "lm_rock_07",
+      "meshFile": "meshes/lm_rock_07.obj",
+      "position": [-13.3574, -0.0220, -10.3470],
+      "rotation": [0.000000, 0.000000, 0.000000, 1.000000],
+      "scale": [0.8016, 0.8016, 0.8016],
+      "color": [255, 255, 255, 255],
+      "smoothness": 0.500,
+      "metallic": 0.000,
+      "texture": "meshes/textures/tile_04_dif.png",
+      "prop": true
+    },
+    {
+      "name": "lm_rock_08 (1)",
+      "meshFile": "meshes/lm_rock_08.obj",
+      "position": [-13.5784, -0.0230, -10.6630],
+      "rotation": [0.000000, -0.404871, 0.000000, 0.914374],
+      "scale": [0.4428, 0.4908, 0.4428],
+      "color": [255, 255, 255, 255],
+      "smoothness": 0.500,
+      "metallic": 0.000,
+      "texture": "meshes/textures/tile_04_dif.png",
+      "prop": true
+    },
+    {
+      "name": "lm_rock_08 (2)",
+      "meshFile": "meshes/lm_rock_08.obj",
+      "position": [-13.3994, -0.0250, -10.8300],
+      "rotation": [0.000000, -0.404871, 0.000000, 0.914374],
+      "scale": [0.2682, 0.2973, 0.2682],
+      "color": [255, 255, 255, 255],
+      "smoothness": 0.500,
+      "metallic": 0.000,
+      "texture": "meshes/textures/tile_04_dif.png",
+      "prop": true
+    },
+    {
+      "name": "lm_rock_08",
+      "meshFile": "meshes/lm_rock_08.obj",
+      "position": [-25.4397, -0.0120, -16.1925],
+      "rotation": [0.000000, 0.000000, 0.000000, 1.000000],
+      "scale": [0.6148, 0.6148, 0.6148],
+      "color": [255, 255, 255, 255],
+      "smoothness": 0.500,
+      "metallic": 0.000,
+      "texture": "meshes/textures/tile_04_dif.png",
+      "prop": true
+    },
+    {
+      "name": "lm_rock_07",
+      "meshFile": "meshes/lm_rock_07.obj",
+      "position": [-25.7927, -0.0220, -15.8655],
+      "rotation": [0.000000, 0.000000, 0.000000, 1.000000],
+      "scale": [0.8016, 0.8016, 0.8016],
+      "color": [255, 255, 255, 255],
+      "smoothness": 0.500,
+      "metallic": 0.000,
+      "texture": "meshes/textures/tile_04_dif.png",
+      "prop": true
+    },
+    {
+      "name": "lm_rock_08 (1)",
+      "meshFile": "meshes/lm_rock_08.obj",
+      "position": [-26.0137, -0.0230, -16.1815],
+      "rotation": [0.000000, -0.404871, 0.000000, 0.914374],
+      "scale": [0.4428, 0.4908, 0.4428],
+      "color": [255, 255, 255, 255],
+      "smoothness": 0.500,
+      "metallic": 0.000,
+      "texture": "meshes/textures/tile_04_dif.png",
+      "prop": true
+    },
+    {
+      "name": "lm_rock_08 (2)",
+      "meshFile": "meshes/lm_rock_08.obj",
+      "position": [-25.8347, -0.0250, -16.3485],
+      "rotation": [0.000000, -0.404871, 0.000000, 0.914374],
+      "scale": [0.2682, 0.2973, 0.2682],
+      "color": [255, 255, 255, 255],
+      "smoothness": 0.500,
+      "metallic": 0.000,
+      "texture": "meshes/textures/tile_04_dif.png",
+      "prop": true
+    },
+    {
+      "name": "lm_rock_08",
+      "meshFile": "meshes/lm_rock_08.obj",
+      "position": [-17.6232, -0.0120, -12.3278],
+      "rotation": [0.000000, 0.000000, 0.000000, 1.000000],
+      "scale": [0.4982, 0.4982, 0.4982],
+      "color": [255, 255, 255, 255],
+      "smoothness": 0.500,
+      "metallic": 0.000,
+      "texture": "meshes/textures/tile_04_dif.png",
+      "prop": true
+    },
+    {
+      "name": "lm_rock_08 (1)",
+      "meshFile": "meshes/lm_rock_08.obj",
+      "position": [-17.8292, -0.0140, -12.1898],
+      "rotation": [0.000000, -0.082225, 0.000000, 0.996614],
+      "scale": [0.3912, 0.4336, 0.3912],
+      "color": [255, 255, 255, 255],
+      "smoothness": 0.500,
+      "metallic": 0.000,
+      "texture": "meshes/textures/tile_04_dif.png",
+      "prop": true
+    },
+    {
+      "name": "lm_rock_08 (2)",
+      "meshFile": "meshes/lm_rock_08.obj",
+      "position": [-17.6972, -0.0250, -12.0458],
+      "rotation": [0.000000, -0.082225, 0.000000, 0.996614],
+      "scale": [0.2682, 0.2973, 0.2682],
+      "color": [255, 255, 255, 255],
+      "smoothness": 0.500,
+      "metallic": 0.000,
+      "texture": "meshes/textures/tile_04_dif.png",
+      "prop": true
+    },
+    {
+      "name": "lm_rock_08",
+      "meshFile": "meshes/lm_rock_08.obj",
+      "position": [1.8119, -0.0120, -10.4095],
+      "rotation": [0.000000, 0.000000, 0.000000, 1.000000],
+      "scale": [0.4982, 0.4982, 0.4982],
+      "color": [255, 255, 255, 255],
+      "smoothness": 0.500,
+      "metallic": 0.000,
+      "texture": "meshes/textures/tile_04_dif.png",
+      "prop": true
+    },
+    {
+      "name": "lm_rock_08 (1)",
+      "meshFile": "meshes/lm_rock_08.obj",
+      "position": [1.6059, -0.0140, -10.2715],
+      "rotation": [0.000000, -0.082225, 0.000000, 0.996614],
+      "scale": [0.3912, 0.4336, 0.3912],
+      "color": [255, 255, 255, 255],
+      "smoothness": 0.500,
+      "metallic": 0.000,
+      "texture": "meshes/textures/tile_04_dif.png",
+      "prop": true
+    },
+    {
+      "name": "lm_rock_08 (2)",
+      "meshFile": "meshes/lm_rock_08.obj",
+      "position": [1.7379, -0.0250, -10.1275],
+      "rotation": [0.000000, -0.082225, 0.000000, 0.996614],
+      "scale": [0.2682, 0.2973, 0.2682],
+      "color": [255, 255, 255, 255],
+      "smoothness": 0.500,
+      "metallic": 0.000,
+      "texture": "meshes/textures/tile_04_dif.png",
+      "prop": true
+    },
+    {
+      "name": "lm_rock_08",
+      "meshFile": "meshes/lm_rock_08.obj",
+      "position": [7.9679, -0.0120, -37.8235],
+      "rotation": [0.000000, 0.000000, 0.000000, 1.000000],
+      "scale": [0.4982, 0.4982, 0.4982],
+      "color": [255, 255, 255, 255],
+      "smoothness": 0.500,
+      "metallic": 0.000,
+      "texture": "meshes/textures/tile_04_dif.png",
+      "prop": true
+    },
+    {
+      "name": "lm_rock_08 (1)",
+      "meshFile": "meshes/lm_rock_08.obj",
+      "position": [7.7619, -0.0140, -37.6855],
+      "rotation": [0.000000, -0.082225, 0.000000, 0.996614],
+      "scale": [0.3912, 0.4336, 0.3912],
+      "color": [255, 255, 255, 255],
+      "smoothness": 0.500,
+      "metallic": 0.000,
+      "texture": "meshes/textures/tile_04_dif.png",
+      "prop": true
+    },
+    {
+      "name": "lm_rock_08 (2)",
+      "meshFile": "meshes/lm_rock_08.obj",
+      "position": [7.8939, -0.0250, -37.5415],
+      "rotation": [0.000000, -0.082225, 0.000000, 0.996614],
+      "scale": [0.2682, 0.2973, 0.2682],
+      "color": [255, 255, 255, 255],
+      "smoothness": 0.500,
+      "metallic": 0.000,
+      "texture": "meshes/textures/tile_04_dif.png",
+      "prop": true
+    },
+    {
+      "name": "lm_rock_08",
+      "meshFile": "meshes/lm_rock_08.obj",
+      "position": [18.7020, -0.0120, -34.7123],
+      "rotation": [0.000000, 0.000000, 0.000000, 1.000000],
+      "scale": [0.4982, 0.4982, 0.4982],
+      "color": [255, 255, 255, 255],
+      "smoothness": 0.500,
+      "metallic": 0.000,
+      "texture": "meshes/textures/tile_04_dif.png",
+      "prop": true
+    },
+    {
+      "name": "lm_rock_08 (1)",
+      "meshFile": "meshes/lm_rock_08.obj",
+      "position": [18.4960, -0.0140, -34.5743],
+      "rotation": [0.000000, -0.082225, 0.000000, 0.996614],
+      "scale": [0.3912, 0.4336, 0.3912],
+      "color": [255, 255, 255, 255],
+      "smoothness": 0.500,
+      "metallic": 0.000,
+      "texture": "meshes/textures/tile_04_dif.png",
+      "prop": true
+    },
+    {
+      "name": "lm_rock_08 (2)",
+      "meshFile": "meshes/lm_rock_08.obj",
+      "position": [18.6280, -0.0250, -34.4303],
+      "rotation": [0.000000, -0.082225, 0.000000, 0.996614],
+      "scale": [0.2682, 0.2973, 0.2682],
+      "color": [255, 255, 255, 255],
+      "smoothness": 0.500,
+      "metallic": 0.000,
+      "texture": "meshes/textures/tile_04_dif.png",
+      "prop": true
+    },
+    {
+      "name": "lm_rock_08",
+      "meshFile": "meshes/lm_rock_08.obj",
+      "position": [25.7811, -0.0120, -22.9652],
+      "rotation": [0.000000, 0.000000, 0.000000, 1.000000],
+      "scale": [0.4982, 0.4982, 0.4982],
+      "color": [255, 255, 255, 255],
+      "smoothness": 0.500,
+      "metallic": 0.000,
+      "texture": "meshes/textures/tile_04_dif.png",
+      "prop": true
+    },
+    {
+      "name": "lm_rock_08 (1)",
+      "meshFile": "meshes/lm_rock_08.obj",
+      "position": [25.5751, -0.0140, -22.8272],
+      "rotation": [0.000000, -0.082225, 0.000000, 0.996614],
+      "scale": [0.3912, 0.4336, 0.3912],
+      "color": [255, 255, 255, 255],
+      "smoothness": 0.500,
+      "metallic": 0.000,
+      "texture": "meshes/textures/tile_04_dif.png",
+      "prop": true
+    },
+    {
+      "name": "lm_rock_08 (2)",
+      "meshFile": "meshes/lm_rock_08.obj",
+      "position": [25.7071, -0.0250, -22.6832],
+      "rotation": [0.000000, -0.082225, 0.000000, 0.996614],
+      "scale": [0.2682, 0.2973, 0.2682],
+      "color": [255, 255, 255, 255],
+      "smoothness": 0.500,
+      "metallic": 0.000,
+      "texture": "meshes/textures/tile_04_dif.png",
+      "prop": true
+    },
+    {
+      "name": "lm_rock_08",
+      "meshFile": "meshes/lm_rock_08.obj",
+      "position": [14.2975, -0.0120, -27.7368],
+      "rotation": [0.000000, 0.000000, 0.000000, 1.000000],
+      "scale": [0.6148, 0.6148, 0.6148],
+      "color": [255, 255, 255, 255],
+      "smoothness": 0.500,
+      "metallic": 0.000,
+      "texture": "meshes/textures/tile_04_dif.png",
+      "prop": true
+    },
+    {
+      "name": "lm_rock_07",
+      "meshFile": "meshes/lm_rock_07.obj",
+      "position": [13.9445, -0.0220, -27.4098],
+      "rotation": [0.000000, 0.000000, 0.000000, 1.000000],
+      "scale": [0.8016, 0.8016, 0.8016],
+      "color": [255, 255, 255, 255],
+      "smoothness": 0.500,
+      "metallic": 0.000,
+      "texture": "meshes/textures/tile_04_dif.png",
+      "prop": true
+    },
+    {
+      "name": "lm_rock_08 (1)",
+      "meshFile": "meshes/lm_rock_08.obj",
+      "position": [13.7235, -0.0230, -27.7258],
+      "rotation": [0.000000, -0.404871, 0.000000, 0.914374],
+      "scale": [0.4428, 0.4908, 0.4428],
+      "color": [255, 255, 255, 255],
+      "smoothness": 0.500,
+      "metallic": 0.000,
+      "texture": "meshes/textures/tile_04_dif.png",
+      "prop": true
+    },
+    {
+      "name": "lm_rock_08 (2)",
+      "meshFile": "meshes/lm_rock_08.obj",
+      "position": [13.9025, -0.0250, -27.8928],
+      "rotation": [0.000000, -0.404871, 0.000000, 0.914374],
+      "scale": [0.2682, 0.2973, 0.2682],
+      "color": [255, 255, 255, 255],
+      "smoothness": 0.500,
+      "metallic": 0.000,
+      "texture": "meshes/textures/tile_04_dif.png",
+      "prop": true
+    },
+    {
+      "name": "lm_rock_08",
+      "meshFile": "meshes/lm_rock_08.obj",
+      "position": [9.7357, -0.0120, -17.4756],
+      "rotation": [0.000000, 0.000000, 0.000000, 1.000000],
+      "scale": [0.4982, 0.4982, 0.4982],
+      "color": [255, 255, 255, 255],
+      "smoothness": 0.500,
+      "metallic": 0.000,
+      "texture": "meshes/textures/tile_04_dif.png",
+      "prop": true
+    },
+    {
+      "name": "lm_rock_08 (1)",
+      "meshFile": "meshes/lm_rock_08.obj",
+      "position": [9.5297, -0.0140, -17.3376],
+      "rotation": [0.000000, -0.082225, 0.000000, 0.996614],
+      "scale": [0.3912, 0.4336, 0.3912],
+      "color": [255, 255, 255, 255],
+      "smoothness": 0.500,
+      "metallic": 0.000,
+      "texture": "meshes/textures/tile_04_dif.png",
+      "prop": true
+    },
+    {
+      "name": "lm_rock_08 (2)",
+      "meshFile": "meshes/lm_rock_08.obj",
+      "position": [9.6617, -0.0250, -17.1936],
+      "rotation": [0.000000, -0.082225, 0.000000, 0.996614],
+      "scale": [0.2682, 0.2973, 0.2682],
+      "color": [255, 255, 255, 255],
+      "smoothness": 0.500,
+      "metallic": 0.000,
+      "texture": "meshes/textures/tile_04_dif.png",
+      "prop": true
+    },
+    {
+      "name": "lm_rock_08",
+      "meshFile": "meshes/lm_rock_08.obj",
+      "position": [1.2564, -0.0120, -3.3338],
+      "rotation": [0.000000, 0.000000, 0.000000, 1.000000],
+      "scale": [0.4982, 0.4982, 0.4982],
+      "color": [255, 255, 255, 255],
+      "smoothness": 0.500,
+      "metallic": 0.000,
+      "texture": "meshes/textures/tile_04_dif.png",
+      "prop": true
+    },
+    {
+      "name": "lm_rock_08 (1)",
+      "meshFile": "meshes/lm_rock_08.obj",
+      "position": [1.0504, -0.0140, -3.1958],
+      "rotation": [0.000000, -0.082225, 0.000000, 0.996614],
+      "scale": [0.3912, 0.4336, 0.3912],
+      "color": [255, 255, 255, 255],
+      "smoothness": 0.500,
+      "metallic": 0.000,
+      "texture": "meshes/textures/tile_04_dif.png",
+      "prop": true
+    },
+    {
+      "name": "lm_rock_08 (2)",
+      "meshFile": "meshes/lm_rock_08.obj",
+      "position": [1.1824, -0.0250, -3.0518],
+      "rotation": [0.000000, -0.082225, 0.000000, 0.996614],
+      "scale": [0.2682, 0.2973, 0.2682],
+      "color": [255, 255, 255, 255],
+      "smoothness": 0.500,
+      "metallic": 0.000,
+      "texture": "meshes/textures/tile_04_dif.png",
+      "prop": true
+    },
+    {
+      "name": "lm_rock_08",
+      "meshFile": "meshes/lm_rock_08.obj",
+      "position": [-22.4049, -0.0120, -9.4448],
+      "rotation": [0.000000, 0.000000, 0.000000, 1.000000],
+      "scale": [0.4982, 0.4982, 0.4982],
+      "color": [255, 255, 255, 255],
+      "smoothness": 0.500,
+      "metallic": 0.000,
+      "texture": "meshes/textures/tile_04_dif.png",
+      "prop": true
+    },
+    {
+      "name": "lm_rock_08 (1)",
+      "meshFile": "meshes/lm_rock_08.obj",
+      "position": [-22.6109, -0.0140, -9.3068],
+      "rotation": [0.000000, -0.082225, 0.000000, 0.996614],
+      "scale": [0.3912, 0.4336, 0.3912],
+      "color": [255, 255, 255, 255],
+      "smoothness": 0.500,
+      "metallic": 0.000,
+      "texture": "meshes/textures/tile_04_dif.png",
+      "prop": true
+    },
+    {
+      "name": "lm_rock_08 (2)",
+      "meshFile": "meshes/lm_rock_08.obj",
+      "position": [-22.4789, -0.0250, -9.1628],
+      "rotation": [0.000000, -0.082225, 0.000000, 0.996614],
+      "scale": [0.2682, 0.2973, 0.2682],
+      "color": [255, 255, 255, 255],
+      "smoothness": 0.500,
+      "metallic": 0.000,
+      "texture": "meshes/textures/tile_04_dif.png",
+      "prop": true
+    },
+    {
+      "name": "lm_magic_stone",
+      "meshFile": "meshes/lm_magic_stone.obj",
+      "position": [25.6348, 0.0000, -18.6600],
+      "rotation": [-0.191953, -0.199189, 0.184849, 0.943032],
+      "scale": [2.0000, 2.0000, 2.0000],
+      "color": [227, 252, 255, 255],
+      "smoothness": 0.000,
+      "metallic": 0.000,
+      "emissive": [255, 255, 255, 255],
+      "emissiveTexture": "meshes/textures/lm_magic_stone_emit_02.png",
+      "texture": "meshes/textures/tile_02_dif.png",
+      "prop": true
+    },
+    {
+      "name": "ColumnBigBroken_002",
+      "meshFile": "meshes/ColumnBigBroken_002.obj",
+      "position": [27.4000, -0.1100, -34.8100],
+      "rotation": [-0.293201, -0.532640, -0.224591, 0.761503],
+      "scale": [1.0000, 1.0000, 1.0000],
+      "materials": [
+        {
+          "color": [255, 255, 255, 255],
+          "smoothness": 0.223,
+          "metallic": 0.000,
+          "texture": "meshes/textures/Texture_02.png"
+        },
+        {
+          "color": [255, 255, 255, 255],
+          "smoothness": 0.500,
+          "metallic": 1.000,
+          "texture": "meshes/textures/Texture_02.png"
+        }
+      ]
     }
   ]
 }
