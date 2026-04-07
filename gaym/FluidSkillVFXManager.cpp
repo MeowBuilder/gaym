@@ -86,7 +86,8 @@ int FluidSkillVFXManager::SpawnSequenceEffect(const XMFLOAT3& origin, const XMFL
             cfg.particleCount     = seqDef.particleCount;
             cfg.spawnRadius       = seqDef.spawnRadius;
             cfg.boundaryStiffness = 150.0f;
-            cfg.particleSize      = 0.35f;
+            // 보스 메가브레스 입자 크기를 7.0으로 최적화 (검은 선 제거 + 시야 확보)
+            cfg.particleSize      = (seqDef.name == "Dragon_MegaBreath") ? 7.0f : 0.35f; 
             if (seqDef.overridePhysics) {
                 cfg.stiffness              = seqDef.sphStiffness;
                 cfg.nearPressureMultiplier = seqDef.sphNearPressureMult;
@@ -317,12 +318,18 @@ void FluidSkillVFXManager::UpdatePhase(FluidVFXSlot& slot, float dt)
         slot.pSystem->SetConfinementBox(phase.boxDesc);
 
         if (phase.motionMode == ParticleMotionMode::Beam) {
-            // Beam: 시작점/끝점 설정
+            // 보스 메가브레스는 120m로 밀집 사격 및 흐름 활성화, 나머지는 20m 정적 레이저
+            bool isBossBreath = (slot.sequenceDef.name == "Dragon_MegaBreath");
+            float beamLen = isBossBreath ? 120.f : 20.f;
+
             BeamDesc bd = phase.beamDesc;
-            bd.startPos = slot.origin;
+            bd.startPos      = slot.origin;
+            bd.enableFlow    = isBossBreath; // 보스만 입자가 흐르도록 설정
+            bd.verticalScale = phase.beamDesc.verticalScale;
+
             XMVECTOR endV = XMVectorAdd(
                 XMLoadFloat3(&slot.origin),
-                XMVectorScale(XMLoadFloat3(&slot.direction), 20.f)
+                XMVectorScale(XMLoadFloat3(&slot.direction), beamLen)
             );
             XMStoreFloat3(&bd.endPos, endV);
             // prevDir을 현재 방향으로 초기화 (첫 프레임 점프 방지)
@@ -443,14 +450,20 @@ void FluidSkillVFXManager::UpdatePhase(FluidVFXSlot& slot, float dt)
     // Beam 모드: 매 프레임 startPos/endPos 갱신 (플레이어 방향 추적)
     // prevDir 보존하면서 startPos/endPos만 업데이트
     if (curPhase.motionMode == ParticleMotionMode::Beam) {
+        bool isBossBreath = (slot.sequenceDef.name == "Dragon_MegaBreath");
+        float beamLen = isBossBreath ? 120.f : 20.f;
+
         BeamDesc bd = slot.pSystem->GetBeamDesc();  // 현재 빔 상태 (prevDir 포함)
         bd.speedMin     = curPhase.beamDesc.speedMin;
         bd.speedMax     = curPhase.beamDesc.speedMax;
         bd.spreadRadius = curPhase.beamDesc.spreadRadius;
+        bd.enableFlow    = isBossBreath;
+        bd.verticalScale = curPhase.beamDesc.verticalScale;
         bd.startPos     = slot.origin;
+
         XMVECTOR endV = XMVectorAdd(
             XMLoadFloat3(&slot.origin),
-            XMVectorScale(XMLoadFloat3(&slot.direction), 20.f)
+            XMVectorScale(XMLoadFloat3(&slot.direction), beamLen)
         );
         XMStoreFloat3(&bd.endPos, endV);
         slot.pSystem->SetBeamDesc(bd);
@@ -694,7 +707,7 @@ FluidSkillVFXDef FluidSkillVFXManager::GetVFXDef(ElementType element, const Rune
         def.particleCount = (int)(def.particleCount * 1.5f);
     }
 
-    if (def.particleCount > 2048) def.particleCount = 2048;
+    if (def.particleCount > 4096) def.particleCount = 4096;
 
     return def;
 }

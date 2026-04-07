@@ -206,15 +206,15 @@ void EnemySpawner::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pComma
     dragon.m_IndicatorConfig.m_eType = IndicatorType::Circle;
     dragon.m_IndicatorConfig.m_fHitRadius = 15.0f;
 
-    // Normal attack: Breath attack (상향된 데미지)
+    // Normal attack: Breath attack (reduced projectile count for performance)
     dragon.m_fnCreateAttack = [pProjMgr]() {
-        return std::make_unique<BreathAttackBehavior>(pProjMgr, 28.0f, 38.0f, 8, 55.0f, 0.4f, 0.9f, 0.3f);
+        return std::make_unique<BreathAttackBehavior>(pProjMgr, 32.0f, 38.0f, 5, 50.0f, 0.4f, 0.8f, 0.3f);
     };
 
-    // Special attack (fallback if no phase controller, 상향된 데미지)
+    // Special attack (fallback if no phase controller, reduced wave count)
     dragon.m_fnCreateSpecialAttack = [pProjMgr]() {
         return std::make_unique<FlyingBarrageAttackBehavior>(
-            pProjMgr, 22.0f, 18.0f, 20, 7, 0.3f, 16.0f, 0.8f, 0.8f);
+            pProjMgr, 26.0f, 18.0f, 12, 4, 0.35f, 16.0f, 0.8f, 0.8f);
     };
 
     // Boss Phase Configuration - 3 phases with varied attack patterns
@@ -229,9 +229,9 @@ void EnemySpawner::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pComma
         phase1.m_nSpecialAttackChance = 35;
         phase1.m_bCanFly = false;
 
-        // Primary: Breath attack (상향된 데미지)
+        // Primary: Breath attack (reduced projectiles for performance)
         phase1.m_fnPrimaryAttack = [pProjMgr]() {
-            return std::make_unique<BreathAttackBehavior>(pProjMgr, 25.0f, 35.0f, 7, 50.0f, 0.4f, 0.9f, 0.3f);
+            return std::make_unique<BreathAttackBehavior>(pProjMgr, 30.0f, 35.0f, 4, 45.0f, 0.4f, 0.8f, 0.3f);
         };
 
         // Special: Randomly choose between tail sweep and claw combo
@@ -260,9 +260,9 @@ void EnemySpawner::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pComma
         phase2.m_nFlyingAttackChance = 55;    // 비행 공격 확률 증가
         phase2.m_bCanFly = true;
 
-        // Primary: Faster breath (상향된 데미지)
+        // Primary: Faster breath (reduced projectiles for performance)
         phase2.m_fnPrimaryAttack = [pProjMgr]() {
-            return std::make_unique<BreathAttackBehavior>(pProjMgr, 30.0f, 38.0f, 9, 55.0f, 0.35f, 0.85f, 0.25f);
+            return std::make_unique<BreathAttackBehavior>(pProjMgr, 35.0f, 38.0f, 5, 50.0f, 0.35f, 0.75f, 0.25f);
         };
 
         // Special: Ground attacks (상향된 데미지)
@@ -275,17 +275,17 @@ void EnemySpawner::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pComma
             }
         };
 
-        // Flying: Strafe or Circle attack (상향된 데미지)
+        // Flying: Strafe or Circle attack (reduced projectiles for performance)
         phase2.m_fnFlyingAttack = [pProjMgr]() -> std::unique_ptr<IAttackBehavior> {
             int choice = rand() % 2;
             if (choice == 0) {
                 // Strafe - side movement while shooting at player
                 return std::make_unique<FlyingStrafeAttackBehavior>(
-                    pProjMgr, 20.0f, 22.0f, 18.0f, 22.0f, 0.1f, 4, 12.0f, 0.4f, 0.4f);
+                    pProjMgr, 24.0f, 22.0f, 18.0f, 22.0f, 0.15f, 3, 12.0f, 0.4f, 0.4f);
             } else {
                 // Circle - orbit around player (shorter, faster)
                 return std::make_unique<FlyingCircleAttackBehavior>(
-                    pProjMgr, 18.0f, 22.0f, 18.0f, 100.0f, 300.0f, 0.12f, 4, 12.0f, 0.4f, 0.4f);
+                    pProjMgr, 22.0f, 22.0f, 18.0f, 100.0f, 280.0f, 0.18f, 3, 12.0f, 0.4f, 0.4f);
             }
         };
 
@@ -317,9 +317,9 @@ void EnemySpawner::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pComma
         phase3.m_nFlyingAttackChance = 65;    // 비행 공격 확률 대폭 증가
         phase3.m_bCanFly = true;
 
-        // Primary: Rapid breath (상향된 데미지)
+        // Primary: Rapid breath (reduced projectiles for performance)
         phase3.m_fnPrimaryAttack = [pProjMgr]() {
-            return std::make_unique<BreathAttackBehavior>(pProjMgr, 35.0f, 42.0f, 12, 65.0f, 0.25f, 0.7f, 0.2f);
+            return std::make_unique<BreathAttackBehavior>(pProjMgr, 42.0f, 42.0f, 6, 55.0f, 0.25f, 0.65f, 0.2f);
         };
 
         // Special: Fury combo or double jump slam (상향된 데미지)
@@ -332,26 +332,26 @@ void EnemySpawner::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pComma
             }
         };
 
-        // Flying: All aerial attacks available (faster, stronger versions)
+        // Flying: All aerial attacks available (reduced projectiles for performance)
         phase3.m_fnFlyingAttack = [pProjMgr]() -> std::unique_ptr<IAttackBehavior> {
             int choice = rand() % 4;
             switch (choice) {
             case 0:
-                // Dive bomb - dive at player while shooting (상향된 데미지)
+                // Dive bomb - dive at player while shooting
                 return std::make_unique<DiveBombAttackBehavior>(
-                    pProjMgr, 25.0f, 32.0f, 36.0f, 40.0f, 7.0f, 6, 0.06f, 18.0f, 0.4f, 0.25f);
+                    pProjMgr, 30.0f, 32.0f, 36.0f, 40.0f, 7.0f, 4, 0.1f, 18.0f, 0.4f, 0.25f);
             case 1:
-                // Sweep - side-to-side fire while moving (상향된 데미지)
+                // Sweep - side-to-side fire while moving
                 return std::make_unique<FlyingSweepAttackBehavior>(
-                    pProjMgr, 22.0f, 28.0f, 18.0f, 28.0f, 100.0f, 220.0f, 0.05f, 3, 10.0f, 0.35f, 0.35f);
+                    pProjMgr, 26.0f, 28.0f, 18.0f, 28.0f, 100.0f, 200.0f, 0.08f, 2, 10.0f, 0.35f, 0.35f);
             case 2:
-                // Barrage - fewer but faster waves (상향된 데미지)
+                // Barrage - fewer but faster waves
                 return std::make_unique<FlyingBarrageAttackBehavior>(
-                    pProjMgr, 24.0f, 20.0f, 20, 6, 0.25f, 16.0f, 0.5f, 0.5f);
+                    pProjMgr, 28.0f, 20.0f, 10, 4, 0.3f, 16.0f, 0.5f, 0.5f);
             default:
-                // Fast strafe (상향된 데미지)
+                // Fast strafe
                 return std::make_unique<FlyingStrafeAttackBehavior>(
-                    pProjMgr, 22.0f, 26.0f, 22.0f, 25.0f, 0.08f, 5, 12.0f, 0.35f, 0.35f);
+                    pProjMgr, 26.0f, 26.0f, 22.0f, 25.0f, 0.12f, 3, 12.0f, 0.35f, 0.35f);
             }
         };
 

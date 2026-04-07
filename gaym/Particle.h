@@ -96,19 +96,19 @@ namespace FireParticlePresets
     inline ParticleEmitterConfig FireballTrail()
     {
         ParticleEmitterConfig config;
-        config.emissionRate = 30.0f;
-        config.minLifetime = 0.2f;
-        config.maxLifetime = 0.4f;
-        config.minStartSize = 0.3f;
-        config.maxStartSize = 0.5f;
+        config.emissionRate = 15.0f;  // Reduced from 30 for performance
+        config.minLifetime = 0.15f;
+        config.maxLifetime = 0.3f;
+        config.minStartSize = 0.25f;
+        config.maxStartSize = 0.4f;
         config.minEndSize = 0.0f;
-        config.maxEndSize = 0.1f;
-        config.minVelocity = { -0.5f, -0.5f, -0.5f };
-        config.maxVelocity = { 0.5f, 0.5f, 0.5f };
+        config.maxEndSize = 0.08f;
+        config.minVelocity = { -0.4f, -0.4f, -0.4f };
+        config.maxVelocity = { 0.4f, 0.4f, 0.4f };
         config.startColor = { 1.0f, 0.6f, 0.1f, 1.0f };  // Bright orange
         config.endColor = { 1.0f, 0.2f, 0.0f, 0.0f };    // Dark red, fade out
         config.gravity = { 0.0f, 1.0f, 0.0f };           // Slight upward drift
-        config.spawnRadius = 0.2f;
+        config.spawnRadius = 0.15f;
         return config;
     }
 
@@ -116,19 +116,19 @@ namespace FireParticlePresets
     {
         ParticleEmitterConfig config;
         config.emissionRate = 0.0f;  // Burst only
-        config.burstCount = 30;
-        config.minLifetime = 0.3f;
-        config.maxLifetime = 0.6f;
-        config.minStartSize = 0.4f;
-        config.maxStartSize = 0.8f;
+        config.burstCount = 12;      // Reduced from 30 for performance
+        config.minLifetime = 0.2f;
+        config.maxLifetime = 0.4f;
+        config.minStartSize = 0.35f;
+        config.maxStartSize = 0.6f;
         config.minEndSize = 0.0f;
-        config.maxEndSize = 0.2f;
-        config.minVelocity = { -5.0f, -5.0f, -5.0f };
-        config.maxVelocity = { 5.0f, 5.0f, 5.0f };
+        config.maxEndSize = 0.15f;
+        config.minVelocity = { -4.0f, -4.0f, -4.0f };
+        config.maxVelocity = { 4.0f, 4.0f, 4.0f };
         config.startColor = { 1.0f, 0.8f, 0.3f, 1.0f };  // Yellow-orange
         config.endColor = { 0.8f, 0.1f, 0.0f, 0.0f };    // Dark red, fade out
         config.gravity = { 0.0f, -2.0f, 0.0f };          // Fall down
-        config.spawnRadius = 0.5f;
+        config.spawnRadius = 0.4f;
         return config;
     }
 
@@ -136,11 +136,11 @@ namespace FireParticlePresets
     inline ParticleEmitterConfig FloatingEmbers()
     {
         ParticleEmitterConfig config;
-        config.emissionRate = 8.0f;  // Slow, steady emission
-        config.minLifetime = 2.0f;
-        config.maxLifetime = 4.0f;
+        config.emissionRate = 4.0f;  // Reduced from 8 for performance
+        config.minLifetime = 1.5f;
+        config.maxLifetime = 3.0f;
         config.minStartSize = 0.05f;
-        config.maxStartSize = 0.15f;
+        config.maxStartSize = 0.12f;
         config.minEndSize = 0.0f;
         config.maxEndSize = 0.02f;
         config.minVelocity = { -1.0f, 1.5f, -1.0f };   // Drift upward
@@ -149,6 +149,27 @@ namespace FireParticlePresets
         config.endColor = { 1.0f, 0.2f, 0.0f, 0.0f };    // Fade to dark red
         config.gravity = { 0.0f, 0.3f, 0.0f };           // Slight upward drift
         config.spawnRadius = 15.0f;  // Wide spawn area around emitter
+        return config;
+    }
+
+    // Mega breath effect - continuous fire stream from dragon's mouth
+    inline ParticleEmitterConfig DragonBreathStream()
+    {
+        ParticleEmitterConfig config;
+        config.emissionRate = 20.0f;  // Reduced from 40 for performance
+        config.burstCount = 0;
+        config.minLifetime = 0.4f;
+        config.maxLifetime = 0.8f;
+        config.minStartSize = 1.5f;
+        config.maxStartSize = 2.5f;
+        config.minEndSize = 3.0f;
+        config.maxEndSize = 5.0f;
+        config.minVelocity = { -2.0f, -1.0f, -2.0f };
+        config.maxVelocity = { 2.0f, 2.0f, 2.0f };
+        config.startColor = { 1.0f, 0.9f, 0.3f, 1.0f };  // Bright yellow-white core
+        config.endColor = { 1.0f, 0.2f, 0.0f, 0.0f };    // Fade to red
+        config.gravity = { 0.0f, 0.5f, 0.0f };           // Slight upward
+        config.spawnRadius = 0.5f;
         return config;
     }
 }
