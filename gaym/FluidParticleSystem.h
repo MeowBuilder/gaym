@@ -62,7 +62,7 @@ struct SPHConstants {
     float    velocityColorBoost; float _foamPad;                       //  8 (offset 360)
     // Near-pressure + SPH 커널 상수 (Sebastian Lague 이중 밀도 완화)
     float nearPressureMult; float kSpikyPow2; float kSpikyPow3; float kSpikyPow2Grad;  // 16 (offset 368)
-    float kSpikyPow3Grad;   float _kPad[3];                                             // 16 (offset 384)
+    float kSpikyPow3Grad;   float elapsedTime; float _kPad[2];                          // 16 (offset 384)
 };  // total 400 bytes
 static_assert(sizeof(SPHConstants) <= 512, "SPHConstants exceeds 512 bytes");
 
@@ -229,6 +229,8 @@ private:
 
     bool m_bGPUInited   = false;
     bool m_bNeedsUpload = false;
+
+    float    m_fElapsed = 0.f;              // 박동 펄스용 누적 시간
 
     // CPU → GPU 프레임 델타 (OffsetParticles / ApplyDirectionalForce 호출 누적)
     XMFLOAT3 m_vGPUPendingOffset   = {};

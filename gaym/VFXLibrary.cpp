@@ -15,7 +15,7 @@ void VFXLibrary::Initialize() {
         VFXSequenceDef def;
         def.name          = "Q_WaveSlash";
         def.element       = ElementType::Fire;
-        def.particleCount = 1024;
+        def.particleCount = 256;
         def.spawnRadius   = 0.4f;
 
         // Phase 0: 플레이어 앞 작은 박스에 뭉침 (0~0.3s)
@@ -32,7 +32,7 @@ void VFXLibrary::Initialize() {
             cp0.orbitSpeed         = 0.0f;
             cp0.orbitPhase         = 0.0f;
             cp0.forwardBias        = 0.5f;  // 플레이어 앞 0.5 (박스 center)
-            cp0.attractionStrength = 30.f;
+            cp0.attractionStrength = 25.f;   // 진동 기반, softAttr과 oscForce 비율 고려
             cp0.sphereRadius       = 0.8f;
             p0.cpDescs = { cp0 };
         }
@@ -162,7 +162,7 @@ void VFXLibrary::Initialize() {
         for (int i = 0; i < 12; i++) {
             SatelliteCPDesc sat;
             sat.orbitRadius        = 7.f + (i % 3) * 2.f; // 7, 9, 11
-            sat.orbitSpeed         = 1.2f + i * 0.15f;
+            sat.orbitSpeed         = 4.0f + i * 0.4f;      // 1.2+i*0.15 → 4.0+i*0.4 (빠른 회전)
             sat.orbitPhase         = i * (TWO_PI / 12.f);
             sat.verticalOffset     = (i % 4 - 1.5f) * 2.f; // -3 ~ +3
             sat.attractionStrength = 18.f;
@@ -190,7 +190,7 @@ void VFXLibrary::Initialize() {
         VFXSequenceDef def;
         def.name          = "RC_Fireball";
         def.element       = ElementType::Fire;
-        def.particleCount = 1024;
+        def.particleCount = 5;
         def.spawnRadius   = 2.5f;
 
         VFXPhase p0;

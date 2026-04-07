@@ -579,7 +579,7 @@ FluidSkillVFXDef FluidSkillVFXManager::GetVFXDef(ElementType element, const Rune
 {
     FluidSkillVFXDef def;
     def.element = element;
-    def.particleCount = 1000;
+    def.particleCount = 256;
     def.spawnRadius   = 0.8f;
 
     switch (element)
@@ -591,10 +591,10 @@ FluidSkillVFXDef FluidSkillVFXManager::GetVFXDef(ElementType element, const Rune
         {
             FluidCPDesc cp;
             cp.orbitRadius        = 0.12f + i * 0.08f;      // 뒤로 갈수록 약간 넓어짐
-            cp.orbitSpeed         = 4.5f;
+            cp.orbitSpeed         = 12.0f;
             cp.orbitPhase         = (float)i * (2.0f * XM_PI / 3.0f);
             cp.forwardBias        = -0.35f - i * 0.75f;     // -0.35, -1.1, -1.85 (모두 뒤쪽)
-            cp.attractionStrength = 22.0f - i * 2.5f;       // 뒤로 갈수록 약해짐
+            cp.attractionStrength = 60.0f - i * 5.0f;       // 요동 진폭 증가
             cp.sphereRadius       = 0.75f + i * 0.3f;       // 뒤로 갈수록 넓게
             def.cpDescs.push_back(cp);
         }
@@ -602,25 +602,25 @@ FluidSkillVFXDef FluidSkillVFXManager::GetVFXDef(ElementType element, const Rune
     }
     case ElementType::Water:
     {
-        // 3개 CP, 느린 삼각형 궤도 - 유선형 구체
+        // 3개 CP, 삼각형 궤도 - 유선형 구체
         for (int i = 0; i < 3; ++i)
         {
             FluidCPDesc cp;
-            cp.orbitRadius = 0.7f; cp.orbitSpeed = 2.5f;
+            cp.orbitRadius = 0.7f; cp.orbitSpeed = 9.0f;
             cp.orbitPhase  = (float)i * (2.0f * XM_PI / 3.0f);
             cp.forwardBias = 0.0f;
-            cp.attractionStrength = 14.0f; cp.sphereRadius = 2.0f;
+            cp.attractionStrength = 20.0f; cp.sphereRadius = 2.0f;
             def.cpDescs.push_back(cp);
         }
         break;
     }
     case ElementType::Wind:
     {
-        // 2개 CP, 매우 빠른 궤도 - 와류형
+        // 2개 CP, 빠른 궤도 - 와류형
         FluidCPDesc cp0;
-        cp0.orbitRadius = 0.5f; cp0.orbitSpeed = 8.0f;
+        cp0.orbitRadius = 0.5f; cp0.orbitSpeed = 22.0f;
         cp0.orbitPhase = 0.0f;  cp0.forwardBias = 0.4f;
-        cp0.attractionStrength = 12.0f; cp0.sphereRadius = 1.5f;
+        cp0.attractionStrength = 18.0f; cp0.sphereRadius = 1.5f;
 
         FluidCPDesc cp1 = cp0;
         cp1.orbitPhase = XM_PI; cp1.forwardBias = -0.4f;
@@ -630,11 +630,11 @@ FluidSkillVFXDef FluidSkillVFXManager::GetVFXDef(ElementType element, const Rune
     }
     case ElementType::Earth:
     {
-        // 1개 CP, 느린 궤도 - 밀집 구체
+        // 1개 CP, 궤도 - 밀집 구체
         FluidCPDesc cp0;
-        cp0.orbitRadius = 0.3f; cp0.orbitSpeed = 1.5f;
+        cp0.orbitRadius = 0.3f; cp0.orbitSpeed = 7.0f;
         cp0.orbitPhase = 0.0f;  cp0.forwardBias = 0.2f;
-        cp0.attractionStrength = 22.0f; cp0.sphereRadius = 1.6f;
+        cp0.attractionStrength = 25.0f; cp0.sphereRadius = 1.6f;
 
         def.cpDescs = { cp0 };
         def.particleCount = 100;
@@ -644,9 +644,9 @@ FluidSkillVFXDef FluidSkillVFXManager::GetVFXDef(ElementType element, const Rune
     default:
     {
         FluidCPDesc cp0;
-        cp0.orbitRadius = 0.6f; cp0.orbitSpeed = 3.5f;
+        cp0.orbitRadius = 0.6f; cp0.orbitSpeed = 12.0f;
         cp0.orbitPhase = 0.0f;  cp0.forwardBias = 0.0f;
-        cp0.attractionStrength = 15.0f; cp0.sphereRadius = 1.8f;
+        cp0.attractionStrength = 20.0f; cp0.sphereRadius = 1.8f;
         def.cpDescs = { cp0 };
         break;
     }
@@ -661,7 +661,7 @@ FluidSkillVFXDef FluidSkillVFXManager::GetVFXDef(ElementType element, const Rune
         cp.orbitSpeed         = 0.0f;
         cp.orbitPhase         = 0.0f;
         cp.forwardBias        = 0.0f;
-        cp.attractionStrength = 40.0f;
+        cp.attractionStrength = 35.0f;
         cp.sphereRadius       = 0.9f;
         def.cpDescs           = { cp };
         def.particleCount     = 120;

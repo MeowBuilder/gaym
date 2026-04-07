@@ -943,6 +943,7 @@ void FluidParticleSystem::Update(float deltaTime)
 
     // Clamp dt for stability with large timesteps
     float dt = (std::min)(deltaTime, 0.016f);
+    m_fElapsed += dt;
 
     // Beam 모드: 빔-로컬 좌표 방식 (방향 변경 시 모든 파티클 즉시 스냅)
     if (m_MotionMode == ParticleMotionMode::Beam) {
@@ -1438,7 +1439,8 @@ static const char* g_SPHComputeShader = R"(
         float  gKSpikyPow3;     // 15/(PI*h^6)    - SpikyPow3 정규화 상수
         float  gKSpikyPow2Grad; // 30/(2*PI*h^5)  - SpikyPow2 미분 상수
         float  gKSpikyPow3Grad; // 45/(PI*h^6)    - SpikyPow3 미분 상수
-        float3 _gKPad;
+        float  gElapsedTime;    // 박동 펄스용 누적 시간
+        float2 _gKPad;
     };
 
     RWStructuredBuffer<GPUParticle>           gParticles  : register(u0);
@@ -1556,22 +1558,35 @@ static const char* g_SPHComputeShader = R"(
         if (gMotionMode == 1) {
             f += gGravityVec * gParticles[i].mass;
         } else {
-            // ControlPoint 모드: CP 인력 + swirl + boundary
+            // ControlPoint 모드: 개별 파티클 radial 진동 + swirl
+            // 파티클마다 다른 위상 → 구체 형태가 뭉쳤다 흩어졌다 요동치는 효과
+            float particlePhase = (float)(i * 1901u % 6283) * 0.001f; // 0 ~ 2PI 균등 분포
+            float radialOsc = sin(gElapsedTime * 18.85f + particlePhase); // 3 Hz 개별 진동 -1..1
+
             for (int c = 0; c < gCPCount; ++c) {
                 float3 toCP = gCPs[c].position - gParticles[i].pos;
                 float dist = length(toCP);
                 if (dist < 0.001f) continue;
 
-                float3 nd = toCP / dist;
-                float attraction = gCPs[c].attractionStrength / (1.0f + dist * 0.5f);
-                f += nd * attraction;
+                float3 nd = toCP / dist;  // toward CP
 
-                float swirlStr = gCPs[c].attractionStrength * 0.35f;
-                f += float3(nd.z * swirlStr, 0, -nd.x * swirlStr);
+                // 개별 진동력: 파티클마다 위상이 달라 구체가 불규칙하게 무너짐
+                // radialOsc > 0 → CP 쪽으로, < 0 → 바깥으로
+                float oscForce = gCPs[c].attractionStrength * 4.0f * radialOsc;
+                f += nd * oscForce;
 
-                if (dist > gCPs[c].sphereRadius) {
-                    float overshoot = dist - gCPs[c].sphereRadius;
-                    f += nd * (200.0f * overshoot);
+                // soft 기본 인력: 너무 멀리 날아가지 않게 약하게 앵커
+                float softAttr = gCPs[c].attractionStrength * 0.35f / (1.0f + dist * 0.15f);
+                f += nd * softAttr;
+
+                // 소용돌이 접선력 (swirl 강화)
+                float swirlStr = gCPs[c].attractionStrength * 0.6f;
+                f += float3(nd.z * swirlStr, 0.0f, -nd.x * swirlStr);
+
+                // 경계 복원: 2.5배 반경 밖으로 나가면 강제로 당김
+                if (dist > gCPs[c].sphereRadius * 2.5f) {
+                    float overshoot = dist - gCPs[c].sphereRadius * 2.5f;
+                    f += nd * (450.0f * overshoot);
                 }
             }
         }
@@ -1921,6 +1936,7 @@ void FluidParticleSystem::DispatchSPH(ID3D12GraphicsCommandList* pCmdList, float
             cb.kSpikyPow3       = 15.0f / (PI_K * powf(h, 6.0f));
             cb.kSpikyPow2Grad   = 30.0f / (2.0f * PI_K * powf(h, 5.0f));  // 2 * kSpikyPow2
             cb.kSpikyPow3Grad   = 45.0f / (PI_K * powf(h, 6.0f));         // 3 * kSpikyPow3
+            cb.elapsedTime      = m_fElapsed;
         }
 
         // 프레임별 CPU -> GPU 델타 (OffsetParticles / ApplyDirectionalForce 누적값)

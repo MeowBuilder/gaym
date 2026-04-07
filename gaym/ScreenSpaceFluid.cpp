@@ -1379,8 +1379,9 @@ void ScreenSpaceFluid::SmoothAndComposite(
 
     // ================================================================
     // Pass 2a (CS): 수평 blur (FluidDepthRT -> TempRT)
+    // m_bEnableBlur=false 시 스킵, 대신 FluidDepthRT를 SmoothedRT에 직접 복사
     // ================================================================
-    if (m_pBlurCSRootSig && m_pBlurHPSO)
+    if (m_bEnableBlur && m_pBlurCSRootSig && m_pBlurHPSO)
     {
         // FluidDepthRT: PSR -> NON_PIXEL_SR (CS에서 SRV로 읽기)
         {
@@ -1436,7 +1437,7 @@ void ScreenSpaceFluid::SmoothAndComposite(
     // ================================================================
     // Pass 2b (CS): 수직 blur (TempRT -> SmoothedRT)
     // ================================================================
-    if (m_pBlurCSRootSig && m_pBlurVPSO)
+    if (m_bEnableBlur && m_pBlurCSRootSig && m_pBlurVPSO)
     {
         // SmoothedRT: RENDER_TARGET -> UAV
         {
@@ -1481,6 +1482,33 @@ void ScreenSpaceFluid::SmoothAndComposite(
         // TempRT: NON_PIXEL_SR -> PIXEL_SR (다음 프레임 복원 대비)
         // -> 사실 이 시점에서 Composite가 TempRT를 안 읽으므로, 나중에 RENDER_TARGET로 복원 필요
     }
+    else if (!m_bEnableBlur)
+    {
+        // 블러 없음: FluidDepthRT(PSR)를 SmoothedRT에 직접 복사
+        // Composite는 SmoothedRT(SRV 인덱스 2)를 읽으므로 내용만 교체
+        D3D12_RESOURCE_BARRIER b[2] = {};
+        b[0].Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        b[0].Transition.pResource   = m_pFluidDepthRT.Get();
+        b[0].Transition.StateBefore = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+        b[0].Transition.StateAfter  = D3D12_RESOURCE_STATE_COPY_SOURCE;
+        b[0].Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+        b[1].Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        b[1].Transition.pResource   = m_pSmoothedRT.Get();
+        b[1].Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
+        b[1].Transition.StateAfter  = D3D12_RESOURCE_STATE_COPY_DEST;
+        b[1].Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+        pCmdList->ResourceBarrier(2, b);
+
+        pCmdList->CopyResource(m_pSmoothedRT.Get(), m_pFluidDepthRT.Get());
+
+        // FluidDepthRT: COPY_SOURCE -> PSR (Composite는 안 읽지만 cleanup 일관성 유지)
+        b[0].Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_SOURCE;
+        b[0].Transition.StateAfter  = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+        // SmoothedRT: COPY_DEST -> PSR (Composite가 읽을 수 있게)
+        b[1].Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
+        b[1].Transition.StateAfter  = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+        pCmdList->ResourceBarrier(2, b);
+    }
 
     // ================================================================
     // Pass 3: Composite (SmoothedRT + ThicknessRT + SceneColorRT -> mainRTV)
@@ -1509,38 +1537,59 @@ void ScreenSpaceFluid::SmoothAndComposite(
     {
         D3D12_RESOURCE_BARRIER barriers[4] = {};
 
-        // FluidDepthRT: NON_PIXEL_SHADER_RESOURCE -> RENDER_TARGET
-        // (CS blur에서 NON_PIXEL_SR로 전환됨, CS blur 미사용 시 PSR 상태)
-        barriers[0].Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-        barriers[0].Transition.pResource   = m_pFluidDepthRT.Get();
-        barriers[0].Transition.StateBefore = (m_pBlurCSRootSig) ?
-            D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE : D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
-        barriers[0].Transition.StateAfter  = D3D12_RESOURCE_STATE_RENDER_TARGET;
-        barriers[0].Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+        if (m_bEnableBlur && m_pBlurCSRootSig)
+        {
+            // blur 경로: FluidDepth/TempRT은 NON_PIXEL_SR 상태
+            barriers[0].Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+            barriers[0].Transition.pResource   = m_pFluidDepthRT.Get();
+            barriers[0].Transition.StateBefore = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+            barriers[0].Transition.StateAfter  = D3D12_RESOURCE_STATE_RENDER_TARGET;
+            barriers[0].Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
 
-        // TempRT: NON_PIXEL_SHADER_RESOURCE -> RENDER_TARGET
-        barriers[1].Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-        barriers[1].Transition.pResource   = m_pTempRT.Get();
-        barriers[1].Transition.StateBefore = (m_pBlurCSRootSig) ?
-            D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE : D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
-        barriers[1].Transition.StateAfter  = D3D12_RESOURCE_STATE_RENDER_TARGET;
-        barriers[1].Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+            barriers[1].Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+            barriers[1].Transition.pResource   = m_pTempRT.Get();
+            barriers[1].Transition.StateBefore = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+            barriers[1].Transition.StateAfter  = D3D12_RESOURCE_STATE_RENDER_TARGET;
+            barriers[1].Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
 
-        // SmoothedRT: PIXEL_SHADER_RESOURCE -> RENDER_TARGET
-        barriers[2].Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-        barriers[2].Transition.pResource   = m_pSmoothedRT.Get();
-        barriers[2].Transition.StateBefore = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
-        barriers[2].Transition.StateAfter  = D3D12_RESOURCE_STATE_RENDER_TARGET;
-        barriers[2].Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+            barriers[2].Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+            barriers[2].Transition.pResource   = m_pSmoothedRT.Get();
+            barriers[2].Transition.StateBefore = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+            barriers[2].Transition.StateAfter  = D3D12_RESOURCE_STATE_RENDER_TARGET;
+            barriers[2].Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
 
-        // ThicknessRT: PIXEL_SHADER_RESOURCE -> RENDER_TARGET
-        barriers[3].Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-        barriers[3].Transition.pResource   = m_pThicknessRT.Get();
-        barriers[3].Transition.StateBefore = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
-        barriers[3].Transition.StateAfter  = D3D12_RESOURCE_STATE_RENDER_TARGET;
-        barriers[3].Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+            barriers[3].Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+            barriers[3].Transition.pResource   = m_pThicknessRT.Get();
+            barriers[3].Transition.StateBefore = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+            barriers[3].Transition.StateAfter  = D3D12_RESOURCE_STATE_RENDER_TARGET;
+            barriers[3].Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
 
-        pCmdList->ResourceBarrier(4, barriers);
+            pCmdList->ResourceBarrier(4, barriers);
+        }
+        else
+        {
+            // no-blur 경로: FluidDepth/SmoothedRT은 PSR, TempRT은 RENDER_TARGET (미변경)
+            barriers[0].Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+            barriers[0].Transition.pResource   = m_pFluidDepthRT.Get();
+            barriers[0].Transition.StateBefore = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+            barriers[0].Transition.StateAfter  = D3D12_RESOURCE_STATE_RENDER_TARGET;
+            barriers[0].Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+
+            barriers[1].Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+            barriers[1].Transition.pResource   = m_pSmoothedRT.Get();
+            barriers[1].Transition.StateBefore = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+            barriers[1].Transition.StateAfter  = D3D12_RESOURCE_STATE_RENDER_TARGET;
+            barriers[1].Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+
+            barriers[2].Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+            barriers[2].Transition.pResource   = m_pThicknessRT.Get();
+            barriers[2].Transition.StateBefore = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+            barriers[2].Transition.StateAfter  = D3D12_RESOURCE_STATE_RENDER_TARGET;
+            barriers[2].Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+
+            // TempRT은 no-blur 경로에서 미사용, 이미 RENDER_TARGET
+            pCmdList->ResourceBarrier(3, barriers);
+        }
     }
     // SceneColorRT는 PIXEL_SHADER_RESOURCE 상태 유지 (다음 CaptureSceneColor에서 전환됨)
 }
