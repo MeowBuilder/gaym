@@ -1899,7 +1899,7 @@ void FluidParticleSystem::DispatchSPH(ID3D12GraphicsCommandList* pCmdList, float
         cb.viscosity     = m_Config.viscosity;
         cb.dt            = (std::min)(dt, 0.016f);
         cb.damping       = 0.995f;
-        cb.maxSpeed      = 12.0f;
+        cb.maxSpeed      = m_Config.maxParticleSpeed;
         cb.motionMode    = (m_MotionMode == ParticleMotionMode::Gravity) ? 1 : 0;
         cb.globalGravity = m_GlobalGravityStrength;
         cb.boxActive     = m_ConfinementBox.active ? 1 : 0;

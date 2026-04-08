@@ -78,7 +78,7 @@ int FluidSkillVFXManager::SpawnSequenceEffect(const XMFLOAT3& origin, const XMFL
             // 메테오용 마스터 CP 초기 위치: origin 그대로 사용
             // (MeteorBehavior에서 이미 상공 위치를 origin으로 전달)
             slot.masterCPPos       = origin;
-            slot.masterCPFallSpeed = 15.f;
+            slot.masterCPFallSpeed = seqDef.masterCPFallSpeed;
 
             // FluidParticleConfig 설정
             FluidParticleConfig cfg;
@@ -100,6 +100,12 @@ int FluidSkillVFXManager::SpawnSequenceEffect(const XMFLOAT3& origin, const XMFL
                 cfg.stiffness       = 50.0f;
                 cfg.viscosity       = 0.25f;
             }
+
+            // OrbitalCP 페이즈가 있으면 maxParticleSpeed를 높여 CP 추적 가능하게 함
+            bool hasOrbitalCP = false;
+            for (const auto& ph : seqDef.phases)
+                if (ph.motionMode == ParticleMotionMode::OrbitalCP) { hasOrbitalCP = true; break; }
+            cfg.maxParticleSpeed = hasOrbitalCP ? 35.0f : 12.0f;
 
             // 첫 페이즈의 모드 설정
             if (!seqDef.phases.empty()) {
@@ -194,6 +200,23 @@ void FluidSkillVFXManager::Update(float deltaTime)
                 }
             }
 
+            // ControlPoint 모드: origin 변화분만큼 파티클 공동이동
+            // (Beam/OrbitalCP는 자체 위치 관리, WaveSlash/Meteor는 origin 고정 → 무해)
+            {
+                XMFLOAT3 delta = {
+                    slot.origin.x - slot.prevOrigin.x,
+                    slot.origin.y - slot.prevOrigin.y,
+                    slot.origin.z - slot.prevOrigin.z
+                };
+                slot.prevOrigin = slot.origin;
+                bool moved = fabsf(delta.x) + fabsf(delta.y) + fabsf(delta.z) > 0.0001f;
+                if (moved && slot.currentPhaseIndex >= 0) {
+                    auto mode = slot.sequenceDef.phases[slot.currentPhaseIndex].motionMode;
+                    if (mode == ParticleMotionMode::ControlPoint)
+                        slot.pSystem->OffsetParticles(delta);
+                }
+            }
+
             UpdatePhase(slot, deltaTime);
             slot.pSystem->Update(deltaTime);
             continue;
@@ -279,10 +302,16 @@ void FluidSkillVFXManager::PushControlPoints(FluidVFXSlot& slot) const
     for (const auto& cpd : slot.def.cpDescs)
     {
         float angle = slot.elapsed * cpd.orbitSpeed + cpd.orbitPhase;
+        float c = cosf(angle), s = sinf(angle);
+
+        // orbitTilt: up 성분을 fwd 방향으로 기울임
+        // tilt=0 → right/up 면, tilt=π/2 → right/fwd 면
+        float ct = cosf(cpd.orbitTilt), st = sinf(cpd.orbitTilt);
+        XMVECTOR tiltedAxis = up * ct + fwd * st;
         XMVECTOR worldPos = originV
-            + right * (cosf(angle) * cpd.orbitRadius)
-            + up    * (sinf(angle) * cpd.orbitRadius)
-            + fwd   * cpd.forwardBias;
+            + right      * (c * cpd.orbitRadius)
+            + tiltedAxis * (s * cpd.orbitRadius)
+            + fwd        * cpd.forwardBias;
 
         FluidControlPoint cp;
         XMStoreFloat3(&cp.position, worldPos);
@@ -447,6 +476,39 @@ void FluidSkillVFXManager::UpdatePhase(FluidVFXSlot& slot, float dt)
         UpdateOrbitalCPs(slot, dt);
     }
 
+    // ControlPoint + sequenceDef.cpDescs: 매 프레임 궤도 CP 갱신 (이동 투사체용)
+    if (curPhase.motionMode == ParticleMotionMode::ControlPoint &&
+        !slot.sequenceDef.cpDescs.empty())
+    {
+        XMVECTOR fwd = XMVector3Normalize(XMLoadFloat3(&slot.direction));
+        XMVECTOR worldUp = XMVectorSet(0, 1, 0, 0);
+        float dot = XMVectorGetX(XMVector3Dot(fwd, worldUp));
+        XMVECTOR right = (fabsf(dot) > 0.99f)
+            ? XMVectorSet(1, 0, 0, 0)
+            : XMVector3Normalize(XMVector3Cross(worldUp, fwd));
+        XMVECTOR up = XMVector3Cross(fwd, right);
+        XMVECTOR originV = XMLoadFloat3(&slot.origin);
+
+        std::vector<FluidControlPoint> cps;
+        for (const auto& cpd : slot.sequenceDef.cpDescs)
+        {
+            float angle = slot.elapsed * cpd.orbitSpeed + cpd.orbitPhase;
+            float c = cosf(angle), s = sinf(angle);
+            float ct = cosf(cpd.orbitTilt), st_val = sinf(cpd.orbitTilt);
+            XMVECTOR tiltedAxis = up * ct + fwd * st_val;
+            XMVECTOR worldPos = originV
+                + right      * (c * cpd.orbitRadius)
+                + tiltedAxis * (s * cpd.orbitRadius)
+                + fwd        * cpd.forwardBias;
+            FluidControlPoint cp;
+            XMStoreFloat3(&cp.position, worldPos);
+            cp.attractionStrength = cpd.attractionStrength;
+            cp.sphereRadius       = cpd.sphereRadius;
+            cps.push_back(cp);
+        }
+        slot.pSystem->SetControlPoints(cps);
+    }
+
     // Beam 모드: 매 프레임 startPos/endPos 갱신 (플레이어 방향 추적)
     // prevDir 보존하면서 startPos/endPos만 업데이트
     if (curPhase.motionMode == ParticleMotionMode::Beam) {
@@ -549,24 +611,36 @@ void FluidSkillVFXManager::UpdatePhase(FluidVFXSlot& slot, float dt)
 
 void FluidSkillVFXManager::UpdateOrbitalCPs(FluidVFXSlot& slot, float dt)
 {
-    // 마스터 CP: 낙하 처리
-    slot.masterCPPos.y -= slot.masterCPFallSpeed * dt;
+    // 마스터 CP 위치 갱신
+    // fallSpeed == 0: 투사체 추적 (fireball 등), > 0: 낙하 (Meteor)
+    if (slot.masterCPFallSpeed > 0.f)
+        slot.masterCPPos.y -= slot.masterCPFallSpeed * dt;
+    else
+        slot.masterCPPos = slot.origin;
+
+    const auto& seqDef = slot.sequenceDef;
 
     std::vector<FluidControlPoint> cps;
     // 마스터 CP 추가
     FluidControlPoint masterCP;
     masterCP.position           = slot.masterCPPos;
-    masterCP.attractionStrength = 25.f;
-    masterCP.sphereRadius       = 5.f;
+    masterCP.attractionStrength = seqDef.masterCPStrength;
+    masterCP.sphereRadius       = seqDef.masterCPSphereRadius;
     cps.push_back(masterCP);
 
-    // 위성 CP들 공전
+    // 위성 CP들 공전 (orbitTiltX: X축 기준으로 xz 궤도면을 기울임)
     for (const auto& sat : slot.sequenceDef.satelliteCPs) {
         float angle = sat.orbitPhase + slot.elapsed * sat.orbitSpeed;
+        float bx =  cosf(angle) * sat.orbitRadius;
+        float bz =  sinf(angle) * sat.orbitRadius;
+
+        // X축 회전: (bx, 0, bz) → (bx, -bz*sin(tilt), bz*cos(tilt))
+        float ct = cosf(sat.orbitTiltX), st = sinf(sat.orbitTiltX);
+
         FluidControlPoint satCP;
-        satCP.position.x           = slot.masterCPPos.x + cosf(angle) * sat.orbitRadius;
-        satCP.position.y           = slot.masterCPPos.y + sat.verticalOffset;
-        satCP.position.z           = slot.masterCPPos.z + sinf(angle) * sat.orbitRadius;
+        satCP.position.x           = slot.masterCPPos.x + bx;
+        satCP.position.y           = slot.masterCPPos.y + sat.verticalOffset - bz * st;
+        satCP.position.z           = slot.masterCPPos.z + bz * ct;
         satCP.attractionStrength   = sat.attractionStrength;
         satCP.sphereRadius         = sat.sphereRadius;
         cps.push_back(satCP);
@@ -586,17 +660,43 @@ FluidSkillVFXDef FluidSkillVFXManager::GetVFXDef(ElementType element, const Rune
     {
     case ElementType::Fire:
     {
-        // 혜성 꼬리: CP 3개를 투사체 뒤쪽에 배치, 뒤로 갈수록 퍼짐
-        for (int i = 0; i < 3; ++i)
+        // 원자 모형: 핵(nucleus) + 3개 기울어진 궤도 링 (전자 각 2개)
+        // 투사체가 nucleus, 전자들이 서로 다른 평면에서 공전
+        def.particleCount = 120;
+        def.spawnRadius   = 0.3f;
+
+        // 핵: 투사체 중심에 고정 (orbitRadius=0)
         {
-            FluidCPDesc cp;
-            cp.orbitRadius        = 0.12f + i * 0.08f;      // 뒤로 갈수록 약간 넓어짐
-            cp.orbitSpeed         = 12.0f;
-            cp.orbitPhase         = (float)i * (2.0f * XM_PI / 3.0f);
-            cp.forwardBias        = -0.35f - i * 0.75f;     // -0.35, -1.1, -1.85 (모두 뒤쪽)
-            cp.attractionStrength = 60.0f - i * 5.0f;       // 요동 진폭 증가
-            cp.sphereRadius       = 0.75f + i * 0.3f;       // 뒤로 갈수록 넓게
-            def.cpDescs.push_back(cp);
+            FluidCPDesc nucleus;
+            nucleus.orbitRadius        = 0.0f;
+            nucleus.orbitSpeed         = 0.0f;
+            nucleus.orbitPhase         = 0.0f;
+            nucleus.forwardBias        = 0.0f;
+            nucleus.orbitTilt          = 0.0f;
+            nucleus.attractionStrength = 28.0f;
+            nucleus.sphereRadius       = 0.4f;
+            def.cpDescs.push_back(nucleus);
+        }
+
+        // 3개 궤도 링: tilt 0°(right/up면), 60°(앞으로 기울어짐), -60°(뒤로 기울어짐)
+        constexpr float R = 1.8f;
+        const float tilts[3]  = { 0.f, XM_PI / 3.f, -XM_PI / 3.f };
+        const float speeds[3] = { 9.f, 6.f, 11.f };
+
+        for (int ring = 0; ring < 3; ++ring)
+        {
+            for (int e = 0; e < 2; ++e)  // 링당 전자 2개: 180° 간격
+            {
+                FluidCPDesc cp;
+                cp.orbitRadius        = R;
+                cp.orbitSpeed         = speeds[ring];
+                cp.orbitPhase         = e * XM_PI + ring * (XM_2PI / 3.f);
+                cp.forwardBias        = 0.0f;
+                cp.orbitTilt          = tilts[ring];
+                cp.attractionStrength = 45.0f;
+                cp.sphereRadius       = 0.45f;
+                def.cpDescs.push_back(cp);
+            }
         }
         break;
     }

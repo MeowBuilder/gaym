@@ -68,6 +68,9 @@ struct FluidParticleConfig
 
     // Element (determines color)
     ElementType element      = ElementType::None;
+
+    // 파티클 최대 속도 (GPU DispatchSPH에서 clamp)
+    float maxParticleSpeed   = 12.0f;
 };
 
 namespace FluidElementColors
@@ -98,6 +101,9 @@ struct FluidCPDesc {
     float forwardBias        = 0.0f;   // 진행 방향을 따른 오프셋 (+앞, -뒤)
     float attractionStrength = 15.0f;
     float sphereRadius       = 1.8f;
+    // 궤도 기울기: 0=right/up 면(forward 수직), π/2=right/fwd 면(forward 수평)
+    // 예) 60° 기울이면 궤도가 forward 방향으로 비스듬히 기울어짐
+    float orbitTilt          = 0.0f;
 };
 
 // 스킬 시전 하나의 전체 VFX 정의

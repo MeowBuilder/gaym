@@ -2,6 +2,7 @@
 #include "ProjectileManager.h"
 #include "ParticleSystem.h"
 #include "FluidSkillVFXManager.h"
+#include "VFXLibrary.h"
 #include "Scene.h"
 #include "Room.h"
 #include "GameObject.h"
@@ -81,16 +82,26 @@ void ProjectileManager::SpawnProjectile(const Projectile& projectile)
     if (m_pFluidVFXManager)
     {
         auto& proj = m_Projectiles.back();
-        FluidSkillVFXDef vfxDef = FluidSkillVFXManager::GetVFXDef(proj.element, proj.runeCombo, proj.chargeRatio);
-        
-        // 적 투사체(드래곤 브레스 등)인 경우 파티클 수를 대폭 줄여 렉 방지
-        if (!proj.isPlayerProjectile)
+
+        if (proj.isPlayerProjectile)
         {
+            // 플레이어 투사체: VFXLibrary 경로 (일관된 룬 조합 처리)
+            uint32_t runeFlags = ToRuneFlags(proj.runeCombo);
+            VFXSequenceDef seqDef = VFXLibrary::Get().GetDef(
+                SkillSlot::RightClick, runeFlags, proj.element);
+            proj.fluidVFXId = m_pFluidVFXManager->SpawnSequenceEffect(
+                proj.position, proj.direction, seqDef);
+        }
+        else
+        {
+            // 적 투사체: 레거시 경로 유지, 파티클 수 축소
+            FluidSkillVFXDef vfxDef = FluidSkillVFXManager::GetVFXDef(
+                proj.element, proj.runeCombo, proj.chargeRatio);
             vfxDef.particleCount = static_cast<int>(vfxDef.particleCount * 0.3f);
             if (vfxDef.particleCount < 100) vfxDef.particleCount = 100;
+            proj.fluidVFXId = m_pFluidVFXManager->SpawnEffect(
+                proj.position, proj.direction, vfxDef);
         }
-
-        proj.fluidVFXId = m_pFluidVFXManager->SpawnEffect(proj.position, proj.direction, vfxDef);
     }
 
     wchar_t buffer[256];

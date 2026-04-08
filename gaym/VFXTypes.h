@@ -46,11 +46,13 @@ struct ConfinementBoxDesc {
 // 위성 CP 설명자 (OrbitalCP 모드용)
 struct SatelliteCPDesc {
     float orbitRadius;
-    float orbitSpeed;   // rad/s
-    float orbitPhase;   // 초기 위상
+    float orbitSpeed;     // rad/s
+    float orbitPhase;     // 초기 위상
     float verticalOffset; // 마스터 CP 기준 Y 오프셋
     float attractionStrength;
     float sphereRadius;
+    // 궤도 기울기: X축 기준으로 xz면을 회전 (0=수평, π/2=수직 yz면)
+    float orbitTiltX = 0.f;
 };
 
 // VFX 페이즈

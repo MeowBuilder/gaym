@@ -138,7 +138,7 @@ void VFXLibrary::Initialize() {
         def.name          = "R_Meteor";
         def.element       = ElementType::Fire;
         def.particleCount = 1024;
-        def.spawnRadius   = 6.f;
+        def.spawnRadius   = 12.f;  // 가장 큰 궤도(18f) - sphereRadius(6f)*2.5(15f) = 3f 여유
 
         // Phase 0: 낙하 (OrbitalCP)
         VFXPhase p0;
@@ -157,17 +157,27 @@ void VFXLibrary::Initialize() {
         p1.gravityDesc.initialSpeedMax = 20.f;
         def.phases.push_back(p1);
 
-        // 위성 CP 12개
+        // 원자 궤도 위성 CP: 3개 평면(수평/+60°/-60°) × 4개 전자 = 12개
         constexpr float TWO_PI = 2.f * 3.14159265358979f;
-        for (int i = 0; i < 12; i++) {
-            SatelliteCPDesc sat;
-            sat.orbitRadius        = 7.f + (i % 3) * 2.f; // 7, 9, 11
-            sat.orbitSpeed         = 4.0f + i * 0.4f;      // 1.2+i*0.15 → 4.0+i*0.4 (빠른 회전)
-            sat.orbitPhase         = i * (TWO_PI / 12.f);
-            sat.verticalOffset     = (i % 4 - 1.5f) * 2.f; // -3 ~ +3
-            sat.attractionStrength = 18.f;
-            sat.sphereRadius       = 4.f;
-            def.satelliteCPs.push_back(sat);
+        // ring 0: 수평(xz), ring 1: +60° 기울기, ring 2: -60° 기울기
+        const float ringRadii[3]  = { 14.f, 18.f, 16.f };
+        const float ringSpeeds[3] = { 2.0f, 1.4f, 2.8f };
+        const float ringTilts[3]  = { 0.f, 3.14159265358979f / 3.f, -3.14159265358979f / 3.f };
+
+        for (int ring = 0; ring < 3; ++ring)
+        {
+            for (int e = 0; e < 4; ++e)  // 링당 전자 4개
+            {
+                SatelliteCPDesc sat;
+                sat.orbitRadius        = ringRadii[ring];
+                sat.orbitSpeed         = ringSpeeds[ring];
+                sat.orbitPhase         = e * (TWO_PI / 4.f);  // 90° 간격
+                sat.verticalOffset     = 0.f;
+                sat.attractionStrength = 30.f;
+                sat.sphereRadius       = 6.f;  // 인력권 15f → 12f 스폰에서 모든 링(최대 18f) 포착
+                sat.orbitTiltX         = ringTilts[ring];
+                def.satelliteCPs.push_back(sat);
+            }
         }
 
         // 마스터 CP (VFXManager가 낙하 위치로 설정)
@@ -184,25 +194,61 @@ void VFXLibrary::Initialize() {
     }
 
     // ──────────────────────────────────────────────────────────
-    // RightClick - 화염구 투사체 (기존 ControlPoint 유지)
+    // RightClick - 화염구 투사체 (원자 모형 궤도)
     // ──────────────────────────────────────────────────────────
     {
         VFXSequenceDef def;
         def.name          = "RC_Fireball";
         def.element       = ElementType::Fire;
-        def.particleCount = 5;
-        def.spawnRadius   = 2.5f;
+        def.particleCount = 300;
+        def.spawnRadius   = 5.0f;  // 궤도(4.5f) 바깥까지 스폰 → 각 위성 인력권 진입
 
+        // OrbitalCP 모드: 마스터 CP = 투사체, 위성 CP = 전자 궤도
         VFXPhase p0;
         p0.startTime  = 0.f;
         p0.duration   = 99.f;
-        p0.motionMode = ParticleMotionMode::ControlPoint;
+        p0.motionMode = ParticleMotionMode::OrbitalCP;
         def.phases.push_back(p0);
 
-        // cpDescs는 기존 Fire GetVFXDef()의 3-CP 혜성 꼬리 패턴 유지
-        // VFXManager가 기존 PushControlPoints로 처리
+        // 마스터 CP 설정: fallSpeed=0 → 투사체 origin 추적
+        // 작은 nucleus 역할 (파티클을 너무 강하게 당기지 않도록 약하게 설정)
+        def.masterCPFallSpeed    = 0.f;   // 낙하 대신 투사체 위치 추적
+        def.masterCPStrength     = 12.f;  // 약한 핵 인력 (전자가 퍼질 공간 확보)
+        def.masterCPSphereRadius = 0.8f;  // 작은 핵 구체
+
+        // 3개 궤도 링 × 전자 2개: tilt 0° / +60° / -60°
+        constexpr float TWO_PI = 2.f * 3.14159265f;
+        constexpr float R = 4.5f;
+        const float tilts[3]  = { 0.f, 3.14159265f / 3.f, -3.14159265f / 3.f };
+        const float speeds[3] = { 5.0f, 3.2f, 7.0f };
+
+        for (int ring = 0; ring < 3; ++ring)
+            for (int e = 0; e < 2; ++e)
+            {
+                SatelliteCPDesc sat;
+                sat.orbitRadius        = R;
+                sat.orbitSpeed         = speeds[ring];
+                sat.orbitPhase         = e * 3.14159265f + ring * (TWO_PI / 3.f);
+                sat.verticalOffset     = 0.f;
+                sat.attractionStrength = 55.f;
+                sat.sphereRadius       = 1.5f;  // 인력권 3.75f → 스폰된 파티클 포착
+                sat.orbitTiltX         = tilts[ring];
+                def.satelliteCPs.push_back(sat);
+            }
 
         RegisterBase(SkillSlot::RightClick, def);
+
+        // Charge 룬: 파티클 증가
+        VFXModifier chgMod;
+        chgMod.particleCountMult = 1.5f;
+        chgMod.sizeScaleMult     = 1.3f;
+        RegisterRuneMod(SkillSlot::RightClick, RUNE_CHARGE, chgMod);
+
+        // Enhance 룬: 궤도 크기 증가
+        VFXModifier enhMod;
+        enhMod.particleCountMult = 1.3f;
+        enhMod.sizeScaleMult     = 1.4f;
+        RegisterRuneMod(SkillSlot::RightClick, RUNE_ENHANCE, enhMod);
     }
 
     // ──────────────────────────────────────────────────────────

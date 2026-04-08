@@ -38,6 +38,11 @@ struct VFXSequenceDef {
     float spawnRadius  = 1.5f;
     ElementType element = ElementType::Fire;
 
+    // OrbitalCP 모드 마스터 CP 설정
+    float masterCPFallSpeed    = 15.f;   // 낙하 속도. 0이면 낙하 대신 slot.origin 추적 (투사체용)
+    float masterCPStrength     = 25.f;   // 마스터 CP 인력
+    float masterCPSphereRadius = 5.f;    // 마스터 CP 구체 반경
+
     // SPH 물리 오버라이드 (true 시 기본값 대신 적용)
     bool  overridePhysics    = false;
     float sphStiffness       = 50.f;
