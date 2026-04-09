@@ -162,8 +162,9 @@ void ProjectileManager::Update(float deltaTime)
             continue;
         }
 
-        // Update position
-        projectile.Update(deltaTime);
+        // Update position (실험: 플레이어 투사체 정지)
+        if (!projectile.isPlayerProjectile)
+            projectile.Update(deltaTime);
 
         // Update fluid VFX position
         if (m_pFluidVFXManager && projectile.fluidVFXId >= 0)

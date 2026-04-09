@@ -18,7 +18,8 @@ struct GPUParticle {
     XMFLOAT3 force;        // 12
     float    mass;         // 4
     int      active;       // 4
-    XMFLOAT3 pad;          // 12
+    int      cpGroup;      // 4  담당 CP 인덱스 (-1=전체, 0=핵, 1+=위성)
+    float    _pad[2];      // 8
 };  // total 64 bytes
 static_assert(sizeof(GPUParticle) == 64, "GPUParticle size mismatch");
 
@@ -130,6 +131,9 @@ public:
 
     // 특정 축 방향 속도 성분 제거 (예: forward 방향 속도만 0으로)
     void ZeroAxisVelocity(const XMFLOAT3& worldAxis);
+
+    // 색상 직접 설정 (Spawn 이후 오버라이드용)
+    void SetColors(const FluidElementColor& colors);
 
     // 양방향 분산 힘: 중심점(originPoint) 기준으로 각 파티클이 axisDir의 양쪽으로 밀림
     void ApplyAxisSpreadForce(const XMFLOAT3& axisDir, const XMFLOAT3& originPoint, float impulse);

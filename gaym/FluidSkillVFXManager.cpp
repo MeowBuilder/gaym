@@ -107,6 +107,42 @@ int FluidSkillVFXManager::SpawnSequenceEffect(const XMFLOAT3& origin, const XMFL
                 if (ph.motionMode == ParticleMotionMode::OrbitalCP) { hasOrbitalCP = true; break; }
             cfg.maxParticleSpeed = hasOrbitalCP ? 35.0f : 12.0f;
 
+            // 핵-궤도 색상 오버라이드 및 핵 전용 스폰 설정
+            if (seqDef.overrideColors) {
+                cfg.overrideColors  = true;
+                cfg.customCoreColor = seqDef.overrideCoreColor;
+                cfg.customEdgeColor = seqDef.overrideEdgeColor;
+            }
+            cfg.nucleusFraction = seqDef.nucleusSpawnFraction;
+            cfg.nucleusRadius   = seqDef.nucleusSpawnRadius;
+
+            // OrbitalCP: 위성 CP 초기 위치에 파티클 스폰 그룹 추가
+            // 파티클이 궤도 위치에서 시작해야 위성 인력권 안에 즉시 진입함
+            if (hasOrbitalCP && !seqDef.satelliteCPs.empty())
+            {
+                int satCount = (int)seqDef.satelliteCPs.size();
+                // 전체 파티클의 60%를 위성 위치에 배분
+                int totalSatParticles = (int)(seqDef.particleCount * 0.60f);
+                int perSat = (std::max)(5, totalSatParticles / satCount);
+
+                for (const auto& sat : seqDef.satelliteCPs)
+                {
+                    // t=0 (elapsed=0) 기준 위성 CP 초기 위치 계산
+                    float angle = sat.orbitPhase;
+                    float bx = cosf(angle) * sat.orbitRadius;
+                    float bz = sinf(angle) * sat.orbitRadius;
+                    float ct = cosf(sat.orbitTiltX), st = sinf(sat.orbitTiltX);
+
+                    FluidParticleConfig::SpawnGroup g;
+                    g.center.x = origin.x + bx;
+                    g.center.y = origin.y + sat.verticalOffset - bz * st;
+                    g.center.z = origin.z + bz * ct;
+                    g.count    = perSat;
+                    g.radius   = sat.sphereRadius * 0.8f; // 위성 인력권 내에 스폰
+                    cfg.spawnGroups.push_back(g);
+                }
+            }
+
             // 첫 페이즈의 모드 설정
             if (!seqDef.phases.empty()) {
                 slot.pSystem->SetMotionMode(seqDef.phases[0].motionMode);
@@ -628,21 +664,38 @@ void FluidSkillVFXManager::UpdateOrbitalCPs(FluidVFXSlot& slot, float dt)
     masterCP.sphereRadius       = seqDef.masterCPSphereRadius;
     cps.push_back(masterCP);
 
-    // 위성 CP들 공전 (orbitTiltX: X축 기준으로 xz 궤도면을 기울임)
+    // 위성 CP들 공전 + 세차운동 (궤도면 자체가 Y축 주위로 회전)
     for (const auto& sat : slot.sequenceDef.satelliteCPs) {
-        float angle = sat.orbitPhase + slot.elapsed * sat.orbitSpeed;
-        float bx =  cosf(angle) * sat.orbitRadius;
-        float bz =  sinf(angle) * sat.orbitRadius;
+        float theta = sat.orbitPhase + slot.elapsed * sat.orbitSpeed;   // 궤도 내 각도
+        float omega = slot.elapsed * sat.precessionSpeed;                // 궤도면 세차 각도
+        float phi   = sat.orbitTiltX;                                    // 궤도면 기울기
 
-        // X축 회전: (bx, 0, bz) → (bx, -bz*sin(tilt), bz*cos(tilt))
-        float ct = cosf(sat.orbitTiltX), st = sinf(sat.orbitTiltX);
+        // 호흡: 삼각파로 수축/팽창 속도 동일 (사인파는 고점/저점 근처에서 느려짐)
+        // triangle(t): t=[0,π] → +1→-1 선형, t=[π,2π] → -1→+1 선형
+        float tPhase = fmodf(slot.elapsed * sat.breatheSpeed + sat.breathePhase, 2.f * 3.14159265f);
+        float triWave = (tPhase < 3.14159265f)
+            ? (1.f - 2.f * tPhase / 3.14159265f)        // +1 → -1
+            : (-1.f + 2.f * (tPhase - 3.14159265f) / 3.14159265f); // -1 → +1
+        float breathe = 1.f + sat.breatheAmplitude * triWave;
+        float R = sat.orbitRadius * breathe;
+
+        // 1) 기울어진 궤도면 내 위치 (X축 기준 tilt 적용)
+        float lx = R * cosf(theta);                   // 궤도 X 성분
+        float ly = R * sinf(theta) * sinf(phi);       // 기울기로 생긴 Y 성분
+        float lz = R * sinf(theta) * cosf(phi);       // 궤도 Z 성분
+
+        // 2) Y축 기준 세차운동 (궤도면 자체 회전)
+        float cosW = cosf(omega), sinW = sinf(omega);
+        float wx = lx * cosW + lz * sinW;
+        float wy = ly;
+        float wz = -lx * sinW + lz * cosW;
 
         FluidControlPoint satCP;
-        satCP.position.x           = slot.masterCPPos.x + bx;
-        satCP.position.y           = slot.masterCPPos.y + sat.verticalOffset - bz * st;
-        satCP.position.z           = slot.masterCPPos.z + bz * ct;
-        satCP.attractionStrength   = sat.attractionStrength;
-        satCP.sphereRadius         = sat.sphereRadius;
+        satCP.position.x         = slot.masterCPPos.x + wx;
+        satCP.position.y         = slot.masterCPPos.y + sat.verticalOffset + wy;
+        satCP.position.z         = slot.masterCPPos.z + wz;
+        satCP.attractionStrength = sat.attractionStrength;
+        satCP.sphereRadius       = sat.sphereRadius;
         cps.push_back(satCP);
     }
 

@@ -523,23 +523,60 @@ void FluidParticleSystem::Spawn(const XMFLOAT3& center, const FluidParticleConfi
     m_vGPUPendingVelDelta  = {};
 
     m_Config = config;
-    m_Colors = FluidElementColors::Get(config.element);
+    m_Colors = config.overrideColors
+        ? FluidElementColor{ config.customCoreColor, config.customEdgeColor }
+        : FluidElementColors::Get(config.element);
 
     int count = (std::min)(config.particleCount, MAX_PARTICLES);
     m_Particles.clear();
     m_Particles.resize(count);
 
-    for (auto& p : m_Particles)
+    int nucleusCount = (int)(count * config.nucleusFraction);
+
+    // 스폰 그룹별 파티클 수 합산 (핵 + 위성 그룹 + 나머지)
+    int groupTotal = 0;
+    for (const auto& g : config.spawnGroups) groupTotal += g.count;
+    // 나머지 파티클은 spawnRadius 구체에 균일 스폰
+    // (nucleusCount + groupTotal이 count 초과 시 clamp는 루프 내에서 처리)
+
+    int pi = 0;
+
+    // 1) 핵 파티클: center 근처 nucleusRadius 내, cpGroup=0 (핵 CP 전용)
+    for (int k = 0; k < nucleusCount && pi < count; ++k, ++pi)
     {
+        auto& p = m_Particles[pi];
+        XMFLOAT3 offset = RandInSphere(config.nucleusRadius);
+        p.position = { center.x + offset.x, center.y + offset.y, center.z + offset.z };
+        p.velocity = { RandRange(-0.5f, 0.5f), RandRange(-0.2f, 0.2f), RandRange(-0.5f, 0.5f) };
+        p.force = {}; p.density = config.restDensity; p.pressure = 0.f; p.mass = 1.f;
+        p.active = true; p.cpGroup = 0;  // 핵 CP (master, gCPs[0])
+    }
+
+    // 2) 위성 CP 위치 스폰 그룹, cpGroup=satIndex (해당 위성 CP 전용)
+    int satIndex = 0;
+    for (const auto& g : config.spawnGroups)
+    {
+        ++satIndex;  // 위성 CP 인덱스: gCPs[1], gCPs[2], ...
+        for (int k = 0; k < g.count && pi < count; ++k, ++pi)
+        {
+            auto& p = m_Particles[pi];
+            XMFLOAT3 offset = RandInSphere(g.radius);
+            p.position = { g.center.x + offset.x, g.center.y + offset.y, g.center.z + offset.z };
+            p.velocity = { RandRange(-1.f, 1.f), RandRange(-0.5f, 0.5f), RandRange(-1.f, 1.f) };
+            p.force = {}; p.density = config.restDensity; p.pressure = 0.f; p.mass = 1.f;
+            p.active = true; p.cpGroup = satIndex;  // 위성 CP (gCPs[satIndex])
+        }
+    }
+
+    // 3) 나머지: spawnRadius 구체에 균일 스폰, cpGroup=-1 (전체 CP)
+    for (; pi < count; ++pi)
+    {
+        auto& p = m_Particles[pi];
         XMFLOAT3 offset = RandInSphere(config.spawnRadius);
         p.position = { center.x + offset.x, center.y + offset.y, center.z + offset.z };
-        // Small random kick so particles start visibly moving from frame 1
         p.velocity = { RandRange(-1.5f, 1.5f), RandRange(-0.5f, 0.5f), RandRange(-1.5f, 1.5f) };
-        p.force    = { 0, 0, 0 };
-        p.density  = config.restDensity;
-        p.pressure = 0.0f;
-        p.mass     = 1.0f;
-        p.active   = true;
+        p.force = {}; p.density = config.restDensity; p.pressure = 0.f; p.mass = 1.f;
+        p.active = true; p.cpGroup = -1;  // 전체 CP 영향
     }
 
     // Set default control point at center if none set
@@ -569,7 +606,9 @@ void FluidParticleSystem::Spawn(const XMFLOAT3& center, const FluidParticleConfi
                 pMapped[i].force       = { 0, 0, 0 };
                 pMapped[i].mass        = m_Particles[i].mass;
                 pMapped[i].active      = m_Particles[i].active ? 1 : 0;
-                pMapped[i].pad         = { 0, 0, 0 };
+                pMapped[i].cpGroup     = m_Particles[i].cpGroup;
+                pMapped[i]._pad[0]     = 0.f;
+                pMapped[i]._pad[1]     = 0.f;
             }
             m_pInitUpload->Unmap(0, nullptr);
         }
@@ -1206,6 +1245,11 @@ void FluidParticleSystem::ApplyRadialBurst(XMFLOAT3 center, float minSpeed, floa
     }
 }
 
+void FluidParticleSystem::SetColors(const FluidElementColor& colors)
+{
+    m_Colors = colors;
+}
+
 void FluidParticleSystem::ZeroAxisVelocity(const XMFLOAT3& worldAxis)
 {
     XMVECTOR axis = XMVector3Normalize(XMLoadFloat3(&worldAxis));
@@ -1377,7 +1421,8 @@ static const char* g_SPHComputeShader = R"(
         float3 force;
         float  mass;
         int    active;
-        float3 pad;
+        int    cpGroup;  // 담당 CP 인덱스 (-1=전체, 0=핵, 1+=위성)
+        float2 pad;
     };
 
     struct FluidParticleRenderData {
@@ -1564,6 +1609,9 @@ static const char* g_SPHComputeShader = R"(
             float radialOsc = sin(gElapsedTime * 18.85f + particlePhase); // 3 Hz 개별 진동 -1..1
 
             for (int c = 0; c < gCPCount; ++c) {
+                // cpGroup 필터: 담당 CP만 처리 (cpGroup < 0이면 전체)
+                if (gParticles[i].cpGroup >= 0 && gParticles[i].cpGroup != c) continue;
+
                 float3 toCP = gCPs[c].position - gParticles[i].pos;
                 float dist = length(toCP);
                 if (dist < 0.001f) continue;

@@ -24,6 +24,7 @@ struct FluidParticle
     float    pressure   = 0.0f;
     float    mass       = 1.0f;
     bool     active     = true;
+    int      cpGroup    = -1;  // 담당 CP 인덱스 (-1=전체, 0=핵, 1+=위성)
     // Beam 모드 전용: 빔-로컬 좌표 (방향 변경 시 즉시 스냅)
     float    beamT      = 0.f;  // 빔 축 방향 진행 거리
     float    beamRx     = 0.f;  // 빔 수직 평면 X 오프셋
@@ -71,6 +72,23 @@ struct FluidParticleConfig
 
     // 파티클 최대 속도 (GPU DispatchSPH에서 clamp)
     float maxParticleSpeed   = 12.0f;
+
+    // 핵 전용 스폰 (OrbitalCP 원자 궤도용)
+    float nucleusFraction    = 0.0f;  // 전체 파티클 중 핵 근처에 스폰할 비율 (0~1)
+    float nucleusRadius      = 0.4f;  // 핵 스폰 반경
+
+    // 색상 오버라이드 (원소별 기본값 대신 직접 지정)
+    bool     overrideColors    = false;
+    XMFLOAT4 customCoreColor   = {};   // 고밀도/핵 색상
+    XMFLOAT4 customEdgeColor   = {};   // 저밀도/궤도 색상
+
+    // 추가 스폰 그룹 (위성 CP 위치 등)
+    struct SpawnGroup {
+        XMFLOAT3 center = {};
+        int       count  = 0;
+        float     radius = 0.5f;
+    };
+    std::vector<SpawnGroup> spawnGroups;
 };
 
 namespace FluidElementColors

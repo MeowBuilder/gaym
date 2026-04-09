@@ -43,6 +43,15 @@ struct VFXSequenceDef {
     float masterCPStrength     = 25.f;   // 마스터 CP 인력
     float masterCPSphereRadius = 5.f;    // 마스터 CP 구체 반경
 
+    // 핵-궤도 색상 오버라이드 (원자 궤도 이펙트용)
+    bool     overrideColors    = false;
+    XMFLOAT4 overrideCoreColor = {};   // 고밀도/핵 색상 (흰-노랑 등)
+    XMFLOAT4 overrideEdgeColor = {};   // 저밀도/궤도 색상 (원소색)
+
+    // 핵 전용 파티클 스폰 비율 (0=전체 구에 스폰, 0.25=25%를 핵 근처에 집중 스폰)
+    float nucleusSpawnFraction = 0.0f;
+    float nucleusSpawnRadius   = 0.4f;
+
     // SPH 물리 오버라이드 (true 시 기본값 대신 적용)
     bool  overridePhysics    = false;
     float sphStiffness       = 50.f;

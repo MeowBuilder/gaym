@@ -181,7 +181,19 @@ void VFXLibrary::Initialize() {
         }
 
         // 마스터 CP (VFXManager가 낙하 위치로 설정)
-        // cpDescs[0] = 마스터 CP
+        // masterCPStrength/SphereRadius는 VFXSequenceDef 기본값 사용
+
+        // 핵(밝은 주황-노랑) vs 궤도 링(어두운 불꽃)으로 시각적 구분
+        def.overrideColors    = true;
+        def.overrideCoreColor = { 1.0f, 0.70f, 0.10f, 1.0f }; // 밝은 주황-노랑 (메테오 코어)
+        def.overrideEdgeColor = { 0.9f, 0.12f, 0.0f,  0.35f }; // 어두운 불꽃 (궤도 링)
+        // 파티클 15%를 메테오 중심 근처에 집중 스폰 → 밝은 코어 형성
+        def.nucleusSpawnFraction = 0.15f;
+        def.nucleusSpawnRadius   = 2.5f;
+        // masterCPSphereRadius: 위성이 최대 18f + sphereRadius(6f) = 24f 커버 필요
+        // 경계 영역 = 10f * 2.5f = 25f → 모든 궤도 파티클 간섭 없음
+        def.masterCPStrength     = 35.f;
+        def.masterCPSphereRadius = 10.f;
 
         RegisterBase(SkillSlot::R, def);
 
@@ -200,7 +212,7 @@ void VFXLibrary::Initialize() {
         VFXSequenceDef def;
         def.name          = "RC_Fireball";
         def.element       = ElementType::Fire;
-        def.particleCount = 300;
+        def.particleCount = 660;
         def.spawnRadius   = 5.0f;  // 궤도(4.5f) 바깥까지 스폰 → 각 위성 인력권 진입
 
         // OrbitalCP 모드: 마스터 CP = 투사체, 위성 CP = 전자 궤도
@@ -211,16 +223,32 @@ void VFXLibrary::Initialize() {
         def.phases.push_back(p0);
 
         // 마스터 CP 설정: fallSpeed=0 → 투사체 origin 추적
-        // 작은 nucleus 역할 (파티클을 너무 강하게 당기지 않도록 약하게 설정)
+        // masterCPSphereRadius는 궤도(4.5f) + 위성 sphereRadius(1.5f) = 6f를 커버해야 함
+        // 경계 영역 = masterCPSphereRadius * 2.5f → 3.0f * 2.5f = 7.5f > 6f (궤도 파티클에 경계력 없음)
         def.masterCPFallSpeed    = 0.f;   // 낙하 대신 투사체 위치 추적
-        def.masterCPStrength     = 12.f;  // 약한 핵 인력 (전자가 퍼질 공간 확보)
-        def.masterCPSphereRadius = 0.8f;  // 작은 핵 구체
+        def.masterCPStrength     = 60.f;  // 핵 인력 강화 (cpGroup=0으로 핵 파티클만 영향)
+        def.masterCPSphereRadius = 3.0f;  // 경계 영역 7.5f → 궤도(4.5f) 파티클 간섭 없음
+
+        // 핵(흰-노랑) vs 전자(불꽃 주황)로 시각적 구분
+        def.overrideColors    = true;
+        def.overrideCoreColor = { 1.0f, 0.97f, 0.65f, 1.0f }; // 밝은 흰-노랑 (고밀도 핵)
+        def.overrideEdgeColor = { 1.0f, 0.35f, 0.0f,  0.55f }; // 불꽃 주황 (저밀도 궤도)
+        // 파티클 25%를 핵 근처에 집중 스폰 → 초기부터 조밀한 핵 형성
+        def.nucleusSpawnFraction = 0.33f;   // 450 × 0.33 ≈ 150개 (기존 75의 2배)
+        def.nucleusSpawnRadius   = 0.35f;  // 궤도: 60% × 450 = 270개 (기존 180의 1.5배)
 
         // 3개 궤도 링 × 전자 2개: tilt 0° / +60° / -60°
+        // 링마다 세차 속도가 달라 시간이 지나면서 궤도면이 각자 다르게 회전 → 혼돈
         constexpr float TWO_PI = 2.f * 3.14159265f;
         constexpr float R = 4.5f;
-        const float tilts[3]  = { 0.f, 3.14159265f / 3.f, -3.14159265f / 3.f };
-        const float speeds[3] = { 5.0f, 3.2f, 7.0f };
+        const float tilts[3]       = { 0.f, 3.14159265f / 3.f, -3.14159265f / 3.f };
+        const float speeds[3]      = { 5.0f, 3.2f, 7.0f };
+        const float precessions[3] = { 0.8f, -1.3f, 1.05f };  // 링별 세차 속도 (rad/s)
+
+        // 호흡: 모든 링이 거의 동시에 수축/팽창 (링별 위상 약간 다르게)
+        constexpr float BREATHE_AMP   = 0.90f;  // 진폭 90% → R_min=0.45, R_max=8.55
+        constexpr float BREATHE_SPEED = 1.65f;  // 1.1 * 1.5배 → ~3.8초 주기
+        const float breathePhases[3]  = { 0.f, 0.25f, -0.25f }; // 살짝 어긋나게
 
         for (int ring = 0; ring < 3; ++ring)
             for (int e = 0; e < 2; ++e)
@@ -231,8 +259,12 @@ void VFXLibrary::Initialize() {
                 sat.orbitPhase         = e * 3.14159265f + ring * (TWO_PI / 3.f);
                 sat.verticalOffset     = 0.f;
                 sat.attractionStrength = 55.f;
-                sat.sphereRadius       = 1.5f;  // 인력권 3.75f → 스폰된 파티클 포착
+                sat.sphereRadius       = 1.5f;
                 sat.orbitTiltX         = tilts[ring];
+                sat.precessionSpeed    = precessions[ring];
+                sat.breatheAmplitude   = BREATHE_AMP;
+                sat.breatheSpeed       = BREATHE_SPEED;
+                sat.breathePhase       = breathePhases[ring];
                 def.satelliteCPs.push_back(sat);
             }
 

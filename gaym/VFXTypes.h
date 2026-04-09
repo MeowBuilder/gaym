@@ -53,6 +53,14 @@ struct SatelliteCPDesc {
     float sphereRadius;
     // 궤도 기울기: X축 기준으로 xz면을 회전 (0=수평, π/2=수직 yz면)
     float orbitTiltX = 0.f;
+    // 궤도면 세차운동 속도 (rad/s): 0이면 고정, 양수/음수로 방향 제어
+    float precessionSpeed = 0.f;
+
+    // 궤도 반지름 호흡 (줄었다 늘었다)
+    // R_eff = orbitRadius * (1 + breatheAmplitude * sin(elapsed * breatheSpeed + breathePhase))
+    float breatheAmplitude = 0.f;  // 진폭 (0~1): 1이면 완전히 0까지 수축
+    float breatheSpeed     = 0.f;  // 속도 (rad/s)
+    float breathePhase     = 0.f;  // 초기 위상
 };
 
 // VFX 페이즈
