@@ -24,7 +24,9 @@ void Shader::RemoveRenderComponent(RenderComponent* pRenderComponent)
         m_vRenderComponents.end());
 }
 
-void Shader::Render(ID3D12GraphicsCommandList* pCommandList, D3D12_GPU_VIRTUAL_ADDRESS d3dPassCBVAddress, D3D12_GPU_DESCRIPTOR_HANDLE shadowSrvHandle)
+void Shader::Render(ID3D12GraphicsCommandList* pCommandList, D3D12_GPU_VIRTUAL_ADDRESS d3dPassCBVAddress, D3D12_GPU_DESCRIPTOR_HANDLE shadowSrvHandle,
+                     D3D12_GPU_DESCRIPTOR_HANDLE waterNormal2Handle, D3D12_GPU_DESCRIPTOR_HANDLE waterHeight2Handle,
+                     D3D12_GPU_DESCRIPTOR_HANDLE foamOpacityHandle, D3D12_GPU_DESCRIPTOR_HANDLE foamDiffuseHandle)
 {
     pCommandList->SetGraphicsRootSignature(m_pd3dRootSignature.Get());
 
@@ -44,6 +46,17 @@ void Shader::Render(ID3D12GraphicsCommandList* pCommandList, D3D12_GPU_VIRTUAL_A
 
     // 2. Render transparent objects (water) with alpha blending PSO
     pCommandList->SetPipelineState(m_pd3dWaterPSO.Get());
+
+    // Bind additional water textures (t7~t10) if provided
+    if (waterNormal2Handle.ptr != 0)
+        pCommandList->SetGraphicsRootDescriptorTable(9, waterNormal2Handle);   // t7
+    if (waterHeight2Handle.ptr != 0)
+        pCommandList->SetGraphicsRootDescriptorTable(10, waterHeight2Handle);  // t8
+    if (foamOpacityHandle.ptr != 0)
+        pCommandList->SetGraphicsRootDescriptorTable(11, foamOpacityHandle);   // t9
+    if (foamDiffuseHandle.ptr != 0)
+        pCommandList->SetGraphicsRootDescriptorTable(12, foamDiffuseHandle);   // t10
+
     for (auto& pRenderComp : m_vRenderComponents)
     {
         if (pRenderComp->IsTransparent())
@@ -72,7 +85,7 @@ void Shader::RenderShadowPass(ID3D12GraphicsCommandList* pCommandList, D3D12_GPU
 void Shader::Build(ID3D12Device* pDevice)
 {
     // Create a root signature with 9 parameters: Object CBV, Pass CBV, Albedo SRV(t0), Shadow SRV(t1), Normal SRV(t2), Height SRV(t3), Emissive SRV(t4), AO SRV(t5), Roughness SRV(t6)
-    D3D12_ROOT_PARAMETER d3dRootParameters[9];
+    D3D12_ROOT_PARAMETER d3dRootParameters[13];  // 9 + 4 (t7~t10)
 
     // Parameter 0: Descriptor table for the per-object constant buffer (b0)
     D3D12_DESCRIPTOR_RANGE d3dDescriptorRange;
@@ -217,8 +230,60 @@ void Shader::Build(ID3D12Device* pDevice)
     d3dRootParameters[8].DescriptorTable.pDescriptorRanges = &d3dRoughnessRange;
     d3dRootParameters[8].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
+    // Parameter 9: Descriptor table for the second Normal map SRV (t7) - Water_6
+    D3D12_DESCRIPTOR_RANGE d3dNormalMap2Range;
+    d3dNormalMap2Range.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+    d3dNormalMap2Range.NumDescriptors = 1;
+    d3dNormalMap2Range.BaseShaderRegister = 7; // t7
+    d3dNormalMap2Range.RegisterSpace = 0;
+    d3dNormalMap2Range.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+
+    d3dRootParameters[9].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+    d3dRootParameters[9].DescriptorTable.NumDescriptorRanges = 1;
+    d3dRootParameters[9].DescriptorTable.pDescriptorRanges = &d3dNormalMap2Range;
+    d3dRootParameters[9].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+
+    // Parameter 10: Descriptor table for the second Height map SRV (t8) - Water_6
+    D3D12_DESCRIPTOR_RANGE d3dHeightMap2Range;
+    d3dHeightMap2Range.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+    d3dHeightMap2Range.NumDescriptors = 1;
+    d3dHeightMap2Range.BaseShaderRegister = 8; // t8
+    d3dHeightMap2Range.RegisterSpace = 0;
+    d3dHeightMap2Range.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+
+    d3dRootParameters[10].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+    d3dRootParameters[10].DescriptorTable.NumDescriptorRanges = 1;
+    d3dRootParameters[10].DescriptorTable.pDescriptorRanges = &d3dHeightMap2Range;
+    d3dRootParameters[10].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;  // VS에서도 사용 (heightmap displacement)
+
+    // Parameter 11: Descriptor table for the foam opacity SRV (t9) - foam4
+    D3D12_DESCRIPTOR_RANGE d3dFoamOpacityRange;
+    d3dFoamOpacityRange.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+    d3dFoamOpacityRange.NumDescriptors = 1;
+    d3dFoamOpacityRange.BaseShaderRegister = 9; // t9
+    d3dFoamOpacityRange.RegisterSpace = 0;
+    d3dFoamOpacityRange.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+
+    d3dRootParameters[11].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+    d3dRootParameters[11].DescriptorTable.NumDescriptorRanges = 1;
+    d3dRootParameters[11].DescriptorTable.pDescriptorRanges = &d3dFoamOpacityRange;
+    d3dRootParameters[11].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+
+    // Parameter 12: Descriptor table for the foam diffuse SRV (t10) - foam4
+    D3D12_DESCRIPTOR_RANGE d3dFoamDiffuseRange;
+    d3dFoamDiffuseRange.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+    d3dFoamDiffuseRange.NumDescriptors = 1;
+    d3dFoamDiffuseRange.BaseShaderRegister = 10; // t10
+    d3dFoamDiffuseRange.RegisterSpace = 0;
+    d3dFoamDiffuseRange.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+
+    d3dRootParameters[12].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+    d3dRootParameters[12].DescriptorTable.NumDescriptorRanges = 1;
+    d3dRootParameters[12].DescriptorTable.pDescriptorRanges = &d3dFoamDiffuseRange;
+    d3dRootParameters[12].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+
     D3D12_ROOT_SIGNATURE_DESC d3dRootSignatureDesc;
-    d3dRootSignatureDesc.NumParameters = 9;
+    d3dRootSignatureDesc.NumParameters = 13;  // 9 -> 13
     d3dRootSignatureDesc.pParameters = d3dRootParameters;
     d3dRootSignatureDesc.NumStaticSamplers = 2;
     d3dRootSignatureDesc.pStaticSamplers = samplers;

@@ -27,6 +27,8 @@
 #include "VFXLibrary.h"
 #include <functional> // Added for std::function
 #include "MapLoader.h"
+#include "WICTextureLoader12.h"
+#include "D3dx12.h"
 
 Scene::Scene()
 {
@@ -846,7 +848,9 @@ void Scene::Render(ID3D12GraphicsCommandList* pCommandList, D3D12_GPU_DESCRIPTOR
     // Iterate through shaders (groups) and render
     for (auto& shader : m_vShaders)
     {
-        shader->Render(pCommandList, GetPassCBVAddress(), shadowSrvHandle);
+        shader->Render(pCommandList, GetPassCBVAddress(), shadowSrvHandle,
+                       m_d3dWaterNormal2GpuHandle, m_d3dWaterHeight2GpuHandle,
+                       m_d3dFoamOpacityGpuHandle, m_d3dFoamDiffuseGpuHandle);
     }
 
     // Render projectiles (after main rendering, pipeline state is already set)
@@ -1960,13 +1964,159 @@ void Scene::TransitionToWaterStage()
             m_pWaterPlane->SetEmissiveSrvGpuDescriptorHandle(emissiveGpuHandle);
             m_pWaterPlane->SetHasEmissiveTexture(true);
 
+            // ── 추가 물 텍스처 로드 (Water_6 + foam4) ──
+
+            // Water_6_Normal.png (t7)
+            {
+                std::wstring normalPath2 = L"Assets/Stylize Water Texture/Water_6/Water_6_Normal.png";
+                std::unique_ptr<uint8_t[]> decodedData;
+                D3D12_SUBRESOURCE_DATA subresource;
+
+                HRESULT hr = DirectX::LoadWICTextureFromFile(pDevice, normalPath2.c_str(), m_pd3dWaterNormal2.GetAddressOf(), decodedData, subresource);
+                if (SUCCEEDED(hr))
+                {
+                    UINT64 nBytes = GetRequiredIntermediateSize(m_pd3dWaterNormal2.Get(), 0, 1);
+                    m_pd3dWaterNormal2Upload = CreateBufferResource(pDevice, pCommandList, NULL, nBytes, D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATE_GENERIC_READ, NULL);
+                    UpdateSubresources(pCommandList, m_pd3dWaterNormal2.Get(), m_pd3dWaterNormal2Upload.Get(), 0, 0, 1, &subresource);
+
+                    D3D12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition(m_pd3dWaterNormal2.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+                    pCommandList->ResourceBarrier(1, &barrier);
+
+                    D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle;
+                    D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle;
+                    AllocateDescriptor(&cpuHandle, &gpuHandle);
+
+                    D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+                    srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+                    srvDesc.Format = m_pd3dWaterNormal2->GetDesc().Format;
+                    srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+                    srvDesc.Texture2D.MipLevels = 1;
+                    pDevice->CreateShaderResourceView(m_pd3dWaterNormal2.Get(), &srvDesc, cpuHandle);
+
+                    m_d3dWaterNormal2GpuHandle = gpuHandle;  // Store GPU handle
+                    OutputDebugString(L"[Scene] Water_6_Normal.png loaded (t7)\n");
+                }
+                else
+                {
+                    OutputDebugString(L"[Scene] Failed to load Water_6_Normal.png\n");
+                }
+            }
+
+            // Water_6_Height.png (t8)
+            {
+                std::wstring heightPath2 = L"Assets/Stylize Water Texture/Water_6/Water_6_Height.png";
+                std::unique_ptr<uint8_t[]> decodedData;
+                D3D12_SUBRESOURCE_DATA subresource;
+
+                HRESULT hr = DirectX::LoadWICTextureFromFile(pDevice, heightPath2.c_str(), m_pd3dWaterHeight2.GetAddressOf(), decodedData, subresource);
+                if (SUCCEEDED(hr))
+                {
+                    UINT64 nBytes = GetRequiredIntermediateSize(m_pd3dWaterHeight2.Get(), 0, 1);
+                    m_pd3dWaterHeight2Upload = CreateBufferResource(pDevice, pCommandList, NULL, nBytes, D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATE_GENERIC_READ, NULL);
+                    UpdateSubresources(pCommandList, m_pd3dWaterHeight2.Get(), m_pd3dWaterHeight2Upload.Get(), 0, 0, 1, &subresource);
+
+                    D3D12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition(m_pd3dWaterHeight2.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+                    pCommandList->ResourceBarrier(1, &barrier);
+
+                    D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle;
+                    D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle;
+                    AllocateDescriptor(&cpuHandle, &gpuHandle);
+
+                    D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+                    srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+                    srvDesc.Format = m_pd3dWaterHeight2->GetDesc().Format;
+                    srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+                    srvDesc.Texture2D.MipLevels = 1;
+                    pDevice->CreateShaderResourceView(m_pd3dWaterHeight2.Get(), &srvDesc, cpuHandle);
+
+                    m_d3dWaterHeight2GpuHandle = gpuHandle;  // Store GPU handle
+                    OutputDebugString(L"[Scene] Water_6_Height.png loaded (t8)\n");
+                }
+                else
+                {
+                    OutputDebugString(L"[Scene] Failed to load Water_6_Height.png\n");
+                }
+            }
+
+            // foam4_Opacity.tga (t9)
+            {
+                std::wstring foamOpacityPath = L"Assets/Stylize Water Texture/foam4/foam4_Opacity.tga";
+                std::unique_ptr<uint8_t[]> decodedData;
+                D3D12_SUBRESOURCE_DATA subresource;
+
+                HRESULT hr = DirectX::LoadWICTextureFromFile(pDevice, foamOpacityPath.c_str(), m_pd3dFoamOpacity.GetAddressOf(), decodedData, subresource);
+                if (SUCCEEDED(hr))
+                {
+                    UINT64 nBytes = GetRequiredIntermediateSize(m_pd3dFoamOpacity.Get(), 0, 1);
+                    m_pd3dFoamOpacityUpload = CreateBufferResource(pDevice, pCommandList, NULL, nBytes, D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATE_GENERIC_READ, NULL);
+                    UpdateSubresources(pCommandList, m_pd3dFoamOpacity.Get(), m_pd3dFoamOpacityUpload.Get(), 0, 0, 1, &subresource);
+
+                    D3D12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition(m_pd3dFoamOpacity.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+                    pCommandList->ResourceBarrier(1, &barrier);
+
+                    D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle;
+                    D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle;
+                    AllocateDescriptor(&cpuHandle, &gpuHandle);
+
+                    D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+                    srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+                    srvDesc.Format = m_pd3dFoamOpacity->GetDesc().Format;
+                    srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+                    srvDesc.Texture2D.MipLevels = 1;
+                    pDevice->CreateShaderResourceView(m_pd3dFoamOpacity.Get(), &srvDesc, cpuHandle);
+
+                    m_d3dFoamOpacityGpuHandle = gpuHandle;  // Store GPU handle
+                    OutputDebugString(L"[Scene] foam4_Opacity.tga loaded (t9)\n");
+                }
+                else
+                {
+                    OutputDebugString(L"[Scene] Failed to load foam4_Opacity.tga\n");
+                }
+            }
+
+            // foam4_Diffuse.tif (t10)
+            {
+                std::wstring foamDiffusePath = L"Assets/Stylize Water Texture/foam4/foam4_Diffuse.tif";
+                std::unique_ptr<uint8_t[]> decodedData;
+                D3D12_SUBRESOURCE_DATA subresource;
+
+                HRESULT hr = DirectX::LoadWICTextureFromFile(pDevice, foamDiffusePath.c_str(), m_pd3dFoamDiffuse.GetAddressOf(), decodedData, subresource);
+                if (SUCCEEDED(hr))
+                {
+                    UINT64 nBytes = GetRequiredIntermediateSize(m_pd3dFoamDiffuse.Get(), 0, 1);
+                    m_pd3dFoamDiffuseUpload = CreateBufferResource(pDevice, pCommandList, NULL, nBytes, D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATE_GENERIC_READ, NULL);
+                    UpdateSubresources(pCommandList, m_pd3dFoamDiffuse.Get(), m_pd3dFoamDiffuseUpload.Get(), 0, 0, 1, &subresource);
+
+                    D3D12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition(m_pd3dFoamDiffuse.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+                    pCommandList->ResourceBarrier(1, &barrier);
+
+                    D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle;
+                    D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle;
+                    AllocateDescriptor(&cpuHandle, &gpuHandle);
+
+                    D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+                    srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+                    srvDesc.Format = m_pd3dFoamDiffuse->GetDesc().Format;
+                    srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+                    srvDesc.Texture2D.MipLevels = 1;
+                    pDevice->CreateShaderResourceView(m_pd3dFoamDiffuse.Get(), &srvDesc, cpuHandle);
+
+                    m_d3dFoamDiffuseGpuHandle = gpuHandle;  // Store GPU handle
+                    OutputDebugString(L"[Scene] foam4_Diffuse.tif loaded (t10)\n");
+                }
+                else
+                {
+                    OutputDebugString(L"[Scene] Failed to load foam4_Diffuse.tif\n");
+                }
+            }
+
             auto* pRC = m_pWaterPlane->AddComponent<RenderComponent>();
             pRC->SetMesh(pPlaneMesh);
             pRC->SetCastsShadow(false);
             pRC->SetTransparent(true);  // 물 투명 렌더링 활성화
             m_vShaders[0]->AddRenderComponent(pRC);
         }
-        OutputDebugString(L"[Scene] Water floor plane placed\n");
+        OutputDebugString(L"[Scene] Water floor plane placed (with Water_6 + foam4 textures)\n");
     }
 
     // ── 9. 맵 정적 오브젝트 상수 버퍼 초기화
@@ -1992,6 +2142,51 @@ void Scene::TransitionToWaterStage()
     {
         auto* pPC = m_pPlayerGameObject->GetComponent<PlayerComponent>();
         if (pPC) pPC->ResetGroundY();
+    }
+
+    // ── 12. Gerstner Waves (임팩트 + 높이감 강화!)
+    if (m_pcbMappedPass)
+    {
+        // Wave 1: 주 파동 (거대한 롤링)
+        m_pcbMappedPass->m_Waves[0].m_fWavelength = 60.0f;
+        m_pcbMappedPass->m_Waves[0].m_fAmplitude = 7.0f;      // 대폭 증가!
+        m_pcbMappedPass->m_Waves[0].m_fSteepness = 0.45f;     // 파도 형태 명확
+        m_pcbMappedPass->m_Waves[0].m_fSpeed = 5.0f;
+        m_pcbMappedPass->m_Waves[0].m_xmf2Direction = XMFLOAT2(1.0f, 0.3f);
+        m_pcbMappedPass->m_Waves[0].m_fFadeSpeed = 0.1f;
+
+        // Wave 2: 부 파동 (교차, 높음)
+        m_pcbMappedPass->m_Waves[1].m_fWavelength = 38.0f;
+        m_pcbMappedPass->m_Waves[1].m_fAmplitude = 4.5f;      // 증가
+        m_pcbMappedPass->m_Waves[1].m_fSteepness = 0.4f;
+        m_pcbMappedPass->m_Waves[1].m_fSpeed = 6.5f;
+        m_pcbMappedPass->m_Waves[1].m_xmf2Direction = XMFLOAT2(-0.7f, 0.7f);
+        m_pcbMappedPass->m_Waves[1].m_fFadeSpeed = 0.12f;
+
+        // Wave 3: 중간 (디테일)
+        m_pcbMappedPass->m_Waves[2].m_fWavelength = 22.0f;
+        m_pcbMappedPass->m_Waves[2].m_fAmplitude = 2.2f;      // 증가
+        m_pcbMappedPass->m_Waves[2].m_fSteepness = 0.35f;
+        m_pcbMappedPass->m_Waves[2].m_fSpeed = 8.5f;
+        m_pcbMappedPass->m_Waves[2].m_xmf2Direction = XMFLOAT2(0.6f, -0.8f);
+        m_pcbMappedPass->m_Waves[2].m_fFadeSpeed = 0.15f;
+
+        // Wave 4-5: 작은 파동
+        m_pcbMappedPass->m_Waves[3].m_fWavelength = 14.0f;
+        m_pcbMappedPass->m_Waves[3].m_fAmplitude = 1.0f;
+        m_pcbMappedPass->m_Waves[3].m_fSteepness = 0.3f;
+        m_pcbMappedPass->m_Waves[3].m_fSpeed = 11.0f;
+        m_pcbMappedPass->m_Waves[3].m_xmf2Direction = XMFLOAT2(0.5f, 0.9f);
+        m_pcbMappedPass->m_Waves[3].m_fFadeSpeed = 0.0f;
+
+        m_pcbMappedPass->m_Waves[4].m_fWavelength = 9.0f;
+        m_pcbMappedPass->m_Waves[4].m_fAmplitude = 0.5f;
+        m_pcbMappedPass->m_Waves[4].m_fSteepness = 0.25f;
+        m_pcbMappedPass->m_Waves[4].m_fSpeed = 13.0f;
+        m_pcbMappedPass->m_Waves[4].m_xmf2Direction = XMFLOAT2(-0.9f, 0.4f);
+        m_pcbMappedPass->m_Waves[4].m_fFadeSpeed = 0.0f;
+
+        OutputDebugString(L"[Scene] 높이 + 디테일 강화 (3레이어 heightmap)\n");
     }
 
     OutputDebugString(L"[Scene] Water stage ready!\n");

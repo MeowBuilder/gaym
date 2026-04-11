@@ -10,7 +10,9 @@ public:
     Shader();
     ~Shader();
 
-    void Render(ID3D12GraphicsCommandList* pCommandList, D3D12_GPU_VIRTUAL_ADDRESS d3dPassCBVAddress, D3D12_GPU_DESCRIPTOR_HANDLE shadowSrvHandle);
+    void Render(ID3D12GraphicsCommandList* pCommandList, D3D12_GPU_VIRTUAL_ADDRESS d3dPassCBVAddress, D3D12_GPU_DESCRIPTOR_HANDLE shadowSrvHandle,
+                D3D12_GPU_DESCRIPTOR_HANDLE waterNormal2Handle = {}, D3D12_GPU_DESCRIPTOR_HANDLE waterHeight2Handle = {},
+                D3D12_GPU_DESCRIPTOR_HANDLE foamOpacityHandle = {}, D3D12_GPU_DESCRIPTOR_HANDLE foamDiffuseHandle = {});
     void RenderShadowPass(ID3D12GraphicsCommandList* pCommandList, D3D12_GPU_VIRTUAL_ADDRESS d3dPassCBVAddress);
 
     void AddRenderComponent(RenderComponent* pRenderComponent);

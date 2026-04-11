@@ -57,6 +57,18 @@ struct TorchLight
     XMFLOAT3 m_xmf3Color;    float m_fIntensity;
 };
 
+// Gerstner Wave Parameters
+struct WaveParams
+{
+    float m_fWavelength;
+    float m_fAmplitude;
+    float m_fSteepness;
+    float m_fSpeed;
+    XMFLOAT2 m_xmf2Direction;
+    float m_fFadeSpeed;
+    float m_fPad;
+};
+
 struct PassConstants
 {
     XMFLOAT4X4 m_xmf4x4ViewProj;
@@ -74,6 +86,9 @@ struct PassConstants
     // Torch lights array
     TorchLight m_TorchLights[MAX_TORCH_LIGHTS];
     int m_nActiveTorchLights; int m_nTorchPad1; int m_nTorchPad2; int m_nTorchPad3;
+
+    // Gerstner Waves (5 waves for ocean simulation)
+    WaveParams m_Waves[5];
 };
 
 // Include TorchSystem after PassConstants is defined (avoid circular include)
@@ -173,6 +188,20 @@ private:
     StageTheme m_eCurrentTheme = StageTheme::Fire; // 현재 스테이지 테마
     GameObject* m_pLavaPlane = nullptr; // 용암 바닥 평면
     GameObject* m_pWaterPlane = nullptr; // 물 바닥 평면
+
+    // Additional water textures (Water_6 + foam4)
+    ComPtr<ID3D12Resource> m_pd3dWaterNormal2 = nullptr;      // Water_6_Normal.png (t7)
+    ComPtr<ID3D12Resource> m_pd3dWaterHeight2 = nullptr;      // Water_6_Height.png (t8)
+    ComPtr<ID3D12Resource> m_pd3dFoamOpacity = nullptr;       // foam4_Opacity.tga (t9)
+    ComPtr<ID3D12Resource> m_pd3dFoamDiffuse = nullptr;       // foam4_Diffuse.tif (t10)
+    ComPtr<ID3D12Resource> m_pd3dWaterNormal2Upload = nullptr;
+    ComPtr<ID3D12Resource> m_pd3dWaterHeight2Upload = nullptr;
+    ComPtr<ID3D12Resource> m_pd3dFoamOpacityUpload = nullptr;
+    ComPtr<ID3D12Resource> m_pd3dFoamDiffuseUpload = nullptr;
+    D3D12_GPU_DESCRIPTOR_HANDLE m_d3dWaterNormal2GpuHandle = {};  // GPU handle for t7
+    D3D12_GPU_DESCRIPTOR_HANDLE m_d3dWaterHeight2GpuHandle = {};  // GPU handle for t8
+    D3D12_GPU_DESCRIPTOR_HANDLE m_d3dFoamOpacityGpuHandle = {};   // GPU handle for t9
+    D3D12_GPU_DESCRIPTOR_HANDLE m_d3dFoamDiffuseGpuHandle = {};   // GPU handle for t10
 
     std::vector<std::unique_ptr<GameObject>> m_vGameObjects; // Global Objects (Player, etc.)
     std::vector<GameObject*> m_vPendingDeletions; // Objects marked for deletion (processed at end of frame)
