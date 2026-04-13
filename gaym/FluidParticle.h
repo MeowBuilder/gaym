@@ -87,6 +87,10 @@ struct FluidParticleConfig
         XMFLOAT3 center = {};
         int       count  = 0;
         float     radius = 0.5f;
+        // -2=auto(satIndex 기반), -1=전체 CP 응답, 0+=특정 CP 인덱스
+        int       cpGroup    = -2;
+        // 0이면 랜덤 초기 속도, >0이면 SpawnGroup.center → center 방향으로 이 속도 부여
+        float     inwardSpeed = 0.f;
     };
     std::vector<SpawnGroup> spawnGroups;
 };

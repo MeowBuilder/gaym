@@ -9,89 +9,46 @@ VFXLibrary& VFXLibrary::Get() {
 
 void VFXLibrary::Initialize() {
     // ──────────────────────────────────────────────────────────
-    // Q - 웨이브 슬래시 (박스 확장 + ConfinementBox)
+    // Q - 웨이브 슬래시 (일정 폭으로 앞으로 나아가는 파도)
     // ──────────────────────────────────────────────────────────
     {
         VFXSequenceDef def;
         def.name          = "Q_WaveSlash";
         def.element       = ElementType::Fire;
-        def.particleCount = 256;
-        def.spawnRadius   = 0.4f;
+        def.particleCount = 600;
+        def.spawnRadius   = 1.0f;  // 플레이어 앞 1m에 스폰 (back wall은 플레이어 위치)
 
-        // Phase 0: 플레이어 앞 작은 박스에 뭉침 (0~0.3s)
-        VFXPhase p0;
-        p0.startTime  = 0.f;
-        p0.duration   = 0.3f;
-        p0.motionMode = ParticleMotionMode::ControlPoint;
-        p0.boxDesc.active      = true;
-        p0.boxDesc.halfExtents = { 0.8f, 0.8f, 0.8f };
-        // Phase 0: CP 1개 (박스 center에 파티클 집결)
-        {
-            FluidCPDesc cp0;
-            cp0.orbitRadius        = 0.0f;
-            cp0.orbitSpeed         = 0.0f;
-            cp0.orbitPhase         = 0.0f;
-            cp0.forwardBias        = 0.5f;  // 플레이어 앞 0.5 (박스 center)
-            cp0.attractionStrength = 25.f;   // 진동 기반, softAttr과 oscForce 비율 고려
-            cp0.sphereRadius       = 0.8f;
-            p0.cpDescs = { cp0 };
-        }
-        def.phases.push_back(p0);
+        // Wave 모드: 뒤가 막힌 ConfinementBox + SPH 압력으로 파티클이 앞으로 흘러나감
+        // waveSpeed: waveDist 타이머 기준 (실제 이동은 SPH + wavePushForce가 담당)
+        def.isWave        = true;
+        def.waveSpeed     = 10.f;   // 타이머 기준 속도 (실제 파티클 이동속도와 다름)
+        def.wavePushForce = 50.f;   // 매 프레임 앞방향 가속도 (m/s²) — SPH와 함께 앞으로 흐름
+        def.waveMaxDist   = 20.f;   // 10 m/s * 2s = 20m → 2초 후 fade-out 시작
+        def.waveHalfW     = 5.0f;
+        def.waveHalfH     = 1.5f;
 
-        // Phase 1: 앞으로 박스 확장 (0.3~1.1s)
-        VFXPhase p1;
-        p1.startTime  = 0.3f;
-        p1.duration   = 0.8f;           // 0.5 -> 0.8 (앞으로 완전히 퍼지는 시간 늘림)
-        p1.motionMode = ParticleMotionMode::ControlPoint;
-        p1.boxDesc.active      = true;
-        p1.boxDesc.halfExtents = { 1.5f, 1.5f, 5.0f }; // Y도 넓게: 측면에서 보여도 두꺼운 덩어리
-        // Phase 1: CP 없음 + 앞(Z)방향 힘
-        p1.cpDescs = {};
-        p1.expansionForce = { 0.f, 0.f, 1.f };  // 로컬 forward(Z) 방향
-        p1.expansionForceStrength = 22.5f;
-        def.phases.push_back(p1);
+        // maxParticleSpeed: 높게 설정해 SPH 초기 블래스트가 앞으로 빠르게 퍼지도록
+        def.maxParticleSpeed = 20.f;
 
-        // Phase 2: 구름 유지 (1.1~5.1s) - 3D 공간에 고르게 분포
-        // SebLague 방식: 중력 최소화 + 상하 산란 → 어떤 각도에서 봐도 두껍게 보임
-        VFXPhase p2;
-        p2.startTime  = 1.1f;
-        p2.duration   = 4.0f;
-        p2.motionMode = ParticleMotionMode::ControlPoint;
-        p2.cpDescs    = {};
-        // ConfinementBox: X/Z 넓게, Y를 충분히 높여 3D 분포 허용
-        p2.boxDesc.active      = true;
-        p2.boxDesc.halfExtents = { 10.0f, 3.5f, 8.0f };  // Y 3.5: 상하 산란 공간 확보
-        p2.cancelForwardVelocityOnEnter = true;
-        p2.randomSidewaysImpulse  = 14.f;  // 좌우 산란 (+ UpdatePhase에서 상하 산란도 추가)
-        p2.expansionForce         = { 0.f, 0.f, 0.f };
-        p2.expansionForceStrength = 0.f;
-        p2.useAxisSpreadForce     = false;
-        // 중력 대폭 감소: 파티클이 납작해지지 않고 3D 볼륨 유지
-        p2.globalGravityStrength  = 1.5f;  // 4.0 → 1.5 (SPH 압력이 중력 이기도록)
-        def.phases.push_back(p2);
-
-        // SPH 물리 오버라이드: 강한 반발력 + 낮은 목표밀도 → 바닥에 넓게 깔림
-        def.overridePhysics           = true;
-        def.sphStiffness              = 80.f;    // 압력 배율 (낮출수록 파티클이 퍼짐)
-        def.sphNearPressureMult       = 3.0f;    // 근압력 (클러스터링 방지)
-        def.sphRestDensity            = 1.5f;    // 목표 밀도 (낮을수록 더 퍼짐)
-        def.sphViscosity              = 0.05f;   // 점성 (낮을수록 빠르게 퍼짐)
-        def.sphSmoothingRadius        = 2.0f;    // 상호작용 반경
+        // SPH: stiffness 높여 초기 압력으로 파티클을 앞방향으로 강하게 분출
+        def.overridePhysics     = true;
+        def.sphStiffness        = 20.f;
+        def.sphNearPressureMult = 0.5f;
+        def.sphRestDensity      = 0.0f;   // 항상 양압 (인력 없음)
+        def.sphViscosity        = 0.4f;
+        def.sphSmoothingRadius  = 1.8f;
 
         RegisterBase(SkillSlot::Q, def);
 
-        // Enhance 룬: 더 크고 많은 파티클
+        // Enhance 룬: 더 넓고 큰 파도
         VFXModifier enhMod;
         enhMod.particleCountMult = 1.5f;
         enhMod.sizeScaleMult     = 1.3f;
-        enhMod.strengthMult      = 1.2f;
         RegisterRuneMod(SkillSlot::Q, RUNE_ENHANCE, enhMod);
 
-        // Charge 룬: 더 강하고 빠르게 확장
+        // Charge 룬: 파티클 밀도 증가
         VFXModifier chgMod;
-        chgMod.particleCountMult = 1.3f;
-        chgMod.speedMult         = 1.5f;
-        chgMod.strengthMult      = 1.4f;
+        chgMod.particleCountMult = 1.4f;
         RegisterRuneMod(SkillSlot::Q, RUNE_CHARGE, chgMod);
     }
 
@@ -206,80 +163,66 @@ void VFXLibrary::Initialize() {
     }
 
     // ──────────────────────────────────────────────────────────
-    // RightClick - 화염구 투사체 (원자 모형 궤도)
+    // RightClick - 화염구 투사체
+    // 페이즈 없이 단일 비행 — 사방에서 스폰된 파티클이 투사체를 쫓아
+    // 이동하면서 서서히 뭉치는 혜성 효과
     // ──────────────────────────────────────────────────────────
     {
         VFXSequenceDef def;
-        def.name          = "RC_Fireball";
-        def.element       = ElementType::Fire;
-        def.particleCount = 660;
-        def.spawnRadius   = 5.0f;  // 궤도(4.5f) 바깥까지 스폰 → 각 위성 인력권 진입
+        def.name             = "RC_Fireball";
+        def.element          = ElementType::Fire;
+        def.particleCount    = 420;
+        def.spawnRadius      = 0.8f;   // 중심 스폰은 최소화 (cardinalSpawnRadius가 메인)
+        def.maxParticleSpeed = 45.0f;  // 빠른 수렴 + 꼬리 추적
 
-        // OrbitalCP 모드: 마스터 CP = 투사체, 위성 CP = 전자 궤도
+        // 사방 집결 스폰: ±fwd/±right/±up 6방향에서 7유닛 거리에 파티클 스폰
+        def.cardinalSpawnRadius = 7.0f;
+        def.cardinalInwardSpeed = 15.0f;  // 내향 초기 속도
+
+        // 색상: 핵은 밝은 흰-노랑, 꼬리/집결은 불꽃 주황-빨강
+        def.overrideColors    = true;
+        def.overrideCoreColor = { 1.0f, 0.95f, 0.60f, 1.0f };  // 흰-노랑 (핵)
+        def.overrideEdgeColor = { 1.0f, 0.28f, 0.0f,  0.55f };  // 불꽃 주황 (꼬리)
+
+        // sequenceDef.cpDescs: 매 프레임 투사체 origin 기준으로 갱신
+        // CP A - 핵: 강한 인력으로 파티클이 이동하면서 자연스럽게 수렴
+        {
+            FluidCPDesc cpHead;
+            cpHead.forwardBias        = 1.5f;
+            cpHead.attractionStrength = 90.f;
+            cpHead.sphereRadius       = 8.0f;   // 7유닛 밖 파티클도 끌어당김
+            def.cpDescs.push_back(cpHead);
+        }
+        // CP B - 꼬리 앵커: 뒤처진 파티클이 멈추지 않고 계속 전진
+        {
+            FluidCPDesc cpTail;
+            cpTail.forwardBias        = -1.5f;  // 투사체 뒤쪽
+            cpTail.attractionStrength = 25.f;
+            cpTail.sphereRadius       = 12.0f;  // 넓어서 멀리 떨어진 파티클도 유지
+            def.cpDescs.push_back(cpTail);
+        }
+
+        // 단일 페이즈: offsetParticlesWithOrigin=true → 파티클이 투사체와 함께
+        // 전진하면서 동시에 CP 인력으로 수렴 ("날아가며 뭉치는" 효과)
         VFXPhase p0;
         p0.startTime  = 0.f;
         p0.duration   = 99.f;
-        p0.motionMode = ParticleMotionMode::OrbitalCP;
+        p0.motionMode = ParticleMotionMode::ControlPoint;
+        p0.offsetParticlesWithOrigin = true;
         def.phases.push_back(p0);
-
-        // 마스터 CP 설정: fallSpeed=0 → 투사체 origin 추적
-        // masterCPSphereRadius는 궤도(4.5f) + 위성 sphereRadius(1.5f) = 6f를 커버해야 함
-        // 경계 영역 = masterCPSphereRadius * 2.5f → 3.0f * 2.5f = 7.5f > 6f (궤도 파티클에 경계력 없음)
-        def.masterCPFallSpeed    = 0.f;   // 낙하 대신 투사체 위치 추적
-        def.masterCPStrength     = 60.f;  // 핵 인력 강화 (cpGroup=0으로 핵 파티클만 영향)
-        def.masterCPSphereRadius = 3.0f;  // 경계 영역 7.5f → 궤도(4.5f) 파티클 간섭 없음
-
-        // 핵(흰-노랑) vs 전자(불꽃 주황)로 시각적 구분
-        def.overrideColors    = true;
-        def.overrideCoreColor = { 1.0f, 0.97f, 0.65f, 1.0f }; // 밝은 흰-노랑 (고밀도 핵)
-        def.overrideEdgeColor = { 1.0f, 0.35f, 0.0f,  0.55f }; // 불꽃 주황 (저밀도 궤도)
-        // 파티클 25%를 핵 근처에 집중 스폰 → 초기부터 조밀한 핵 형성
-        def.nucleusSpawnFraction = 0.33f;   // 450 × 0.33 ≈ 150개 (기존 75의 2배)
-        def.nucleusSpawnRadius   = 0.35f;  // 궤도: 60% × 450 = 270개 (기존 180의 1.5배)
-
-        // 3개 궤도 링 × 전자 2개: tilt 0° / +60° / -60°
-        // 링마다 세차 속도가 달라 시간이 지나면서 궤도면이 각자 다르게 회전 → 혼돈
-        constexpr float TWO_PI = 2.f * 3.14159265f;
-        constexpr float R = 4.5f;
-        const float tilts[3]       = { 0.f, 3.14159265f / 3.f, -3.14159265f / 3.f };
-        const float speeds[3]      = { 5.0f, 3.2f, 7.0f };
-        const float precessions[3] = { 0.8f, -1.3f, 1.05f };  // 링별 세차 속도 (rad/s)
-
-        // 호흡: 모든 링이 거의 동시에 수축/팽창 (링별 위상 약간 다르게)
-        constexpr float BREATHE_AMP   = 0.90f;  // 진폭 90% → R_min=0.45, R_max=8.55
-        constexpr float BREATHE_SPEED = 1.65f;  // 1.1 * 1.5배 → ~3.8초 주기
-        const float breathePhases[3]  = { 0.f, 0.25f, -0.25f }; // 살짝 어긋나게
-
-        for (int ring = 0; ring < 3; ++ring)
-            for (int e = 0; e < 2; ++e)
-            {
-                SatelliteCPDesc sat;
-                sat.orbitRadius        = R;
-                sat.orbitSpeed         = speeds[ring];
-                sat.orbitPhase         = e * 3.14159265f + ring * (TWO_PI / 3.f);
-                sat.verticalOffset     = 0.f;
-                sat.attractionStrength = 55.f;
-                sat.sphereRadius       = 1.5f;
-                sat.orbitTiltX         = tilts[ring];
-                sat.precessionSpeed    = precessions[ring];
-                sat.breatheAmplitude   = BREATHE_AMP;
-                sat.breatheSpeed       = BREATHE_SPEED;
-                sat.breathePhase       = breathePhases[ring];
-                def.satelliteCPs.push_back(sat);
-            }
 
         RegisterBase(SkillSlot::RightClick, def);
 
-        // Charge 룬: 파티클 증가
+        // Charge 룬: 파티클 증가 + 꼬리 길어짐
         VFXModifier chgMod;
         chgMod.particleCountMult = 1.5f;
         chgMod.sizeScaleMult     = 1.3f;
         RegisterRuneMod(SkillSlot::RightClick, RUNE_CHARGE, chgMod);
 
-        // Enhance 룬: 궤도 크기 증가
+        // Enhance 룬: 파티클 증가 + 인력 강화
         VFXModifier enhMod;
         enhMod.particleCountMult = 1.3f;
-        enhMod.sizeScaleMult     = 1.4f;
+        enhMod.strengthMult      = 1.2f;
         RegisterRuneMod(SkillSlot::RightClick, RUNE_ENHANCE, enhMod);
     }
 

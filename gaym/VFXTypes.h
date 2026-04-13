@@ -99,6 +99,11 @@ struct VFXPhase {
     // Phase 진입 시 right 축 방향으로 랜덤 속도 부여 (양방향, 파도 확산용)
     // 0이면 비활성, 양수면 이 값 범위에서 랜덤 (-randomSidewaysImpulse ~ +randomSidewaysImpulse)
     float randomSidewaysImpulse = 0.f;
+
+    // 투사체 이동 시 파티클도 같이 텔레포트할지 여부
+    // true(기본): 파티클이 origin과 함께 이동 (뭉쳐서 이동)
+    // false: CP만 이동, 파티클은 물리로 따라감 → 혜성 꼬리 효과
+    bool offsetParticlesWithOrigin = true;
 };
 
 // VFX 룬 수식자

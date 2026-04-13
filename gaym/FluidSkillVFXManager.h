@@ -14,8 +14,10 @@ class ScreenSpaceFluid;
 struct FluidVFXSlot {
     std::unique_ptr<FluidParticleSystem> pSystem;
     bool             isActive    = false;
-    bool             isFadingOut = false;   // 충돌 후 수렴 중
-    float            fadeTimer   = 0.0f;    // 수렴 후 소멸까지 남은 시간
+    bool             isFadingOut    = false;   // 충돌 후 수렴 중
+    float            fadeTimer      = 0.0f;    // 수렴 후 소멸까지 남은 시간
+    bool             isExplodeMode  = false;   // 폭발(ExplodeEffect) 모드 여부
+    float            explodeTotalTime = 1.5f;  // 폭발 소멸 총 시간
     float            elapsed     = 0.0f;
     XMFLOAT3         origin      = {0, 0, 0};
     XMFLOAT3         prevOrigin  = {0, 0, 0};  // 이전 프레임 origin (파티클 공동이동용)
@@ -29,6 +31,11 @@ struct FluidVFXSlot {
     float            masterCPFallY = 0.f;   // 메테오용 마스터 CP Y 위치 (낙하 추적)
     XMFLOAT3         masterCPPos = {};      // 메테오 마스터 CP 현재 위치
     float            masterCPFallSpeed = 15.f; // 낙하 속도 (units/s)
+
+    // Wave 모드 상태
+    bool             isWaveMode  = false;
+    float            waveDist    = 0.f;    // 현재 이동 거리
+    bool             waveStopped = false;  // 충돌/최대거리로 멈춘 여부
 };
 
 class FluidSkillVFXManager
@@ -55,6 +62,14 @@ public:
 
     // 피격 시 파티클을 충돌 위치로 수렴시킨 뒤 소멸
     void ImpactEffect(int id, const XMFLOAT3& impactPos);
+
+    // 피격 시 CP 제거 + 방사형 폭발 (R/우클릭 전용)
+    void ExplodeEffect(int id, const XMFLOAT3& impactPos);
+
+    // Wave 모드 API
+    void     StopWave(int id);                    // 파도를 충돌 위치에서 멈춤
+    XMFLOAT3 GetWaveFrontPos(int id) const;       // 파도 현재 위치
+    bool     IsWaveActive(int id) const;          // 파도가 아직 이동 중이면 true
 
     void Update(float deltaTime);
 

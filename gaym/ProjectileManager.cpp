@@ -162,9 +162,8 @@ void ProjectileManager::Update(float deltaTime)
             continue;
         }
 
-        // Update position (실험: 플레이어 투사체 정지)
-        if (!projectile.isPlayerProjectile)
-            projectile.Update(deltaTime);
+        // Update position
+        projectile.Update(deltaTime);
 
         // Update fluid VFX position
         if (m_pFluidVFXManager && projectile.fluidVFXId >= 0)
@@ -182,8 +181,14 @@ void ProjectileManager::Update(float deltaTime)
             if (m_pFluidVFXManager && projectile.fluidVFXId >= 0)
             {
                 if (projectile.wasHit)
-                    // 충돌: 파티클이 충돌 위치로 수렴 후 소멸
-                    m_pFluidVFXManager->ImpactEffect(projectile.fluidVFXId, projectile.position);
+                {
+                    if (projectile.isPlayerProjectile)
+                        // 플레이어 투사체(R/우클릭): CP 제거 + 방사형 폭발
+                        m_pFluidVFXManager->ExplodeEffect(projectile.fluidVFXId, projectile.position);
+                    else
+                        // 적 투사체: 기존 수렴 소멸
+                        m_pFluidVFXManager->ImpactEffect(projectile.fluidVFXId, projectile.position);
+                }
                 else
                     // 사거리 초과: 즉시 소멸
                     m_pFluidVFXManager->StopEffect(projectile.fluidVFXId);

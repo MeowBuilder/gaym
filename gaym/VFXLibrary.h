@@ -52,6 +52,9 @@ struct VFXSequenceDef {
     float nucleusSpawnFraction = 0.0f;
     float nucleusSpawnRadius   = 0.4f;
 
+    // 파티클 최대 속도 오버라이드 (0이면 자동: OrbitalCP=35, 나머지=12)
+    float maxParticleSpeed = 0.f;
+
     // SPH 물리 오버라이드 (true 시 기본값 대신 적용)
     bool  overridePhysics    = false;
     float sphStiffness       = 50.f;
@@ -59,6 +62,20 @@ struct VFXSequenceDef {
     float sphRestDensity     = 7.f;
     float sphViscosity       = 0.25f;
     float sphSmoothingRadius = 1.2f;
+
+    // 사방 집결 스폰 (0이면 비활성 — 기본 구 스폰 사용)
+    // SpawnSequenceEffect에서 ±X/±Y/±Z 방향에 각각 SpawnGroup을 생성
+    float cardinalSpawnRadius  = 0.f;   // 집결 스폰 거리 (유닛)
+    float cardinalInwardSpeed  = 12.f;  // 파티클 초기 내향 속도 (m/s)
+
+    // Wave 모드 (isWave=true면 phases 무시, 처음부터 일정 폭으로 전진)
+    bool  isWave       = false;
+    float waveSpeed    = 20.f;  // ConfinementBox 전진 속도 (units/s)
+    float wavePushForce = 60.f; // 파티클에 매 프레임 가하는 전진 가속도 (units/s²)
+    float waveMaxDist  = 22.f;  // 최대 이동 거리
+    float waveHalfW    = 4.0f;  // 파도 좌우 반폭 (X)
+    float waveHalfH    = 2.5f;  // 파도 높이 반폭 (Y)
+    float waveDepth    = 2.5f;  // 파도 전후 두께 반폭 (Z) — 클수록 경계 반사 완화
 };
 
 class VFXLibrary {

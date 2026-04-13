@@ -63,7 +63,7 @@ struct SPHConstants {
     float    velocityColorBoost; float _foamPad;                       //  8 (offset 360)
     // Near-pressure + SPH 커널 상수 (Sebastian Lague 이중 밀도 완화)
     float nearPressureMult; float kSpikyPow2; float kSpikyPow3; float kSpikyPow2Grad;  // 16 (offset 368)
-    float kSpikyPow3Grad;   float elapsedTime; float _kPad[2];                          // 16 (offset 384)
+    float kSpikyPow3Grad;   float elapsedTime; float explodeFade; float _kPad;            // 16 (offset 384)
 };  // total 400 bytes
 static_assert(sizeof(SPHConstants) <= 512, "SPHConstants exceeds 512 bytes");
 
@@ -134,6 +134,9 @@ public:
 
     // 색상 직접 설정 (Spawn 이후 오버라이드용)
     void SetColors(const FluidElementColor& colors);
+
+    // 폭발 페이드: 2.0=정상, 1.0..0.0=폭발 후 소멸 (크기 축소 + 선명 고정)
+    void SetExplodeFade(float ratio) { m_explodeFade = ratio; }
 
     // 양방향 분산 힘: 중심점(originPoint) 기준으로 각 파티클이 axisDir의 양쪽으로 밀림
     void ApplyAxisSpreadForce(const XMFLOAT3& axisDir, const XMFLOAT3& originPoint, float impulse);
@@ -235,6 +238,7 @@ private:
     bool m_bNeedsUpload = false;
 
     float    m_fElapsed = 0.f;              // 박동 펄스용 누적 시간
+    float    m_explodeFade = 2.0f;          // 폭발 페이드: 2.0=정상, 1.0..0.0=폭발 소멸
 
     // CPU → GPU 프레임 델타 (OffsetParticles / ApplyDirectionalForce 호출 누적)
     XMFLOAT3 m_vGPUPendingOffset   = {};

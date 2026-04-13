@@ -5,6 +5,10 @@
 #include "GameObject.h"
 #include "TransformComponent.h"
 #include "SkillComponent.h"
+#include "Scene.h"
+#include "Room.h"
+#include "EnemyComponent.h"
+#include <cmath>
 
 WaveSlashBehavior::WaveSlashBehavior()
     : m_SkillData(FireSkillPresets::FlameWave())
@@ -22,6 +26,7 @@ WaveSlashBehavior::WaveSlashBehavior(const SkillData& customData)
 void WaveSlashBehavior::Execute(GameObject* caster, const DirectX::XMFLOAT3& targetPosition, float damageMultiplier)
 {
     m_bIsFinished = false;
+    m_bWaveActive = false;
 
     if (!m_pVFXManager)
     {
@@ -37,7 +42,7 @@ void WaveSlashBehavior::Execute(GameObject* caster, const DirectX::XMFLOAT3& tar
     if (caster && caster->GetTransform())
     {
         origin = caster->GetTransform()->GetPosition();
-        origin.y += 1.0f; // 허리 높이
+        origin.y += 0.5f; // 지면 근처 — 불길이 바닥에 깔리도록
 
         // 타겟 방향 계산 (Y축 무시, 수평 방향)
         XMVECTOR originV = XMLoadFloat3(&origin);
@@ -71,12 +76,23 @@ void WaveSlashBehavior::Execute(GameObject* caster, const DirectX::XMFLOAT3& tar
         m_vfxId, runeFlags, damageMultiplier);
     OutputDebugString(buf);
 
-    m_bIsFinished = true;
+    if (m_vfxId >= 0) {
+        m_bWaveActive = true;
+        // m_bIsFinished = false 유지 → Update()에서 충돌 감지 후 true로 설정
+    } else {
+        m_bIsFinished = true;
+    }
 }
 
 void WaveSlashBehavior::Update(float deltaTime)
 {
-    // VFX 업데이트는 FluidSkillVFXManager::Update()에서 자동 처리
+    if (!m_bWaveActive || m_vfxId < 0 || !m_pVFXManager) return;
+
+    // 파도가 최대 거리에 도달하면 종료
+    if (!m_pVFXManager->IsWaveActive(m_vfxId)) {
+        m_bWaveActive = false;
+        m_bIsFinished = true;
+    }
 }
 
 bool WaveSlashBehavior::IsFinished() const
@@ -87,6 +103,7 @@ bool WaveSlashBehavior::IsFinished() const
 void WaveSlashBehavior::Reset()
 {
     m_bIsFinished = true;
+    m_bWaveActive = false;
     m_vfxId = -1;
 }
 

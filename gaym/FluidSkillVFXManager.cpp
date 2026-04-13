@@ -105,7 +105,8 @@ int FluidSkillVFXManager::SpawnSequenceEffect(const XMFLOAT3& origin, const XMFL
             bool hasOrbitalCP = false;
             for (const auto& ph : seqDef.phases)
                 if (ph.motionMode == ParticleMotionMode::OrbitalCP) { hasOrbitalCP = true; break; }
-            cfg.maxParticleSpeed = hasOrbitalCP ? 35.0f : 12.0f;
+            cfg.maxParticleSpeed = seqDef.maxParticleSpeed > 0.f ? seqDef.maxParticleSpeed
+                                                                   : (hasOrbitalCP ? 35.0f : 12.0f);
 
             // 핵-궤도 색상 오버라이드 및 핵 전용 스폰 설정
             if (seqDef.overrideColors) {
@@ -143,12 +144,103 @@ int FluidSkillVFXManager::SpawnSequenceEffect(const XMFLOAT3& origin, const XMFL
                 }
             }
 
+            // 사방 집결 스폰: cardinalSpawnRadius > 0이면 ±X/±Y/±Z 6방향에 SpawnGroup 추가
+            // 각 그룹의 파티클은 cpGroup=-1(전체 CP 응답) + 내향 초기 속도로 빠르게 수렴
+            if (seqDef.cardinalSpawnRadius > 0.f)
+            {
+                // 발사 방향 기준 로컬 좌표계 (fwd/right/up)
+                XMVECTOR fwdV    = XMVector3Normalize(XMLoadFloat3(&direction));
+                XMVECTOR worldUp = XMVectorSet(0, 1, 0, 0);
+                float    dotUp   = XMVectorGetX(XMVector3Dot(fwdV, worldUp));
+                XMVECTOR rightV  = (fabsf(dotUp) > 0.99f)
+                    ? XMVectorSet(1, 0, 0, 0)
+                    : XMVector3Normalize(XMVector3Cross(worldUp, fwdV));
+                XMVECTOR upV     = XMVector3Cross(fwdV, rightV);
+
+                // 6방향 오프셋 (로컬 좌표계: ±forward, ±right, ±up)
+                XMVECTOR offsets[6] = {
+                     fwdV,  XMVectorNegate(fwdV),
+                     rightV, XMVectorNegate(rightV),
+                     upV,    XMVectorNegate(upV)
+                };
+
+                float r = seqDef.cardinalSpawnRadius;
+                int perDir = (std::max)(5, seqDef.particleCount / 6);
+                // 중심 스폰 파티클 수 줄이기 (cardinal이 대부분 담당)
+                cfg.spawnRadius = 0.8f;
+
+                for (int di = 0; di < 6; ++di)
+                {
+                    XMVECTOR posV = XMVectorAdd(
+                        XMLoadFloat3(&origin),
+                        XMVectorScale(offsets[di], r));
+
+                    FluidParticleConfig::SpawnGroup g;
+                    XMStoreFloat3(&g.center, posV);
+                    g.count       = perDir;
+                    g.radius      = 0.7f;         // 각 방향 그룹 산포 반경
+                    g.cpGroup     = -1;            // 전체 CP에 응답
+                    g.inwardSpeed = seqDef.cardinalInwardSpeed;
+                    cfg.spawnGroups.push_back(g);
+                }
+            }
+
             // 첫 페이즈의 모드 설정
             if (!seqDef.phases.empty()) {
                 slot.pSystem->SetMotionMode(seqDef.phases[0].motionMode);
             }
 
-            slot.pSystem->Spawn(origin, cfg);
+            // Wave 모드: 플레이어 앞 spawnRadius 위치에 스폰
+            XMFLOAT3 spawnPos = origin;
+            if (seqDef.isWave) {
+                XMVECTOR fwdV     = XMVector3Normalize(XMLoadFloat3(&direction));
+                XMVECTOR shiftedV = XMVectorAdd(XMLoadFloat3(&origin),
+                    XMVectorScale(fwdV, cfg.spawnRadius));
+                XMStoreFloat3(&spawnPos, shiftedV);
+            }
+            slot.pSystem->Spawn(spawnPos, cfg);
+
+            // Wave 모드 초기화
+            slot.isWaveMode  = seqDef.isWave;
+            slot.waveDist    = 0.f;
+            slot.waveStopped = false;
+            if (seqDef.isWave) {
+                slot.useSequence = false;
+                slot.origin     = spawnPos;
+                slot.prevOrigin = spawnPos;
+
+                // ConfinementBox 설계:
+                //   center = origin + halfZBig * fwd  (플레이어 위치 기준, spawnPos 아님)
+                //   halfZ  = halfZBig
+                //   → 뒤 벽(back wall) = origin (플레이어 발 위치) — 뒤로 못 나감
+                //   → 앞 벽(front wall) = origin + 2*halfZBig (160m — 사실상 개방)
+                //   X/Y 는 waveHalfW/H 로 좌우/상하 제한
+                // SPH 압력이 유일하게 열린 앞 방향으로만 흘러나옴 → ZeroAxisVelocity 불필요
+                const float halfZBig = 80.f;
+                XMVECTOR wDir    = XMVector3Normalize(XMLoadFloat3(&direction));
+                XMVECTOR wWorldUp = XMVectorSet(0, 1, 0, 0);
+                float wDotUp = XMVectorGetX(XMVector3Dot(wDir, wWorldUp));
+                XMVECTOR wRightV = (fabsf(wDotUp) > 0.99f)
+                    ? XMVectorSet(1, 0, 0, 0)
+                    : XMVector3Normalize(XMVector3Cross(wWorldUp, wDir));
+                XMVECTOR wUpV = XMVector3Cross(wDir, wRightV);
+
+                // center = origin(플레이어 위치) + halfZBig * fwd → back wall이 origin에 위치
+                XMFLOAT3 boxCenter;
+                XMStoreFloat3(&boxCenter, XMVectorAdd(XMLoadFloat3(&origin),
+                    XMVectorScale(wDir, halfZBig)));
+
+                ConfinementBoxDesc wbd;
+                wbd.active = true;
+                wbd.halfExtents = { seqDef.waveHalfW, seqDef.waveHalfH, halfZBig };
+                wbd.center = boxCenter;
+                XMStoreFloat3(&wbd.axisX, wRightV);
+                XMStoreFloat3(&wbd.axisY, wUpV);
+                XMStoreFloat3(&wbd.axisZ, wDir);
+                slot.pSystem->SetConfinementBox(wbd);
+                slot.pSystem->SetGlobalGravity(0.f);
+                slot.pSystem->SetMotionMode(ParticleMotionMode::Gravity); // wave는 CP 없음 — Gravity 모드로 SPH+힘만 사용
+            }
 
             wchar_t buf[128];
             swprintf_s(buf, 128, L"[FluidSkillVFXManager] SpawnSequenceEffect slot %d\n", i);
@@ -194,8 +286,43 @@ void FluidSkillVFXManager::ImpactEffect(int id, const XMFLOAT3& impactPos)
     emptyBox.active = false;
     slot.pSystem->SetConfinementBox(emptyBox);
 
-    slot.isFadingOut = true;
-    slot.fadeTimer   = 0.7f;  // 0.7초 후 소멸
+    slot.isFadingOut   = true;
+    slot.fadeTimer     = 0.7f;  // 0.7초 후 소멸
+    slot.isExplodeMode = false; // Impact는 폭발 축소 없음
+}
+
+void FluidSkillVFXManager::ExplodeEffect(int id, const XMFLOAT3& impactPos)
+{
+    if (id < 0 || id >= MAX_EFFECTS || !m_Slots[id].isActive) return;
+    auto& slot = m_Slots[id];
+
+    // CP 완전 제거 — 인력 없이 파티클이 자유롭게 날아가도록
+    slot.pSystem->SetControlPoints({});
+
+    // Gravity 모드로 전환 (약한 중력 + 방사형 폭발)
+    slot.pSystem->SetMotionMode(ParticleMotionMode::Gravity);
+    GravityDesc gd;
+    gd.gravity        = { 0.f, -4.f, 0.f };  // 약한 하향 중력 (자연스러운 폭발 포물선)
+    gd.initialSpeedMin = 0.f;  // ApplyRadialBurst로 별도 부여
+    gd.initialSpeedMax = 0.f;
+    slot.pSystem->SetGravityDesc(gd);
+    slot.pSystem->SetGlobalGravity(0.f);
+
+    // 충돌 지점에서 방사형 폭발 속도 부여
+    slot.pSystem->ApplyRadialBurst(impactPos, 8.f, 22.f);
+
+    // 시퀀스/박스 모드 해제
+    slot.useSequence = false;
+    ConfinementBoxDesc emptyBox;
+    emptyBox.active = false;
+    slot.pSystem->SetConfinementBox(emptyBox);
+
+    // ImpactEffect보다 긴 표시 시간 (폭발이 자연스럽게 퍼진 뒤 소멸)
+    slot.isFadingOut      = true;
+    slot.fadeTimer        = 1.5f;
+    slot.isExplodeMode    = true;
+    slot.explodeTotalTime = 1.5f;
+    slot.pSystem->SetExplodeFade(1.0f);  // 즉시 폭발 모드: coreColor 강제 + 크기 축소 준비
 }
 
 void FluidSkillVFXManager::Update(float deltaTime)
@@ -205,15 +332,59 @@ void FluidSkillVFXManager::Update(float deltaTime)
         if (!slot.isActive) continue;
 
         if (slot.isFadingOut) {
-            // fade-out 중: 제어점은 이미 충돌 위치에 고정됨, SPH만 업데이트
-            slot.pSystem->Update(deltaTime);
+            // fade-out 중: SPH 업데이트
             slot.fadeTimer -= deltaTime;
+
+            // 폭발 모드: 매 프레임 fadeRatio → GPU에 전달 (크기 축소 + 선명 고정)
+            if (slot.isExplodeMode) {
+                float fadeRatio = (slot.explodeTotalTime > 0.001f)
+                    ? (slot.fadeTimer / slot.explodeTotalTime)
+                    : 0.0f;
+                fadeRatio = (std::max)(0.0f, (std::min)(1.0f, fadeRatio));
+                slot.pSystem->SetExplodeFade(fadeRatio);
+            }
+
+            slot.pSystem->Update(deltaTime);
             if (slot.fadeTimer <= 0.0f) {
-                slot.isActive    = false;
-                slot.isFadingOut = false;
-                slot.useSequence = false;
+                slot.isActive      = false;
+                slot.isFadingOut   = false;
+                slot.isExplodeMode = false;
+                slot.useSequence   = false;
+                slot.isWaveMode    = false;
+                slot.waveStopped   = false;
+                slot.pSystem->SetExplodeFade(2.0f); // 정상 모드 복구
                 slot.pSystem->Clear();
             }
+            continue;
+        }
+
+        // Wave 모드: 일정 폭으로 앞으로 전진
+        if (slot.isWaveMode && !slot.waveStopped) {
+            float moveDelta = slot.sequenceDef.waveSpeed * deltaTime;
+            slot.waveDist  += moveDelta;
+
+            if (slot.waveDist >= slot.sequenceDef.waveMaxDist) {
+                // 최대 거리 도달 → fade-out
+                // ConfinementBox 해제: 파티클이 자유롭게 퍼지며 소멸
+                slot.waveStopped = true;
+                slot.isFadingOut = true;
+                slot.fadeTimer   = 1.5f;
+                slot.pSystem->SetGlobalGravity(0.f);
+                ConfinementBoxDesc emptyBox;
+                emptyBox.active = false;
+                slot.pSystem->SetConfinementBox(emptyBox);
+            } else {
+                // Wave 진행 중: SPH + 앞방향 힘으로 파티클이 앞으로 흘러나감
+                // ConfinementBox의 뒤 벽이 후방 탈출을 막아주므로
+                // OffsetParticles / ZeroAxisVelocity 불필요
+                XMVECTOR dir = XMVector3Normalize(XMLoadFloat3(&slot.direction));
+                XMFLOAT3 fwdDir3;
+                XMStoreFloat3(&fwdDir3, dir);
+                slot.pSystem->ApplyDirectionalForce(fwdDir3,
+                    slot.sequenceDef.wavePushForce * deltaTime);
+            }
+
+            slot.pSystem->Update(deltaTime);
             continue;
         }
 
@@ -247,8 +418,9 @@ void FluidSkillVFXManager::Update(float deltaTime)
                 slot.prevOrigin = slot.origin;
                 bool moved = fabsf(delta.x) + fabsf(delta.y) + fabsf(delta.z) > 0.0001f;
                 if (moved && slot.currentPhaseIndex >= 0) {
-                    auto mode = slot.sequenceDef.phases[slot.currentPhaseIndex].motionMode;
-                    if (mode == ParticleMotionMode::ControlPoint)
+                    const auto& curP = slot.sequenceDef.phases[slot.currentPhaseIndex];
+                    if (curP.offsetParticlesWithOrigin &&
+                        (curP.motionMode == ParticleMotionMode::ControlPoint || curP.motionMode == ParticleMotionMode::OrbitalCP))
                         slot.pSystem->OffsetParticles(delta);
                 }
             }
@@ -888,4 +1060,32 @@ FluidElementColor FluidSkillVFXManager::GetDominantFluidColors() const
         return FluidElementColors::Get(elem);
     }
     return FluidElementColors::Get(ElementType::None);
+}
+
+void FluidSkillVFXManager::StopWave(int id)
+{
+    if (id < 0 || id >= MAX_EFFECTS || !m_Slots[id].isActive) return;
+    auto& slot = m_Slots[id];
+    if (!slot.isWaveMode || slot.waveStopped) return;
+
+    slot.waveStopped = true;
+    // ConfinementBox 해제 → 파티클이 자유롭게 흩어지며 소멸
+    ConfinementBoxDesc emptyBox;
+    emptyBox.active = false;
+    slot.pSystem->SetConfinementBox(emptyBox);
+    slot.isFadingOut = true;
+    slot.fadeTimer   = 0.5f;
+}
+
+XMFLOAT3 FluidSkillVFXManager::GetWaveFrontPos(int id) const
+{
+    if (id < 0 || id >= MAX_EFFECTS || !m_Slots[id].isActive)
+        return {};
+    return m_Slots[id].origin;
+}
+
+bool FluidSkillVFXManager::IsWaveActive(int id) const
+{
+    if (id < 0 || id >= MAX_EFFECTS || !m_Slots[id].isActive) return false;
+    return m_Slots[id].isWaveMode && !m_Slots[id].waveStopped;
 }

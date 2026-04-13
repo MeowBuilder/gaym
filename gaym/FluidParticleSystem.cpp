@@ -547,24 +547,46 @@ void FluidParticleSystem::Spawn(const XMFLOAT3& center, const FluidParticleConfi
         auto& p = m_Particles[pi];
         XMFLOAT3 offset = RandInSphere(config.nucleusRadius);
         p.position = { center.x + offset.x, center.y + offset.y, center.z + offset.z };
-        p.velocity = { RandRange(-0.5f, 0.5f), RandRange(-0.2f, 0.2f), RandRange(-0.5f, 0.5f) };
+        p.velocity = { 0.f, 0.f, 0.f };  // 처음부터 중앙에 정지 스폰
         p.force = {}; p.density = config.restDensity; p.pressure = 0.f; p.mass = 1.f;
         p.active = true; p.cpGroup = 0;  // 핵 CP (master, gCPs[0])
     }
 
-    // 2) 위성 CP 위치 스폰 그룹, cpGroup=satIndex (해당 위성 CP 전용)
+    // 2) 위성 CP 위치 스폰 그룹
     int satIndex = 0;
     for (const auto& g : config.spawnGroups)
     {
-        ++satIndex;  // 위성 CP 인덱스: gCPs[1], gCPs[2], ...
+        ++satIndex;  // 위성 CP 인덱스 (cpGroup=-2일 때만 사용)
+        // cpGroup: -2=satIndex 자동, -1=전체 CP, 0+=지정 CP
+        int assignedCpGroup = (g.cpGroup == -2) ? satIndex : g.cpGroup;
+
+        // inwardSpeed > 0이면 center(스폰 원점) 방향 초기 속도 부여
+        XMFLOAT3 inwardVel = {};
+        if (g.inwardSpeed > 0.f)
+        {
+            float dx = center.x - g.center.x;
+            float dy = center.y - g.center.y;
+            float dz = center.z - g.center.z;
+            float dist = sqrtf(dx*dx + dy*dy + dz*dz);
+            if (dist > 0.001f) {
+                float inv = g.inwardSpeed / dist;
+                inwardVel = { dx * inv, dy * inv, dz * inv };
+            }
+        }
+
         for (int k = 0; k < g.count && pi < count; ++k, ++pi)
         {
             auto& p = m_Particles[pi];
             XMFLOAT3 offset = RandInSphere(g.radius);
             p.position = { g.center.x + offset.x, g.center.y + offset.y, g.center.z + offset.z };
-            p.velocity = { RandRange(-1.f, 1.f), RandRange(-0.5f, 0.5f), RandRange(-1.f, 1.f) };
+            if (g.inwardSpeed > 0.f)
+                p.velocity = { inwardVel.x + RandRange(-1.f, 1.f),
+                                inwardVel.y + RandRange(-0.5f, 0.5f),
+                                inwardVel.z + RandRange(-1.f, 1.f) };
+            else
+                p.velocity = { RandRange(-1.f, 1.f), RandRange(-0.5f, 0.5f), RandRange(-1.f, 1.f) };
             p.force = {}; p.density = config.restDensity; p.pressure = 0.f; p.mass = 1.f;
-            p.active = true; p.cpGroup = satIndex;  // 위성 CP (gCPs[satIndex])
+            p.active = true; p.cpGroup = assignedCpGroup;
         }
     }
 
@@ -585,7 +607,16 @@ void FluidParticleSystem::Spawn(const XMFLOAT3& center, const FluidParticleConfi
         FluidControlPoint cp;
         cp.position           = center;
         cp.attractionStrength = 15.0f;
-        cp.sphereRadius       = config.spawnRadius * 1.2f;
+        // SpawnGroup이 있으면 가장 먼 그룹까지 커버하도록 반경 확장
+        float maxRadius = config.spawnRadius;
+        for (const auto& g : config.spawnGroups) {
+            float dx = g.center.x - center.x;
+            float dy = g.center.y - center.y;
+            float dz = g.center.z - center.z;
+            float dist = sqrtf(dx*dx + dy*dy + dz*dz) + g.radius;
+            if (dist > maxRadius) maxRadius = dist;
+        }
+        cp.sphereRadius = maxRadius * 1.3f;
         m_ControlPoints.push_back(cp);
     }
 
@@ -1485,7 +1516,8 @@ static const char* g_SPHComputeShader = R"(
         float  gKSpikyPow2Grad; // 30/(2*PI*h^5)  - SpikyPow2 미분 상수
         float  gKSpikyPow3Grad; // 45/(PI*h^6)    - SpikyPow3 미분 상수
         float  gElapsedTime;    // 박동 펄스용 누적 시간
-        float2 _gKPad;
+        float  gExplodeFade;    // 폭발 페이드: 2.0=정상, 1.0..0.0=폭발 소멸
+        float  _gKPad;
     };
 
     RWStructuredBuffer<GPUParticle>           gParticles  : register(u0);
@@ -1735,7 +1767,15 @@ static const char* g_SPHComputeShader = R"(
 
         // density curve: rho=1 -> t=0.85 (coreColor 지배, 속성색이 강하게 나옴)
         float t = saturate(rho * 0.85f);
-        float4 baseColor = lerp(gEdgeColor, gCoreColor, t);
+
+        // 폭발 페이드: gExplodeFade 2.0=정상, 1.0..0.0=폭발 소멸
+        // isExplodingF=1 이면 폭발 모드 (coreColor 강제 + 크기 축소)
+        float isExplodingF = 1.0f - step(1.5f, gExplodeFade);
+        float fadeMult = saturate(gExplodeFade); // 2.0→1.0, 1.0→1.0, 0.0→0.0
+
+        // 폭발 모드: 밀도 무관하게 coreColor에 가깝게 (반투명 물방울 방지)
+        float tFinal = lerp(t, 0.92f, isExplodingF * 0.85f);
+        float4 baseColor = lerp(gEdgeColor, gCoreColor, tFinal);
 
         // foam: density > threshold 일 때 coreColor 오버드라이브 (파도 거품)
         float foamT  = saturate((rho - gFoamThreshold) * 2.5f) * gFoamStrength;
@@ -1745,12 +1785,15 @@ static const char* g_SPHComputeShader = R"(
         // 속도 기반 brightness boost (빠른 파티클이 더 밝게)
         float3 finalRGB = foamRGB * (1.0f + speedT * gVelocityColorBoost);
 
-        // foam일수록 알파 증가 (밀집 지점 더 불투명)
-        float finalA = baseColor.a + foamT * (1.0f - baseColor.a) * 0.6f;
+        // 알파: 정상=밀도 기반, 폭발=coreColor 알파로 고정 후 fadeMult로 소멸
+        float normalAlpha = baseColor.a + foamT * (1.0f - baseColor.a) * 0.6f;
+        float explodeAlpha = gCoreColor.a * fadeMult;
+        float finalA = lerp(normalAlpha, explodeAlpha, isExplodingF);
 
-        // 속도에 따른 동적 크기: 느릴수록 큰 구(SSF에서 더 두껍게 보임)
+        // 속도에 따른 동적 크기 + 폭발 시 fadeMult로 점점 작아짐
         float spd = length(gParticles[i].vel);
         float dynSize = lerp(0.42f, 0.25f, saturate(spd / max(gMaxSpeed * 0.6f, 0.001f)));
+        dynSize *= fadeMult;
 
         gRenderData[i].position = gParticles[i].pos;
         gRenderData[i].size     = dynSize;
@@ -1985,6 +2028,7 @@ void FluidParticleSystem::DispatchSPH(ID3D12GraphicsCommandList* pCmdList, float
             cb.kSpikyPow2Grad   = 30.0f / (2.0f * PI_K * powf(h, 5.0f));  // 2 * kSpikyPow2
             cb.kSpikyPow3Grad   = 45.0f / (PI_K * powf(h, 6.0f));         // 3 * kSpikyPow3
             cb.elapsedTime      = m_fElapsed;
+            cb.explodeFade      = m_explodeFade;
         }
 
         // 프레임별 CPU -> GPU 델타 (OffsetParticles / ApplyDirectionalForce 누적값)
