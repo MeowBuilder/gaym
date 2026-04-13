@@ -1897,8 +1897,8 @@ void Scene::TransitionToWaterStage()
 
         if (m_pWaterPlane)
         {
-            // 세분화된 평면 메쉬 (128x128 그리드 = 16641 정점, 정점 변위용)
-            GridPlaneMesh* pPlaneMesh = new GridPlaneMesh(pDevice, pCommandList, 1.0f, 1.0f, 128, 128);
+            // 세분화된 평면 메쉬 (256x256 그리드 = 66049 정점, 정점 변위용)
+            GridPlaneMesh* pPlaneMesh = new GridPlaneMesh(pDevice, pCommandList, 1.0f, 1.0f, 256, 256);
             m_pWaterPlane->SetMesh(pPlaneMesh);
 
             // 맵이 살짝 잠기도록 높이 조정
@@ -1966,9 +1966,9 @@ void Scene::TransitionToWaterStage()
 
             // ── 추가 물 텍스처 로드 (Water_6 + foam4) ──
 
-            // Water_6_Normal.png (t7)
+            // water_normal_01.png (t7)
             {
-                std::wstring normalPath2 = L"Assets/Stylize Water Texture/Water_6/Water_6_Normal.png";
+                std::wstring normalPath2 = L"Assets/Stylize Water Texture/water_normal_01.png";
                 std::unique_ptr<uint8_t[]> decodedData;
                 D3D12_SUBRESOURCE_DATA subresource;
 
@@ -1994,17 +1994,17 @@ void Scene::TransitionToWaterStage()
                     pDevice->CreateShaderResourceView(m_pd3dWaterNormal2.Get(), &srvDesc, cpuHandle);
 
                     m_d3dWaterNormal2GpuHandle = gpuHandle;  // Store GPU handle
-                    OutputDebugString(L"[Scene] Water_6_Normal.png loaded (t7)\n");
+                    OutputDebugString(L"[Scene] water_normal_01.png loaded (t7)\n");
                 }
                 else
                 {
-                    OutputDebugString(L"[Scene] Failed to load Water_6_Normal.png\n");
+                    OutputDebugString(L"[Scene] Failed to load water_normal_01.png\n");
                 }
             }
 
-            // Water_6_Height.png (t8)
+            // water_height_01.png (t8)
             {
-                std::wstring heightPath2 = L"Assets/Stylize Water Texture/Water_6/Water_6_Height.png";
+                std::wstring heightPath2 = L"Assets/Stylize Water Texture/water_height_01.png";
                 std::unique_ptr<uint8_t[]> decodedData;
                 D3D12_SUBRESOURCE_DATA subresource;
 
@@ -2030,17 +2030,17 @@ void Scene::TransitionToWaterStage()
                     pDevice->CreateShaderResourceView(m_pd3dWaterHeight2.Get(), &srvDesc, cpuHandle);
 
                     m_d3dWaterHeight2GpuHandle = gpuHandle;  // Store GPU handle
-                    OutputDebugString(L"[Scene] Water_6_Height.png loaded (t8)\n");
+                    OutputDebugString(L"[Scene] water_height_01.png loaded (t8)\n");
                 }
                 else
                 {
-                    OutputDebugString(L"[Scene] Failed to load Water_6_Height.png\n");
+                    OutputDebugString(L"[Scene] Failed to load water_height_01.png\n");
                 }
             }
 
-            // foam4_Opacity.tga (t9)
+            // water_normal_02.png (t9) - detail normal layer
             {
-                std::wstring foamOpacityPath = L"Assets/Stylize Water Texture/foam4/foam4_Opacity.tga";
+                std::wstring foamOpacityPath = L"Assets/Stylize Water Texture/water_normal_02.png";
                 std::unique_ptr<uint8_t[]> decodedData;
                 D3D12_SUBRESOURCE_DATA subresource;
 
@@ -2066,17 +2066,17 @@ void Scene::TransitionToWaterStage()
                     pDevice->CreateShaderResourceView(m_pd3dFoamOpacity.Get(), &srvDesc, cpuHandle);
 
                     m_d3dFoamOpacityGpuHandle = gpuHandle;  // Store GPU handle
-                    OutputDebugString(L"[Scene] foam4_Opacity.tga loaded (t9)\n");
+                    OutputDebugString(L"[Scene] water_normal_02.png loaded (t9)\n");
                 }
                 else
                 {
-                    OutputDebugString(L"[Scene] Failed to load foam4_Opacity.tga\n");
+                    OutputDebugString(L"[Scene] Failed to load water_normal_02.png\n");
                 }
             }
 
-            // foam4_Diffuse.tif (t10)
+            // water_height_02.png (t10) - detail height layer
             {
-                std::wstring foamDiffusePath = L"Assets/Stylize Water Texture/foam4/foam4_Diffuse.tif";
+                std::wstring foamDiffusePath = L"Assets/Stylize Water Texture/water_height_02.png";
                 std::unique_ptr<uint8_t[]> decodedData;
                 D3D12_SUBRESOURCE_DATA subresource;
 
@@ -2102,11 +2102,11 @@ void Scene::TransitionToWaterStage()
                     pDevice->CreateShaderResourceView(m_pd3dFoamDiffuse.Get(), &srvDesc, cpuHandle);
 
                     m_d3dFoamDiffuseGpuHandle = gpuHandle;  // Store GPU handle
-                    OutputDebugString(L"[Scene] foam4_Diffuse.tif loaded (t10)\n");
+                    OutputDebugString(L"[Scene] water_height_02.png loaded (t10)\n");
                 }
                 else
                 {
-                    OutputDebugString(L"[Scene] Failed to load foam4_Diffuse.tif\n");
+                    OutputDebugString(L"[Scene] Failed to load water_height_02.png\n");
                 }
             }
 
@@ -2116,7 +2116,7 @@ void Scene::TransitionToWaterStage()
             pRC->SetTransparent(true);  // 물 투명 렌더링 활성화
             m_vShaders[0]->AddRenderComponent(pRC);
         }
-        OutputDebugString(L"[Scene] Water floor plane placed (with Water_6 + foam4 textures)\n");
+        OutputDebugString(L"[Scene] Water floor plane placed (with water_normal_01/02 + water_height_01/02)\n");
     }
 
     // ── 9. 맵 정적 오브젝트 상수 버퍼 초기화
@@ -2144,49 +2144,49 @@ void Scene::TransitionToWaterStage()
         if (pPC) pPC->ResetGroundY();
     }
 
-    // ── 12. Gerstner Waves (임팩트 + 높이감 강화!)
+    // ── 12. Gerstner Waves (균형: 뾰족하지 않으면서 명확한 파도)
     if (m_pcbMappedPass)
     {
-        // Wave 1: 주 파동 (거대한 롤링)
-        m_pcbMappedPass->m_Waves[0].m_fWavelength = 60.0f;
-        m_pcbMappedPass->m_Waves[0].m_fAmplitude = 7.0f;      // 대폭 증가!
-        m_pcbMappedPass->m_Waves[0].m_fSteepness = 0.45f;     // 파도 형태 명확
-        m_pcbMappedPass->m_Waves[0].m_fSpeed = 5.0f;
+        // Wave 1: 메인 파동 (큰 파도)
+        m_pcbMappedPass->m_Waves[0].m_fWavelength = 70.0f;     // 중간 파장 (화면에 여러 개)
+        m_pcbMappedPass->m_Waves[0].m_fAmplitude = 6.0f;       // 충분한 높이
+        m_pcbMappedPass->m_Waves[0].m_fSteepness = 0.35f;      // 균형 (뾰족X, 파도O)
+        m_pcbMappedPass->m_Waves[0].m_fSpeed = 4.5f;
         m_pcbMappedPass->m_Waves[0].m_xmf2Direction = XMFLOAT2(1.0f, 0.3f);
         m_pcbMappedPass->m_Waves[0].m_fFadeSpeed = 0.1f;
 
-        // Wave 2: 부 파동 (교차, 높음)
-        m_pcbMappedPass->m_Waves[1].m_fWavelength = 38.0f;
-        m_pcbMappedPass->m_Waves[1].m_fAmplitude = 4.5f;      // 증가
-        m_pcbMappedPass->m_Waves[1].m_fSteepness = 0.4f;
-        m_pcbMappedPass->m_Waves[1].m_fSpeed = 6.5f;
+        // Wave 2: 부 파동 (교차)
+        m_pcbMappedPass->m_Waves[1].m_fWavelength = 45.0f;
+        m_pcbMappedPass->m_Waves[1].m_fAmplitude = 4.0f;
+        m_pcbMappedPass->m_Waves[1].m_fSteepness = 0.3f;
+        m_pcbMappedPass->m_Waves[1].m_fSpeed = 6.0f;
         m_pcbMappedPass->m_Waves[1].m_xmf2Direction = XMFLOAT2(-0.7f, 0.7f);
         m_pcbMappedPass->m_Waves[1].m_fFadeSpeed = 0.12f;
 
-        // Wave 3: 중간 (디테일)
-        m_pcbMappedPass->m_Waves[2].m_fWavelength = 22.0f;
-        m_pcbMappedPass->m_Waves[2].m_fAmplitude = 2.2f;      // 증가
-        m_pcbMappedPass->m_Waves[2].m_fSteepness = 0.35f;
-        m_pcbMappedPass->m_Waves[2].m_fSpeed = 8.5f;
+        // Wave 3: 중간 파동 (복잡도 추가)
+        m_pcbMappedPass->m_Waves[2].m_fWavelength = 28.0f;
+        m_pcbMappedPass->m_Waves[2].m_fAmplitude = 2.5f;
+        m_pcbMappedPass->m_Waves[2].m_fSteepness = 0.28f;
+        m_pcbMappedPass->m_Waves[2].m_fSpeed = 8.0f;
         m_pcbMappedPass->m_Waves[2].m_xmf2Direction = XMFLOAT2(0.6f, -0.8f);
         m_pcbMappedPass->m_Waves[2].m_fFadeSpeed = 0.15f;
 
-        // Wave 4-5: 작은 파동
-        m_pcbMappedPass->m_Waves[3].m_fWavelength = 14.0f;
+        // Wave 4-5: 작은 디테일
+        m_pcbMappedPass->m_Waves[3].m_fWavelength = 30.0f;   // 18→30 (정점 간격 7.8m 기준 3.8배)
         m_pcbMappedPass->m_Waves[3].m_fAmplitude = 1.0f;
-        m_pcbMappedPass->m_Waves[3].m_fSteepness = 0.3f;
-        m_pcbMappedPass->m_Waves[3].m_fSpeed = 11.0f;
+        m_pcbMappedPass->m_Waves[3].m_fSteepness = 0.2f;
+        m_pcbMappedPass->m_Waves[3].m_fSpeed = 9.0f;
         m_pcbMappedPass->m_Waves[3].m_xmf2Direction = XMFLOAT2(0.5f, 0.9f);
         m_pcbMappedPass->m_Waves[3].m_fFadeSpeed = 0.0f;
 
-        m_pcbMappedPass->m_Waves[4].m_fWavelength = 9.0f;
-        m_pcbMappedPass->m_Waves[4].m_fAmplitude = 0.5f;
-        m_pcbMappedPass->m_Waves[4].m_fSteepness = 0.25f;
-        m_pcbMappedPass->m_Waves[4].m_fSpeed = 13.0f;
+        m_pcbMappedPass->m_Waves[4].m_fWavelength = 22.0f;   // 12→22 (정점 간격 7.8m 기준 2.8배)
+        m_pcbMappedPass->m_Waves[4].m_fAmplitude = 0.6f;
+        m_pcbMappedPass->m_Waves[4].m_fSteepness = 0.18f;
+        m_pcbMappedPass->m_Waves[4].m_fSpeed = 11.0f;
         m_pcbMappedPass->m_Waves[4].m_xmf2Direction = XMFLOAT2(-0.9f, 0.4f);
         m_pcbMappedPass->m_Waves[4].m_fFadeSpeed = 0.0f;
 
-        OutputDebugString(L"[Scene] 높이 + 디테일 강화 (3레이어 heightmap)\n");
+        OutputDebugString(L"[Scene] Balanced ocean waves (visible + natural)\n");
     }
 
     OutputDebugString(L"[Scene] Water stage ready!\n");

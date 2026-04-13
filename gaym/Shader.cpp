@@ -1,4 +1,4 @@
-#include "stdafx.h"
+﻿#include "stdafx.h"
 #include "Shader.h"
 #include "RenderComponent.h"
 #include <algorithm>
@@ -280,7 +280,7 @@ void Shader::Build(ID3D12Device* pDevice)
     d3dRootParameters[12].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
     d3dRootParameters[12].DescriptorTable.NumDescriptorRanges = 1;
     d3dRootParameters[12].DescriptorTable.pDescriptorRanges = &d3dFoamDiffuseRange;
-    d3dRootParameters[12].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+    d3dRootParameters[12].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;  // VS에서도 사용 (water_height_02 displacement)
 
     D3D12_ROOT_SIGNATURE_DESC d3dRootSignatureDesc;
     d3dRootSignatureDesc.NumParameters = 13;  // 9 -> 13

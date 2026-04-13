@@ -229,29 +229,26 @@ PS_INPUT VS(VS_INPUT input)
         float3 waveNormal = normalL;
         ApplyGerstnerWaves(worldPos.xyz, waveNormal, crestFactor);
 
-        // === 2. Heightmap Displacement (2개 텍스처 + 5레이어!) ===
-        // Vol_36_5 (Stylized) - 3개 레이어
-        float2 heightUV1 = input.uv * 5.0f + float2(g_Time * 0.03f, g_Time * 0.025f);
-        float2 heightUV2 = input.uv * 8.0f - float2(g_Time * 0.022f, g_Time * 0.04f);
-        float2 heightUV3 = input.uv * 12.0f + float2(g_Time * 0.015f, -g_Time * 0.018f);
+        // === 2. Heightmap Displacement (water_height_01 + water_height_02, 4레이어) ===
+        // height_01: 큰 스케일 파도 디테일 (t8)
+        float2 heightUV1 = input.uv * 3.5f + float2(g_Time * 0.022f, g_Time * 0.016f);
+        float height1 = gHeightMap2.SampleLevel(gSampler, heightUV1, 0).r;
 
-        float height1 = gHeightMap.SampleLevel(gSampler, heightUV1, 0).r;
-        float height2 = gHeightMap.SampleLevel(gSampler, heightUV2, 0).r;
-        float height3 = gHeightMap.SampleLevel(gSampler, heightUV3, 0).r;
+        float2 heightUV2 = input.uv * 6.5f - float2(g_Time * 0.015f, g_Time * 0.026f);
+        float height2 = gHeightMap2.SampleLevel(gSampler, heightUV2, 0).r;
 
-        // Water_6 (Realistic) - 2개 레이어 (다른 스케일 + 속도)
-        float2 heightUV4 = input.uv * 3.5f + float2(g_Time * 0.02f, -g_Time * 0.03f);
-        float2 heightUV5 = input.uv * 15.0f - float2(g_Time * 0.01f, g_Time * 0.025f);
+        // height_02: 세부 디테일 (t10, gFoamDiffuse 슬롯 재활용)
+        float2 heightUV3 = input.uv * 8.0f + float2(g_Time * 0.01f, -g_Time * 0.013f);
+        float height3 = gFoamDiffuse.SampleLevel(gSampler, heightUV3, 0).r;
 
-        float height4 = gHeightMap2.SampleLevel(gSampler, heightUV4, 0).r;
-        float height5 = gHeightMap2.SampleLevel(gSampler, heightUV5, 0).r;
+        float2 heightUV4 = input.uv * 12.0f - float2(g_Time * 0.007f, g_Time * 0.017f);
+        float height4 = gFoamDiffuse.SampleLevel(gSampler, heightUV4, 0).r;
 
-        // 5레이어 블렌딩 (Vol_36_5 주도, Water_6는 디테일)
-        float heightCombined = (height1 * 0.35f + height2 * 0.25f + height3 * 0.15f +
-                                height4 * 0.15f + height5 * 0.1f) - 0.5f;
+        // 4레이어 블렌딩 (큰 파도 60% + 세부 40%)
+        float heightCombined = (height1 * 0.35f + height2 * 0.25f + height3 * 0.25f + height4 * 0.15f) - 0.5f;
 
-        // 매우 강하게 적용 (높이감 증가)
-        worldPos.y += heightCombined * 5.5f;  // 더 증가!
+        // Gerstner + heightmap 균형 (부드럽게)
+        worldPos.y += heightCombined * 3.5f;
 
         // Update normal with wave-modified normal
         normalL = waveNormal;
@@ -369,23 +366,34 @@ float4 PS(PS_INPUT input) : SV_TARGET
         // === GPU Gems 스타일 물 셰이더 (Gerstner waves 기반) ===
 
         // Gerstner wave normal이 이미 VS에서 계산됨
-        // 2개 노말맵으로 풍부한 디테일 추가
-        float2 normalUV1 = input.uv * 2.0f + float2(g_Time * 0.02f, g_Time * 0.015f);
-        float2 normalUV2 = input.uv * 4.5f - float2(g_Time * 0.012f, g_Time * 0.025f);
+        // normal_01 (t7) + normal_02 (t9) 4레이어 블렌딩
 
-        float3 detailNormal1 = gNormalMap.Sample(gSampler, normalUV1).rgb * 2.0f - 1.0f;
-        float3 detailNormal2 = gNormalMap2.Sample(gSampler, normalUV2).rgb * 2.0f - 1.0f;
+        // normal_01: 큰 스케일 (t7)
+        float2 normalUV1 = input.uv * 2.0f + float2(g_Time * 0.018f, g_Time * 0.013f);
+        float2 normalUV2 = input.uv * 4.5f - float2(g_Time * 0.01f, g_Time * 0.022f);
+        float3 bigNormal1 = gNormalMap2.Sample(gSampler, normalUV1).rgb * 2.0f - 1.0f;
+        float3 bigNormal2 = gNormalMap2.Sample(gSampler, normalUV2).rgb * 2.0f - 1.0f;
 
-        // 두 노말맵 블렌딩 (Vol_36_5 + Water_6)
-        float3 detailNormal = normalize(detailNormal1 * 0.6f + detailNormal2 * 0.4f);
+        // normal_02: 세부 디테일 (t9, gFoamOpacity 슬롯 재활용)
+        float2 normalUV3 = input.uv * 8.0f + float2(g_Time * 0.026f, g_Time * 0.016f);
+        float2 normalUV4 = input.uv * 14.0f - float2(g_Time * 0.014f, g_Time * 0.03f);
+        float3 detailNormal1 = gFoamOpacity.Sample(gSampler, normalUV3).rgb * 2.0f - 1.0f;
+        float3 detailNormal2 = gFoamOpacity.Sample(gSampler, normalUV4).rgb * 2.0f - 1.0f;
 
-        // Gerstner normal + 디테일 노말 (Gerstner가 주도)
+        // 4레이어 합산 (큰 파도 60% + 세부 40%)
+        float3 combinedNormal = normalize(
+            bigNormal1    * 0.35f +
+            bigNormal2    * 0.25f +
+            detailNormal1 * 0.25f +
+            detailNormal2 * 0.15f
+        );
+
         float3 tangent = float3(1, 0, 0);
         float3 bitangent = float3(0, 0, 1);
         waterNormal = normalize(
             normal +
-            tangent * detailNormal.x * 0.15f +
-            bitangent * detailNormal.z * 0.15f
+            tangent    * combinedNormal.x * 0.28f +
+            bitangent  * combinedNormal.z * 0.28f
         );
 
         // 간단한 Fresnel
@@ -526,24 +534,18 @@ float4 PS(PS_INPUT input) : SV_TARGET
 
         // Specular (태양 반사 - 적당히)
         float3 halfVec = normalize(vToCamera + (-g_LightDirection));
-        float spec = pow(max(dot(shadingNormal, halfVec), 0.0f), 120.0f);  // 매우 날카롭게
-        float3 specColor = float3(1.0f, 1.0f, 1.0f) * spec * 0.6f;  // 중간 강도
+        float spec = pow(max(dot(shadingNormal, halfVec), 0.0f), 280.0f);  // 더 날카롭게 (범위 축소)
+        float3 specColor = float3(1.0f, 1.0f, 1.0f) * spec * 0.35f;  // 강도 절반
 
-        // === Wave Crest Foam (foam4 텍스처로 강화!) ===
-        float crestFoam = pow(input.crestFactor, 1.0f);  // 제곱 없음 (더 넓게)
-        crestFoam = smoothstep(0.35f, 0.85f, crestFoam);
+        // === Wave Crest Foam (crest factor 기반, 파도 마루에만 제한) ===
+        float crestFoam = pow(input.crestFactor, 1.5f);               // 지수 높여서 면적 축소
+        crestFoam = smoothstep(0.58f, 0.92f, crestFoam);              // threshold 높여서 마루 끝만
 
-        // foam4 텍스처 샘플링 (거품이 있는 곳에만)
-        float2 foamUV = input.uv * 6.0f + float2(g_Time * 0.015f, g_Time * 0.01f);
-        float foamOpacity = gFoamOpacity.Sample(gSampler, foamUV).r;
-        float3 foamDiffuse = gFoamDiffuse.Sample(gSampler, foamUV).rgb;
+        // 거품 강도 (절제)
+        float foamStrength = saturate(crestFoam * 0.7f);
 
-        // 거품 강도: crest factor + foam opacity
-        float foamStrength = crestFoam * foamOpacity;
-        foamStrength = saturate(foamStrength * 1.5f);  // 약간 증폭
-
-        // 거품 색상 (foam4 diffuse + 기본 흰색 블렌딩)
-        float3 foamColor = lerp(float3(0.9f, 0.95f, 1.0f), foamDiffuse, 0.3f);  // 약간 foam4 색상 반영
+        // 거품 색상 (완전 흰색 → 약간 탁한 흰색)
+        float3 foamColor = float3(0.85f, 0.90f, 0.94f);
 
         // === 최종 합성 ===
         finalColor.rgb = waterColor;
