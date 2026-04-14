@@ -121,16 +121,19 @@ void Scene::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList)
         // Q - WaveSlash (웨이브 슬래시)
         auto waveSlash = std::make_unique<WaveSlashBehavior>();
         waveSlash->SetVFXManager(m_pFluidVFXManager.get());
+        waveSlash->SetScene(this);
         pSkillComponent->EquipSkill(SkillSlot::Q, std::move(waveSlash));
 
         // E - FireBeam (화염 빔)
         auto fireBeam = std::make_unique<FireBeamBehavior>();
         fireBeam->SetVFXManager(m_pFluidVFXManager.get());
+        fireBeam->SetScene(this);
         pSkillComponent->EquipSkill(SkillSlot::E, std::move(fireBeam));
 
         // R - Meteor (메테오)
         auto meteor = std::make_unique<MeteorBehavior>();
         meteor->SetVFXManager(m_pFluidVFXManager.get());
+        meteor->SetScene(this);
         pSkillComponent->EquipSkill(SkillSlot::R, std::move(meteor));
 
         // RightClick - Fireball (기존 투사체 유지)

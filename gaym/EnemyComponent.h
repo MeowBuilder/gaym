@@ -108,7 +108,8 @@ public:
     const EnemyStats& GetStats() const { return m_Stats; }
 
     // Damage handling
-    void TakeDamage(float fDamage);
+    // bTriggerStagger=false: 데미지만 입히고 경직 없음 (다단히트 스킬용)
+    void TakeDamage(float fDamage, bool bTriggerStagger = true);
     bool IsDead() const { return m_eCurrentState == EnemyState::Dead; }
 
     // Attack behavior

@@ -4,6 +4,7 @@
 #include "SkillData.h"
 
 class FluidSkillVFXManager;
+class Scene;
 
 // E 슬롯 - 화염 빔 (Channel 방식, 키 누르는 동안 지속)
 class FireBeamBehavior : public ISkillBehavior
@@ -14,6 +15,7 @@ public:
     virtual ~FireBeamBehavior() = default;
 
     void SetVFXManager(FluidSkillVFXManager* mgr) { m_pVFXManager = mgr; }
+    void SetScene(Scene* pScene)                  { m_pScene = pScene; }
 
     // ISkillBehavior 인터페이스
     virtual void Execute(GameObject* caster, const DirectX::XMFLOAT3& targetPosition, float damageMultiplier = 1.0f) override;
@@ -24,12 +26,21 @@ public:
 
 private:
     uint32_t GetRuneFlags(GameObject* caster) const;
+    void     HitEnemiesInBeam(float damage);
 
     SkillData m_SkillData;
     bool m_bIsFinished = true;
-    bool m_bIsActive = false;      // 빔이 현재 활성 중인지
+    bool m_bIsActive = false;
     FluidSkillVFXManager* m_pVFXManager = nullptr;
+    Scene*       m_pScene       = nullptr;
     int m_vfxId = -1;
-    GameObject* m_pCaster = nullptr;  // 빔 추적용 caster 캐시
-    XMFLOAT3 m_lastTargetPos = { 0.f, 0.f, 0.f }; // 마지막 타겟 위치 캐시
+    GameObject* m_pCaster = nullptr;
+    XMFLOAT3 m_lastTargetPos = { 0.f, 0.f, 0.f };
+
+    // 히트 판정용
+    float m_damageMult   = 1.f;
+    float m_hitTimer     = 0.f;
+    static constexpr float HIT_INTERVAL  = 0.2f;  // 다단히트 간격 (초)
+    static constexpr float BEAM_RADIUS   = 2.0f;  // 빔 판정 반경 (m)
+    static constexpr float BEAM_RANGE    = 20.0f; // 빔 최대 사거리 (m)
 };

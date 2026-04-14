@@ -76,6 +76,12 @@ struct VFXSequenceDef {
     float waveHalfW    = 4.0f;  // 파도 좌우 반폭 (X)
     float waveHalfH    = 2.5f;  // 파도 높이 반폭 (Y)
     float waveDepth    = 2.5f;  // 파도 전후 두께 반폭 (Z) — 클수록 경계 반사 완화
+
+    // Traveling wave 수직 진동 (F_y = A * sin(k * fwdPos - ω * t))
+    // amplitude > 0 이면 자동 활성화
+    float waveOscAmplitude  = 0.f;   // 힘 진폭 (m/s²)
+    float waveOscFrequency  = 4.f;   // 시간 주파수 ω (rad/s)
+    float waveOscWaveNumber = 0.8f;  // 공간 파수 k (rad/m), 파장 = 2π/k
 };
 
 class VFXLibrary {

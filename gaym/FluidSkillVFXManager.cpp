@@ -240,6 +240,18 @@ int FluidSkillVFXManager::SpawnSequenceEffect(const XMFLOAT3& origin, const XMFL
                 slot.pSystem->SetConfinementBox(wbd);
                 slot.pSystem->SetGlobalGravity(0.f);
                 slot.pSystem->SetMotionMode(ParticleMotionMode::Gravity); // wave는 CP 없음 — Gravity 모드로 SPH+힘만 사용
+
+                // Traveling wave 수직 진동 활성화
+                if (seqDef.waveOscAmplitude > 0.f) {
+                    XMFLOAT3 fwdDir3, upDir3;
+                    XMStoreFloat3(&fwdDir3, wDir);
+                    XMStoreFloat3(&upDir3, wUpV);
+                    slot.pSystem->SetWaveOscillation(
+                        seqDef.waveOscAmplitude,
+                        seqDef.waveOscFrequency,
+                        seqDef.waveOscWaveNumber,
+                        fwdDir3, upDir3);
+                }
             }
 
             wchar_t buf[128];
@@ -1081,7 +1093,32 @@ XMFLOAT3 FluidSkillVFXManager::GetWaveFrontPos(int id) const
 {
     if (id < 0 || id >= MAX_EFFECTS || !m_Slots[id].isActive)
         return {};
+    const auto& slot = m_Slots[id];
+    // 선두 위치 = 스폰 원점 + 진행방향 * 이동거리
+    XMVECTOR frontV = XMVectorAdd(
+        XMLoadFloat3(&slot.origin),
+        XMVectorScale(XMVector3Normalize(XMLoadFloat3(&slot.direction)), slot.waveDist));
+    XMFLOAT3 result;
+    XMStoreFloat3(&result, frontV);
+    return result;
+}
+
+float FluidSkillVFXManager::GetWaveDist(int id) const
+{
+    if (id < 0 || id >= MAX_EFFECTS || !m_Slots[id].isActive) return 0.f;
+    return m_Slots[id].waveDist;
+}
+
+XMFLOAT3 FluidSkillVFXManager::GetWaveOrigin(int id) const
+{
+    if (id < 0 || id >= MAX_EFFECTS || !m_Slots[id].isActive) return {};
     return m_Slots[id].origin;
+}
+
+XMFLOAT3 FluidSkillVFXManager::GetWaveDir(int id) const
+{
+    if (id < 0 || id >= MAX_EFFECTS || !m_Slots[id].isActive) return {0,0,1};
+    return m_Slots[id].direction;
 }
 
 bool FluidSkillVFXManager::IsWaveActive(int id) const

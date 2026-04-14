@@ -68,7 +68,10 @@ public:
 
     // Wave 모드 API
     void     StopWave(int id);                    // 파도를 충돌 위치에서 멈춤
-    XMFLOAT3 GetWaveFrontPos(int id) const;       // 파도 현재 위치
+    XMFLOAT3 GetWaveFrontPos(int id) const;       // 파도 선두 현재 위치 (origin + dir*dist)
+    float    GetWaveDist(int id) const;           // 파도가 이동한 거리
+    XMFLOAT3 GetWaveOrigin(int id) const;         // 파도 스폰 위치 (back wall)
+    XMFLOAT3 GetWaveDir(int id) const;            // 파도 진행 방향
     bool     IsWaveActive(int id) const;          // 파도가 아직 이동 중이면 true
 
     void Update(float deltaTime);

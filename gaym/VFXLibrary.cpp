@@ -25,7 +25,14 @@ void VFXLibrary::Initialize() {
         def.wavePushForce = 50.f;   // 매 프레임 앞방향 가속도 (m/s²) — SPH와 함께 앞으로 흐름
         def.waveMaxDist   = 20.f;   // 10 m/s * 2s = 20m → 2초 후 fade-out 시작
         def.waveHalfW     = 5.0f;
-        def.waveHalfH     = 1.5f;
+        def.waveHalfH     = 2.5f;   // 수직 진동 공간 확보 (1.5→2.5)
+
+        // 파도 수직 진동: 전진 위치에 따라 다른 위상으로 위아래 요동
+        // 파장 = 2π/k ≈ 9m (파도 진행 중 ~2개 마루가 보임)
+        // 위상 속도 = ω/k = 5/0.7 ≈ 7 m/s (파티클 이동과 비슷한 속도로 패턴 이동)
+        def.waveOscAmplitude  = 12.f;  // 수직 가속력 (m/s²)
+        def.waveOscFrequency  = 5.f;   // ω = 5 rad/s
+        def.waveOscWaveNumber = 0.7f;  // k = 0.7 rad/m
 
         // maxParticleSpeed: 높게 설정해 SPH 초기 블래스트가 앞으로 빠르게 퍼지도록
         def.maxParticleSpeed = 20.f;

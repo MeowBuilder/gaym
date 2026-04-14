@@ -64,7 +64,11 @@ struct SPHConstants {
     // Near-pressure + SPH 커널 상수 (Sebastian Lague 이중 밀도 완화)
     float nearPressureMult; float kSpikyPow2; float kSpikyPow3; float kSpikyPow2Grad;  // 16 (offset 368)
     float kSpikyPow3Grad;   float elapsedTime; float explodeFade; float _kPad;            // 16 (offset 384)
-};  // total 400 bytes
+    // Traveling wave oscillation (Q스킬 파도 수직 요동)
+    float waveOscAmplitude; float waveOscFrequency; float waveOscWaveNumber; float waveOscEnabled; // 16 (offset 400)
+    XMFLOAT3 waveOscFwdDir; float _woPad0;                                                          // 16 (offset 416)
+    XMFLOAT3 waveOscUpDir;  float _woPad1;                                                          // 16 (offset 432)
+};  // total 448 bytes
 static_assert(sizeof(SPHConstants) <= 512, "SPHConstants exceeds 512 bytes");
 
 class FluidParticleSystem
@@ -128,6 +132,12 @@ public:
     void ApplyRadialBurst(XMFLOAT3 center, float minSpeed, float maxSpeed);
     void ApplyDirectionalForce(const XMFLOAT3& direction, float impulse);
     void SetGlobalGravity(float strength);
+
+    // Traveling wave 수직 진동 (Q스킬 파도용)
+    // F_y(pos,t) = amplitude * sin(waveNumber * dot(pos,fwdDir) - frequency * t)
+    void SetWaveOscillation(float amplitude, float frequency, float waveNumber,
+                            const XMFLOAT3& fwdDir, const XMFLOAT3& upDir);
+    void ClearWaveOscillation();
 
     // 특정 축 방향 속도 성분 제거 (예: forward 방향 속도만 0으로)
     void ZeroAxisVelocity(const XMFLOAT3& worldAxis);
@@ -239,6 +249,14 @@ private:
 
     float    m_fElapsed = 0.f;              // 박동 펄스용 누적 시간
     float    m_explodeFade = 2.0f;          // 폭발 페이드: 2.0=정상, 1.0..0.0=폭발 소멸
+
+    // Traveling wave 수직 진동
+    float    m_waveOscAmplitude  = 0.f;
+    float    m_waveOscFrequency  = 4.f;
+    float    m_waveOscWaveNumber = 0.8f;
+    bool     m_waveOscEnabled    = false;
+    XMFLOAT3 m_waveOscFwdDir    = {0,0,1};
+    XMFLOAT3 m_waveOscUpDir     = {0,1,0};
 
     // CPU → GPU 프레임 델타 (OffsetParticles / ApplyDirectionalForce 호출 누적)
     XMFLOAT3 m_vGPUPendingOffset   = {};

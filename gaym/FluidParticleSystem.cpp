@@ -1326,6 +1326,23 @@ void FluidParticleSystem::ApplyAxisSpreadForce(const XMFLOAT3& axisDir,
     }
 }
 
+void FluidParticleSystem::SetWaveOscillation(float amplitude, float frequency, float waveNumber,
+                                              const XMFLOAT3& fwdDir, const XMFLOAT3& upDir)
+{
+    m_waveOscAmplitude  = amplitude;
+    m_waveOscFrequency  = frequency;
+    m_waveOscWaveNumber = waveNumber;
+    m_waveOscFwdDir     = fwdDir;
+    m_waveOscUpDir      = upDir;
+    m_waveOscEnabled    = (amplitude > 0.f);
+}
+
+void FluidParticleSystem::ClearWaveOscillation()
+{
+    m_waveOscEnabled   = false;
+    m_waveOscAmplitude = 0.f;
+}
+
 void FluidParticleSystem::ApplyRandomSidewaysImpulse(const XMFLOAT3& worldAxis, float maxImpulse)
 {
     XMVECTOR axis = XMVector3Normalize(XMLoadFloat3(&worldAxis));
@@ -1518,6 +1535,10 @@ static const char* g_SPHComputeShader = R"(
         float  gElapsedTime;    // 박동 펄스용 누적 시간
         float  gExplodeFade;    // 폭발 페이드: 2.0=정상, 1.0..0.0=폭발 소멸
         float  _gKPad;
+        // Traveling wave 수직 진동 (Q스킬 파도용)
+        float  gWaveOscAmplitude; float gWaveOscFrequency; float gWaveOscWaveNumber; float gWaveOscEnabled;
+        float3 gWaveOscFwdDir;  float _gWOPad0;
+        float3 gWaveOscUpDir;   float _gWOPad1;
     };
 
     RWStructuredBuffer<GPUParticle>           gParticles  : register(u0);
@@ -1746,6 +1767,15 @@ static const char* g_SPHComputeShader = R"(
                 float  spd  = gOpBurstMinSpeed + _FRAND(_s) * (gOpBurstMaxSpeed - gOpBurstMinSpeed);
                 gParticles[i].vel += bDir * spd;
             }
+        }
+
+        // Traveling wave 수직 진동: F_y = A * sin(k * dot(pos, fwd) - ω * t)
+        // 파티클마다 전진 방향 위치에 따라 다른 위상 → 물결처럼 굽이치는 효과
+        if (gWaveOscEnabled > 0.5f) {
+            float fwdProj  = dot(gParticles[i].pos, gWaveOscFwdDir);
+            float phase    = gWaveOscWaveNumber * fwdProj - gWaveOscFrequency * gElapsedTime;
+            float oscForce = gWaveOscAmplitude * sin(phase);
+            gParticles[i].vel += gWaveOscUpDir * (oscForce * gDt);
         }
 
         float invDensity = 1.0f / max(gParticles[i].density, 0.001f);
@@ -2030,6 +2060,16 @@ void FluidParticleSystem::DispatchSPH(ID3D12GraphicsCommandList* pCmdList, float
             cb.elapsedTime      = m_fElapsed;
             cb.explodeFade      = m_explodeFade;
         }
+
+        // Traveling wave 수직 진동
+        cb.waveOscAmplitude  = m_waveOscAmplitude;
+        cb.waveOscFrequency  = m_waveOscFrequency;
+        cb.waveOscWaveNumber = m_waveOscWaveNumber;
+        cb.waveOscEnabled    = m_waveOscEnabled ? 1.f : 0.f;
+        cb.waveOscFwdDir     = m_waveOscFwdDir;
+        cb._woPad0           = 0.f;
+        cb.waveOscUpDir      = m_waveOscUpDir;
+        cb._woPad1           = 0.f;
 
         // 프레임별 CPU -> GPU 델타 (OffsetParticles / ApplyDirectionalForce 누적값)
         cb.posOffset = m_vGPUPendingOffset;

@@ -5,6 +5,9 @@
 #include "GameObject.h"
 #include "TransformComponent.h"
 #include "SkillComponent.h"
+#include "Scene.h"
+#include "Room.h"
+#include "EnemyComponent.h"
 
 FireBeamBehavior::FireBeamBehavior()
 {
@@ -40,7 +43,9 @@ void FireBeamBehavior::Execute(GameObject* caster, const DirectX::XMFLOAT3& targ
     if (!m_bIsActive)
     {
         m_bIsFinished = false;
-        m_bIsActive = true;
+        m_bIsActive   = true;
+        m_damageMult  = damageMultiplier > 0.f ? damageMultiplier : 1.f;
+        m_hitTimer    = 0.f;
 
         // 플레이어 위치/방향 계산
         XMFLOAT3 origin = { 0.f, 0.f, 0.f };
@@ -126,6 +131,59 @@ void FireBeamBehavior::Update(float deltaTime)
     XMFLOAT3 dir;
     XMStoreFloat3(&dir, dirV);
     m_pVFXManager->TrackEffect(m_vfxId, origin, dir);
+
+    // 다단 히트: HIT_INTERVAL마다 빔 원통 안 적 데미지
+    m_hitTimer += deltaTime;
+    if (m_hitTimer >= HIT_INTERVAL) {
+        m_hitTimer -= HIT_INTERVAL;
+        HitEnemiesInBeam(m_SkillData.damage * m_damageMult);
+    }
+}
+
+void FireBeamBehavior::HitEnemiesInBeam(float damage)
+{
+    if (!m_pScene || !m_pCaster || !m_pCaster->GetTransform()) return;
+
+    CRoom* pRoom = m_pScene->GetCurrentRoom();
+    if (!pRoom) return;
+
+    XMFLOAT3 originF = m_pCaster->GetTransform()->GetPosition();
+    originF.y += 1.5f;
+
+    XMVECTOR originV = XMLoadFloat3(&originF);
+    XMVECTOR dirV    = m_pCaster->GetTransform()->GetLook();
+    dirV = XMVectorSetY(dirV, 0.f);
+    dirV = XMVector3Normalize(dirV);
+
+    const auto& gameObjects = pRoom->GetGameObjects();
+    for (const auto& obj : gameObjects)
+    {
+        if (!obj) continue;
+        EnemyComponent* pEnemy = obj->GetComponent<EnemyComponent>();
+        if (!pEnemy || pEnemy->IsDead()) continue;
+
+        TransformComponent* pTransform = obj->GetTransform();
+        if (!pTransform) continue;
+
+        XMFLOAT3 ePos = pTransform->GetPosition();
+        ePos.y += 1.0f; // 적 중심 높이
+        XMVECTOR toEnemyV = XMVectorSubtract(XMLoadFloat3(&ePos), originV);
+
+        // 빔 방향 투영 (사거리 범위 체크)
+        float fwdProj = XMVectorGetX(XMVector3Dot(toEnemyV, dirV));
+        if (fwdProj < 0.f || fwdProj > BEAM_RANGE) continue;
+
+        // 빔 축까지 수직 거리 (원통 체크)
+        XMVECTOR lateralV = XMVectorSubtract(toEnemyV, XMVectorScale(dirV, fwdProj));
+        float lateralDist = XMVectorGetX(XMVector3Length(lateralV));
+
+        // 적 반경 고려 (최소 1.5m)
+        XMFLOAT3 eScale = pTransform->GetScale();
+        float eRadius = max(1.5f, max(eScale.x, eScale.z) * 1.2f);
+
+        if (lateralDist < BEAM_RADIUS + eRadius)
+            pEnemy->TakeDamage(damage, false);  // 다단히트: 경직 없음
+    }
 }
 
 bool FireBeamBehavior::IsFinished() const

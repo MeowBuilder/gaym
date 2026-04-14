@@ -26,6 +26,7 @@ public:
 
 private:
     uint32_t GetRuneFlags(GameObject* caster) const;
+    void     HitEnemiesInWave(float damage);
 
     SkillData  m_SkillData;
     bool       m_bIsFinished = true;
@@ -33,4 +34,15 @@ private:
     FluidSkillVFXManager* m_pVFXManager = nullptr;
     Scene*     m_pScene     = nullptr;
     int        m_vfxId      = -1;
+
+    // 히트 판정용
+    XMFLOAT3   m_waveOrigin  = {};
+    XMFLOAT3   m_waveDir     = {0,0,1};
+    float      m_damageMult  = 1.f;
+    float      m_hitTimer    = 0.f;
+    static constexpr float HIT_INTERVAL  = 0.4f;  // 다단히트 간격 (초)
+    static constexpr float WAVE_HALF_W   = 5.0f;  // VFXLibrary waveHalfW 와 일치
+    static constexpr float WAVE_HALF_H   = 3.0f;  // 수직 판정 범위 (약간 여유)
+    // 파티클이 실제로 집중된 파도 선두 두께 (선두에서 뒤로 HIT_DEPTH만큼만 판정)
+    static constexpr float WAVE_HIT_DEPTH = 5.0f;
 };

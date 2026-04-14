@@ -5,6 +5,10 @@
 #include "GameObject.h"
 #include "TransformComponent.h"
 #include "SkillComponent.h"
+#include "Scene.h"
+#include "Room.h"
+#include "EnemyComponent.h"
+#include <cmath>
 
 MeteorBehavior::MeteorBehavior()
     : m_SkillData(FireSkillPresets::Meteor())
@@ -67,20 +71,86 @@ void MeteorBehavior::Execute(GameObject* caster, const DirectX::XMFLOAT3& target
     //    spawnPos를 origin으로 전달
     m_vfxId = m_pVFXManager->SpawnSequenceEffect(spawnPos, direction, seqDef);
 
+    // 히트 판정 상태 초기화
+    m_targetPos   = targetPos;
+    m_damageMult  = damageMultiplier > 0.f ? damageMultiplier : 1.f;
+    m_elapsed     = 0.f;
+    m_bExploded   = false;
+    m_hitTimer    = 0.f;
+    m_bIsFinished = (m_vfxId < 0); // VFX 성공하면 Update에서 완료 처리
+
     wchar_t buf[256];
     swprintf_s(buf, 256,
         L"[Meteor] Execute: vfxId=%d, target=(%.1f,%.1f,%.1f), spawn=(%.1f,%.1f,%.1f), runeFlags=0x%X\n",
         m_vfxId, targetPos.x, targetPos.y, targetPos.z,
         spawnPos.x, spawnPos.y, spawnPos.z, runeFlags);
     OutputDebugString(buf);
-
-    m_bIsFinished = true;
 }
 
 void MeteorBehavior::Update(float deltaTime)
 {
-    // 메테오 VFX 업데이트는 FluidSkillVFXManager::Update()에서 자동 처리
-    // OrbitalCP 낙하 -> Gravity 폭발 전환도 UpdatePhase에서 처리됨
+    if (m_bIsFinished || m_vfxId < 0) return;
+
+    m_elapsed += deltaTime;
+
+    // ── 낙하 단계 (0 ~ FALL_DURATION) ──────────────────────────────
+    if (m_elapsed < FALL_DURATION) return;
+
+    // ── 폭발 단계 진입 ─────────────────────────────────────────────
+    if (!m_bExploded) {
+        m_bExploded = true;
+        m_hitTimer  = 0.f;
+        // 초기 큰 폭발 AoE: 경직 허용
+        ApplyExplosionDamage(m_SkillData.damage * m_damageMult, EXPLODE_RADIUS, true);
+        OutputDebugStringA("[Meteor] Explosion hit!\n");
+    }
+
+    // 폭발 지속 중 다단 히트 (FALL_DURATION ~ FALL_DURATION + EXPLODE_DURATION)
+    if (m_elapsed < FALL_DURATION + EXPLODE_DURATION) {
+        m_hitTimer += deltaTime;
+        if (m_hitTimer >= MULTI_HIT_INTERVAL) {
+            m_hitTimer -= MULTI_HIT_INTERVAL;
+            float tickDmg = m_SkillData.damage * m_damageMult * 0.25f;
+            ApplyExplosionDamage(tickDmg, MULTI_HIT_RADIUS, false); // 여진: 경직 없음
+        }
+    } else {
+        // 폭발 단계 종료
+        m_bIsFinished = true;
+    }
+}
+
+void MeteorBehavior::ApplyExplosionDamage(float damage, float radius, bool bTriggerStagger)
+{
+    if (!m_pScene) return;
+    CRoom* pRoom = m_pScene->GetCurrentRoom();
+    if (!pRoom) return;
+
+    XMVECTOR centerV = XMLoadFloat3(&m_targetPos);
+
+    const auto& gameObjects = pRoom->GetGameObjects();
+    for (const auto& obj : gameObjects)
+    {
+        if (!obj) continue;
+        EnemyComponent* pEnemy = obj->GetComponent<EnemyComponent>();
+        if (!pEnemy || pEnemy->IsDead()) continue;
+
+        TransformComponent* pTransform = obj->GetTransform();
+        if (!pTransform) continue;
+
+        XMFLOAT3 ePos = pTransform->GetPosition();
+        XMFLOAT3 eScale = pTransform->GetScale();
+        float eRadius = max(1.5f, max(eScale.x, max(eScale.y, eScale.z)) * 1.2f);
+
+        float dist = XMVectorGetX(XMVector3Length(
+            XMVectorSubtract(XMLoadFloat3(&ePos), centerV)));
+
+        if (dist < radius + eRadius) {
+            // 거리 기반 감쇠: 중심 100%, 가장자리 50%
+            float falloff = 1.f - (dist / (radius + eRadius)) * 0.5f;
+            falloff = max(0.5f, falloff);
+            pEnemy->TakeDamage(damage * falloff, bTriggerStagger);
+        }
+    }
 }
 
 bool MeteorBehavior::IsFinished() const
@@ -91,7 +161,10 @@ bool MeteorBehavior::IsFinished() const
 void MeteorBehavior::Reset()
 {
     m_bIsFinished = true;
-    m_vfxId = -1;
+    m_bExploded   = false;
+    m_elapsed     = 0.f;
+    m_hitTimer    = 0.f;
+    m_vfxId       = -1;
 }
 
 uint32_t MeteorBehavior::GetRuneFlags(GameObject* caster) const

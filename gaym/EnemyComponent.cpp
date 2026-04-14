@@ -201,7 +201,7 @@ void EnemyComponent::ChangeState(EnemyState newState)
     }
 }
 
-void EnemyComponent::TakeDamage(float fDamage)
+void EnemyComponent::TakeDamage(float fDamage, bool bTriggerStagger)
 {
     if (m_eCurrentState == EnemyState::Dead) return;
 
@@ -230,12 +230,11 @@ void EnemyComponent::TakeDamage(float fDamage)
         m_Stats.m_fCurrentHP = 0.0f;
         ChangeState(EnemyState::Dead);
     }
-    else if (!m_bIsBoss)
+    else if (bTriggerStagger && !m_bIsBoss)
     {
-        // Only non-boss enemies get staggered
+        // 경직 허용 + 일반 적만 경직 (보스는 피해만 받고 패턴 유지)
         ChangeState(EnemyState::Stagger);
     }
-    // Bosses take damage but don't get staggered - pattern continues
 }
 
 void EnemyComponent::SetAttackBehavior(std::unique_ptr<IAttackBehavior> pBehavior)

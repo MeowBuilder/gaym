@@ -78,6 +78,10 @@ void WaveSlashBehavior::Execute(GameObject* caster, const DirectX::XMFLOAT3& tar
 
     if (m_vfxId >= 0) {
         m_bWaveActive = true;
+        m_waveOrigin  = origin;
+        m_waveDir     = direction;
+        m_damageMult  = damageMultiplier > 0.f ? damageMultiplier : 1.f;
+        m_hitTimer    = 0.f;
         // m_bIsFinished = false 유지 → Update()에서 충돌 감지 후 true로 설정
     } else {
         m_bIsFinished = true;
@@ -92,6 +96,63 @@ void WaveSlashBehavior::Update(float deltaTime)
     if (!m_pVFXManager->IsWaveActive(m_vfxId)) {
         m_bWaveActive = false;
         m_bIsFinished = true;
+        return;
+    }
+
+    // 다단 히트: HIT_INTERVAL마다 파도 범위 안 적 데미지
+    m_hitTimer += deltaTime;
+    if (m_hitTimer >= HIT_INTERVAL) {
+        m_hitTimer -= HIT_INTERVAL;
+        HitEnemiesInWave(m_SkillData.damage * m_damageMult);
+    }
+}
+
+void WaveSlashBehavior::HitEnemiesInWave(float damage)
+{
+    if (!m_pScene || m_vfxId < 0 || !m_pVFXManager) return;
+
+    CRoom* pRoom = m_pScene->GetCurrentRoom();
+    if (!pRoom) return;
+
+    float waveDist = m_pVFXManager->GetWaveDist(m_vfxId);
+    if (waveDist <= 0.01f) return;
+
+    XMVECTOR originV = XMLoadFloat3(&m_waveOrigin);
+    XMVECTOR dirV    = XMVector3Normalize(XMLoadFloat3(&m_waveDir));
+
+    // 파티클은 파도 선두 근처에 집중됨 — 선두에서 WAVE_HIT_DEPTH 만큼만 판정
+    float frontZ  = waveDist;
+    float backZ   = (std::max)(0.f, waveDist - WAVE_HIT_DEPTH);
+
+    const auto& gameObjects = pRoom->GetGameObjects();
+    for (const auto& obj : gameObjects)
+    {
+        if (!obj) continue;
+        EnemyComponent* pEnemy = obj->GetComponent<EnemyComponent>();
+        if (!pEnemy || pEnemy->IsDead()) continue;
+
+        TransformComponent* pTransform = obj->GetTransform();
+        if (!pTransform) continue;
+
+        XMFLOAT3 ePos = pTransform->GetPosition();
+        XMVECTOR toEnemyV = XMVectorSubtract(XMLoadFloat3(&ePos), originV);
+
+        // 전진 축 투영: 파도 선두 슬랩 안에 있어야 함
+        float fwdProj = XMVectorGetX(XMVector3Dot(toEnemyV, dirV));
+        if (fwdProj < backZ || fwdProj > frontZ) continue;
+
+        // 수평 측면 거리 (파도 너비)
+        XMVECTOR lateralV = XMVectorSubtract(toEnemyV, XMVectorScale(dirV, fwdProj));
+        lateralV = XMVectorSetY(lateralV, 0.f);
+        float lateralDist = XMVectorGetX(XMVector3Length(lateralV));
+        if (lateralDist > WAVE_HALF_W) continue;
+
+        // 수직 범위
+        float heightDiff = fabsf(ePos.y - m_waveOrigin.y);
+        if (heightDiff > WAVE_HALF_H) continue;
+
+        // 다단히트: 경직 없음
+        pEnemy->TakeDamage(damage, false);
     }
 }
 
