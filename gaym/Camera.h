@@ -17,7 +17,13 @@ public:
     void SetLens(float fovY, float aspect, float zn, float zf);
 
     // Update camera based on mouse input
-    void Update(float mouseDeltaX, float mouseDeltaY, float scrollDelta, float deltaTime = 0.0f);
+    void Update(float mouseDeltaX, float mouseDeltaY, float scrollDelta, float deltaTime = 0.0f,
+                bool bForward = false, bool bBackward = false, bool bLeft = false, bool bRight = false,
+                bool bUp = false, bool bDown = false);
+
+    // Free camera toggle
+    void ToggleFreeCam();
+    bool IsFreeCam() const { return m_bFreeCam; }
 
     // Get camera matrices
     const DirectX::XMFLOAT4X4& GetViewMatrix() const { return m_viewMatrix; }
@@ -62,6 +68,14 @@ private:
     // Mouse sensitivity
     float m_rotationSpeed = 0.2f;
     float m_zoomSpeed = 0.01f;
+
+    // Free camera mode
+    bool m_bFreeCam = false;
+    DirectX::XMFLOAT3 m_freeCamPos = { 0.0f, 30.0f, 0.0f };
+    float m_freeYaw   = 45.0f;   // degrees
+    float m_freePitch = -30.0f;  // degrees (looking down)
+    float m_freeMoveSpeed = 40.0f;
+    float m_freeRotSpeed  = 0.15f;
 
     // Camera shake
     bool m_bShaking = false;

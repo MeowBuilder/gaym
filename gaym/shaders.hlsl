@@ -104,6 +104,7 @@ struct PS_INPUT
     float2 uv : TEXCOORD;
     float4 posLightSpace : TEXCOORD1; // Shadow Map용 Light 공간 위치
     float crestFactor : TEXCOORD2; // Wave crest factor for foam (0~1)
+    float waterDisp : TEXCOORD3;  // Wave vertical displacement from baseline (depth proxy)
 };
 
 // ========================================================================
@@ -218,6 +219,7 @@ PS_INPUT VS(VS_INPUT input)
 
     // Initialize crest factor (default 0 for non-water)
     float crestFactor = 0.0;
+    float waterDisp = 0.0;  // Wave displacement from baseline (for depth effect in PS)
 
     // Transform to world space first (needed for Gerstner waves)
     float4 worldPos = mul(float4(posL, 1.0f), World);
@@ -225,32 +227,16 @@ PS_INPUT VS(VS_INPUT input)
     // Water vertex displacement: Gerstner waves + Heightmap (Medium 글 방식)
     if (bIsWater)
     {
+        float originalY = worldPos.y;  // Capture baseline Y before any displacement
+
         // === 1. Gerstner Waves (큰 파도, 2개만 사용) ===
         float3 waveNormal = normalL;
         ApplyGerstnerWaves(worldPos.xyz, waveNormal, crestFactor);
 
-        // === 2. Heightmap Displacement (water_height_01 + water_height_02, 4레이어) ===
-        // height_01: 큰 스케일 파도 디테일 (t8)
-        float2 heightUV1 = input.uv * 3.5f + float2(g_Time * 0.022f, g_Time * 0.016f);
-        float height1 = gHeightMap2.SampleLevel(gSampler, heightUV1, 0).r;
+        // Heightmap displacement 제거 — Gerstner만으로 버텍스 변위
+        // (heightmap은 PS normal map 레이어로 표면 디테일 처리)
+        waterDisp = worldPos.y - originalY;
 
-        float2 heightUV2 = input.uv * 6.5f - float2(g_Time * 0.015f, g_Time * 0.026f);
-        float height2 = gHeightMap2.SampleLevel(gSampler, heightUV2, 0).r;
-
-        // height_02: 세부 디테일 (t10, gFoamDiffuse 슬롯 재활용)
-        float2 heightUV3 = input.uv * 8.0f + float2(g_Time * 0.01f, -g_Time * 0.013f);
-        float height3 = gFoamDiffuse.SampleLevel(gSampler, heightUV3, 0).r;
-
-        float2 heightUV4 = input.uv * 12.0f - float2(g_Time * 0.007f, g_Time * 0.017f);
-        float height4 = gFoamDiffuse.SampleLevel(gSampler, heightUV4, 0).r;
-
-        // 4레이어 블렌딩 (큰 파도 60% + 세부 40%)
-        float heightCombined = (height1 * 0.35f + height2 * 0.25f + height3 * 0.25f + height4 * 0.15f) - 0.5f;
-
-        // Gerstner + heightmap 균형 (부드럽게)
-        worldPos.y += heightCombined * 3.5f;
-
-        // Update normal with wave-modified normal
         normalL = waveNormal;
     }
 
@@ -266,6 +252,7 @@ PS_INPUT VS(VS_INPUT input)
 
     // Pass crest factor for foam calculation in pixel shader
     output.crestFactor = crestFactor;
+    output.waterDisp = waterDisp;
 
     output.uv = input.uv;
 
@@ -365,35 +352,27 @@ float4 PS(PS_INPUT input) : SV_TARGET
     {
         // === GPU Gems 스타일 물 셰이더 (Gerstner waves 기반) ===
 
-        // Gerstner wave normal이 이미 VS에서 계산됨
-        // normal_01 (t7) + normal_02 (t9) 4레이어 블렌딩
+        // Water_6 normal map 4레이어 (모두 gNormalMap2 = t7, 올바른 normal map)
+        // 서로 다른 스케일과 방향으로 흘러 자연스러운 물결 표면 생성
+        float2 normalUV1 = input.uv * 1.8f + float2( g_Time * 0.014f,  g_Time * 0.010f);
+        float2 normalUV2 = input.uv * 3.5f + float2(-g_Time * 0.009f,  g_Time * 0.018f);
+        float2 normalUV3 = input.uv * 6.0f + float2( g_Time * 0.020f, -g_Time * 0.012f);
+        float2 normalUV4 = input.uv * 10.f + float2(-g_Time * 0.006f, -g_Time * 0.022f);
 
-        // normal_01: 큰 스케일 (t7)
-        float2 normalUV1 = input.uv * 2.0f + float2(g_Time * 0.018f, g_Time * 0.013f);
-        float2 normalUV2 = input.uv * 4.5f - float2(g_Time * 0.01f, g_Time * 0.022f);
-        float3 bigNormal1 = gNormalMap2.Sample(gSampler, normalUV1).rgb * 2.0f - 1.0f;
-        float3 bigNormal2 = gNormalMap2.Sample(gSampler, normalUV2).rgb * 2.0f - 1.0f;
+        float3 n1 = gNormalMap2.Sample(gSampler, normalUV1).rgb * 2.0f - 1.0f;
+        float3 n2 = gNormalMap2.Sample(gSampler, normalUV2).rgb * 2.0f - 1.0f;
+        float3 n3 = gNormalMap2.Sample(gSampler, normalUV3).rgb * 2.0f - 1.0f;
+        float3 n4 = gNormalMap2.Sample(gSampler, normalUV4).rgb * 2.0f - 1.0f;
 
-        // normal_02: 세부 디테일 (t9, gFoamOpacity 슬롯 재활용)
-        float2 normalUV3 = input.uv * 8.0f + float2(g_Time * 0.026f, g_Time * 0.016f);
-        float2 normalUV4 = input.uv * 14.0f - float2(g_Time * 0.014f, g_Time * 0.03f);
-        float3 detailNormal1 = gFoamOpacity.Sample(gSampler, normalUV3).rgb * 2.0f - 1.0f;
-        float3 detailNormal2 = gFoamOpacity.Sample(gSampler, normalUV4).rgb * 2.0f - 1.0f;
+        // 큰 파도 우선, 디테일은 낮은 가중치
+        float3 combinedNormal = normalize(n1 * 0.40f + n2 * 0.30f + n3 * 0.20f + n4 * 0.10f);
 
-        // 4레이어 합산 (큰 파도 60% + 세부 40%)
-        float3 combinedNormal = normalize(
-            bigNormal1    * 0.35f +
-            bigNormal2    * 0.25f +
-            detailNormal1 * 0.25f +
-            detailNormal2 * 0.15f
-        );
-
-        float3 tangent = float3(1, 0, 0);
+        float3 tangent   = float3(1, 0, 0);
         float3 bitangent = float3(0, 0, 1);
         waterNormal = normalize(
             normal +
-            tangent    * combinedNormal.x * 0.28f +
-            bitangent  * combinedNormal.z * 0.28f
+            tangent    * combinedNormal.x * 0.22f +
+            bitangent  * combinedNormal.z * 0.22f
         );
 
         // 간단한 Fresnel
@@ -523,43 +502,61 @@ float4 PS(PS_INPUT input) : SV_TARGET
 
     if (bIsWater)
     {
-        // === 균형잡힌 물 셰이더 (어둡고 거품 명확) ===
+        // ================================================================
+        // === Phase 3: Depth-based Water Shader ===========================
+        // ================================================================
 
-        // 기본 물 색상 (매우 어두운 바다)
-        float3 waterColor = float3(0.01f, 0.08f, 0.18f);  // 진한 남색
+        // --- Depth Factor: wave displacement → depth proxy ---
+        // waveDisp range: roughly -14 (trough) ~ +14 (crest)
+        // depthFactor: 0.0 = deep trough, 1.0 = high crest
+        float waveDisp = input.waterDisp;
+        float depthFactor = saturate((waveDisp + 14.0f) / 28.0f);
 
-        // 조명 계산 (약하게)
+        // --- Depth Color Gradient (3-stop) ---
+        // Trough: very dark deep navy
+        float3 troughColor = float3(0.003f, 0.018f, 0.07f);
+        // Mid wave: medium ocean blue
+        float3 midColor    = float3(0.015f, 0.07f,  0.18f);
+        // Crest base: 더 밝게 (파도 마루 강조)
+        float3 crestColor  = float3(0.08f,  0.28f,  0.55f);
+
+        // Smooth 3-stop blend using two lerps
+        float3 waterColor = lerp(troughColor, midColor,   saturate(depthFactor * 2.0f));
+        waterColor        = lerp(waterColor,  crestColor, saturate((depthFactor - 0.5f) * 2.0f));
+
+        // --- Subsurface Scattering (파도 마루에서 청록 빛 더 강하게) ---
+        float3 sssColor   = float3(0.05f, 0.55f, 0.65f);  // 더 선명한 청록
+        float sssStrength = pow(saturate(input.crestFactor * 1.5f), 2.0f) * 0.55f;  // 더 강하게
+        waterColor = lerp(waterColor, sssColor, sssStrength);
+
+        // --- Directional light shading (subtle) ---
         float diff = saturate(dot(shadingNormal, -g_LightDirection));
-        waterColor = waterColor * (1.0f + diff * 0.4f);  // 은은한 조명
+        waterColor = waterColor * (1.0f + diff * 0.35f);
 
-        // Specular (태양 반사 - 적당히)
+        // --- Specular highlight (sun glint on waves) ---
         float3 halfVec = normalize(vToCamera + (-g_LightDirection));
-        float spec = pow(max(dot(shadingNormal, halfVec), 0.0f), 280.0f);  // 더 날카롭게 (범위 축소)
-        float3 specColor = float3(1.0f, 1.0f, 1.0f) * spec * 0.35f;  // 강도 절반
+        float spec = pow(max(dot(shadingNormal, halfVec), 0.0f), 200.0f);  // 300→200 (범위 넓게)
+        float3 specColor = float3(1.0f, 0.97f, 0.90f) * spec * 0.80f;     // 0.55→0.80
 
-        // === Wave Crest Foam (crest factor 기반, 파도 마루에만 제한) ===
-        float crestFoam = pow(input.crestFactor, 1.5f);               // 지수 높여서 면적 축소
-        crestFoam = smoothstep(0.58f, 0.92f, crestFoam);              // threshold 높여서 마루 끝만
+        // --- Wave Crest Foam (threshold 낮춰서 더 잘 터지게) ---
+        float crestFoam = pow(input.crestFactor, 1.2f);           // 1.5→1.2 (더 낮은 crest에서도 활성)
+        crestFoam = smoothstep(0.30f, 0.70f, crestFoam);          // 0.55/0.90 → 0.30/0.70
+        float foamStrength = saturate(crestFoam * 1.0f);          // 0.75→1.0
+        float3 foamColor   = float3(0.90f, 0.94f, 0.98f);
 
-        // 거품 강도 (절제)
-        float foamStrength = saturate(crestFoam * 0.7f);
+        // --- Fresnel (edge reflectivity) ---
+        float3 fresnelColor = float3(0.06f, 0.18f, 0.30f);
 
-        // 거품 색상 (완전 흰색 → 약간 탁한 흰색)
-        float3 foamColor = float3(0.85f, 0.90f, 0.94f);
+        // --- Depth-based transparency ---
+        // Crests (thin water) = more transparent; troughs (deep) = more opaque
+        float waterAlpha = lerp(0.96f, 0.82f, saturate(waveDisp / 12.0f));
 
-        // === 최종 합성 ===
+        // === Final Composite ===
         finalColor.rgb = waterColor;
         finalColor.rgb += specColor * shadowFactor;
+        finalColor.rgb  = lerp(finalColor.rgb, foamColor, foamStrength);
+        finalColor.rgb  = lerp(finalColor.rgb, fresnelColor, waterFresnel * 0.18f);
 
-        // 거품 명확하게 (foam4 텍스처 반영, 어두운 물 + 밝은 거품 = 대비)
-        finalColor.rgb = lerp(finalColor.rgb, foamColor, foamStrength);
-
-        // Fresnel 최소화 (거의 없음)
-        float3 fresnelColor = float3(0.05f, 0.15f, 0.25f);
-        finalColor.rgb = lerp(finalColor.rgb, fresnelColor, waterFresnel * 0.2f);
-
-        // 투명도
-        float waterAlpha = 0.9f;
         return float4(finalColor.rgb, waterAlpha);
     }
 

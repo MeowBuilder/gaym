@@ -25,8 +25,67 @@ void CCamera::SetLens(float fovY, float aspect, float zn, float zf)
     XMStoreFloat4x4(&m_projectionMatrix, P);
 }
 
-void CCamera::Update(float mouseDeltaX, float mouseDeltaY, float scrollDelta, float deltaTime)
+void CCamera::ToggleFreeCam()
 {
+    m_bFreeCam = !m_bFreeCam;
+    if (m_bFreeCam)
+    {
+        // FreeCam 진입 시 현재 카메라 위치 및 방향 이어받기
+        m_freeCamPos = m_position;
+        m_freeYaw   = m_yaw;
+        m_freePitch = -m_pitch; // orbit pitch는 위를 양수로, freecam은 아래를 양수로
+        OutputDebugString(L"[Camera] FreeCam ON (F2 to toggle)\n");
+    }
+    else
+    {
+        OutputDebugString(L"[Camera] FreeCam OFF\n");
+    }
+}
+
+void CCamera::Update(float mouseDeltaX, float mouseDeltaY, float scrollDelta, float deltaTime,
+                     bool bForward, bool bBackward, bool bLeft, bool bRight, bool bUp, bool bDown)
+{
+    // === Free Camera Mode ===
+    if (m_bFreeCam)
+    {
+        // Mouse rotation
+        m_freeYaw   += mouseDeltaX * m_freeRotSpeed;
+        m_freePitch += mouseDeltaY * m_freeRotSpeed;
+        m_freePitch  = max(-89.0f, min(89.0f, m_freePitch));
+
+        // Build look/right/up from yaw+pitch
+        float yawRad   = XMConvertToRadians(m_freeYaw);
+        float pitchRad = XMConvertToRadians(m_freePitch);
+
+        XMVECTOR look = XMVector3Normalize(XMVectorSet(
+            cosf(pitchRad) * sinf(yawRad),
+           -sinf(pitchRad),
+            cosf(pitchRad) * cosf(yawRad),
+            0.0f));
+        XMVECTOR worldUp = XMVectorSet(0, 1, 0, 0);
+        XMVECTOR right   = XMVector3Normalize(XMVector3Cross(worldUp, look));
+        XMVECTOR up      = XMVector3Cross(look, right);
+
+        // WASD + QE movement
+        float speed = m_freeMoveSpeed * deltaTime;
+        XMVECTOR pos = XMLoadFloat3(&m_freeCamPos);
+        if (bForward)  pos = pos + look  * speed;
+        if (bBackward) pos = pos - look  * speed;
+        if (bRight)    pos = pos + right * speed;
+        if (bLeft)     pos = pos - right * speed;
+        if (bUp)       pos = pos + worldUp * speed;
+        if (bDown)     pos = pos - worldUp * speed;
+        XMStoreFloat3(&m_freeCamPos, pos);
+        XMStoreFloat3(&m_position, pos);
+
+        // Build view matrix
+        XMVECTOR target = pos + look;
+        XMMATRIX view = XMMatrixLookAtLH(pos, target, up);
+        XMStoreFloat4x4(&m_viewMatrix, view);
+        return;
+    }
+
+    // === Orbit Camera Mode (original) ===
     // Update yaw and pitch from mouse input
     //m_yaw += mouseDeltaX * m_rotationSpeed;
     //m_pitch += mouseDeltaY * m_rotationSpeed;

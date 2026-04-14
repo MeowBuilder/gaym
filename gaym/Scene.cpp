@@ -502,6 +502,12 @@ void Scene::Update(float deltaTime, InputSystem* pInputSystem)
 {
     m_fLastDeltaTime = deltaTime;
 
+    // F2: FreeCam 토글 (테스트용 자유 시점)
+    if (pInputSystem && pInputSystem->IsKeyPressed(VK_F2))
+    {
+        m_pCamera->ToggleFreeCam();
+    }
+
     // Toggle debug collider visualization with F1
     if (pInputSystem && pInputSystem->IsKeyPressed(VK_F1))
     {
@@ -559,7 +565,19 @@ void Scene::Update(float deltaTime, InputSystem* pInputSystem)
     // Update camera
     if (m_pCamera && pInputSystem)
     {
-        m_pCamera->Update(pInputSystem->GetMouseDeltaX(), pInputSystem->GetMouseDeltaY(), pInputSystem->GetMouseWheelDelta(), deltaTime);
+        bool bFreeCam = m_pCamera->IsFreeCam();
+        m_pCamera->Update(
+            pInputSystem->GetMouseDeltaX(),
+            pInputSystem->GetMouseDeltaY(),
+            pInputSystem->GetMouseWheelDelta(),
+            deltaTime,
+            bFreeCam && pInputSystem->IsKeyDown('W'),
+            bFreeCam && pInputSystem->IsKeyDown('S'),
+            bFreeCam && pInputSystem->IsKeyDown('A'),
+            bFreeCam && pInputSystem->IsKeyDown('D'),
+            bFreeCam && pInputSystem->IsKeyDown('E'),
+            bFreeCam && pInputSystem->IsKeyDown('Q')
+        );
     }
 
     // Update Pass Constants
@@ -2180,16 +2198,16 @@ void Scene::TransitionToWaterStage()
     if (m_pcbMappedPass)
     {
         // Wave 1: 메인 파동 (큰 파도)
-        m_pcbMappedPass->m_Waves[0].m_fWavelength = 70.0f;     // 중간 파장 (화면에 여러 개)
-        m_pcbMappedPass->m_Waves[0].m_fAmplitude = 6.0f;       // 충분한 높이
-        m_pcbMappedPass->m_Waves[0].m_fSteepness = 0.35f;      // 균형 (뾰족X, 파도O)
+        m_pcbMappedPass->m_Waves[0].m_fWavelength = 70.0f;
+        m_pcbMappedPass->m_Waves[0].m_fAmplitude = 10.0f;      // 6 → 10
+        m_pcbMappedPass->m_Waves[0].m_fSteepness = 0.35f;
         m_pcbMappedPass->m_Waves[0].m_fSpeed = 4.5f;
         m_pcbMappedPass->m_Waves[0].m_xmf2Direction = XMFLOAT2(1.0f, 0.3f);
         m_pcbMappedPass->m_Waves[0].m_fFadeSpeed = 0.1f;
 
         // Wave 2: 부 파동 (교차)
         m_pcbMappedPass->m_Waves[1].m_fWavelength = 45.0f;
-        m_pcbMappedPass->m_Waves[1].m_fAmplitude = 4.0f;
+        m_pcbMappedPass->m_Waves[1].m_fAmplitude = 6.5f;       // 4 → 6.5
         m_pcbMappedPass->m_Waves[1].m_fSteepness = 0.3f;
         m_pcbMappedPass->m_Waves[1].m_fSpeed = 6.0f;
         m_pcbMappedPass->m_Waves[1].m_xmf2Direction = XMFLOAT2(-0.7f, 0.7f);
@@ -2197,22 +2215,22 @@ void Scene::TransitionToWaterStage()
 
         // Wave 3: 중간 파동 (복잡도 추가)
         m_pcbMappedPass->m_Waves[2].m_fWavelength = 28.0f;
-        m_pcbMappedPass->m_Waves[2].m_fAmplitude = 2.5f;
+        m_pcbMappedPass->m_Waves[2].m_fAmplitude = 4.0f;       // 2.5 → 4
         m_pcbMappedPass->m_Waves[2].m_fSteepness = 0.28f;
         m_pcbMappedPass->m_Waves[2].m_fSpeed = 8.0f;
         m_pcbMappedPass->m_Waves[2].m_xmf2Direction = XMFLOAT2(0.6f, -0.8f);
         m_pcbMappedPass->m_Waves[2].m_fFadeSpeed = 0.15f;
 
         // Wave 4-5: 작은 디테일
-        m_pcbMappedPass->m_Waves[3].m_fWavelength = 30.0f;   // 18→30 (정점 간격 7.8m 기준 3.8배)
-        m_pcbMappedPass->m_Waves[3].m_fAmplitude = 1.0f;
+        m_pcbMappedPass->m_Waves[3].m_fWavelength = 30.0f;
+        m_pcbMappedPass->m_Waves[3].m_fAmplitude = 1.8f;       // 1.0 → 1.8
         m_pcbMappedPass->m_Waves[3].m_fSteepness = 0.2f;
         m_pcbMappedPass->m_Waves[3].m_fSpeed = 9.0f;
         m_pcbMappedPass->m_Waves[3].m_xmf2Direction = XMFLOAT2(0.5f, 0.9f);
         m_pcbMappedPass->m_Waves[3].m_fFadeSpeed = 0.0f;
 
-        m_pcbMappedPass->m_Waves[4].m_fWavelength = 22.0f;   // 12→22 (정점 간격 7.8m 기준 2.8배)
-        m_pcbMappedPass->m_Waves[4].m_fAmplitude = 0.6f;
+        m_pcbMappedPass->m_Waves[4].m_fWavelength = 22.0f;
+        m_pcbMappedPass->m_Waves[4].m_fAmplitude = 1.0f;       // 0.6 → 1.0
         m_pcbMappedPass->m_Waves[4].m_fSteepness = 0.18f;
         m_pcbMappedPass->m_Waves[4].m_fSpeed = 11.0f;
         m_pcbMappedPass->m_Waves[4].m_xmf2Direction = XMFLOAT2(-0.9f, 0.4f);
