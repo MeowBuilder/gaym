@@ -19,7 +19,9 @@
       "Bash(git -C /c/Users/tta12/Documents/저장소/gaym diff gaym/Assets/MapData/room_Room1.json)",
       "Bash(\"C:\\\\Program Files\\\\Microsoft Visual Studio\\\\2022\\\\Community\\\\MSBuild\\\\Current\\\\Bin\\\\amd64\\\\MSBuild.exe\" \"C:\\\\Users\\\\tta12\\\\Documents\\\\저장소\\\\gaym\\\\gaym\\\\gaym.sln\" -p:Configuration=Release -p:Platform=x64 -m -v:minimal)",
       "Bash(\"C:\\\\Program Files\\\\Microsoft Visual Studio\\\\2022\\\\Community\\\\MSBuild\\\\Current\\\\Bin\\\\amd64\\\\MSBuild.exe\" \"C:\\\\Users\\\\tta12\\\\Documents\\\\저장소\\\\gaym\\\\gaym\\\\gaym.sln\" -p:Configuration=Release -p:Platform=x64 -m)",
-      "Bash(\"C:\\\\Program Files\\\\Microsoft Visual Studio\\\\2022\\\\Community\\\\MSBuild\\\\Current\\\\Bin\\\\amd64\\\\MSBuild.exe\" \"C:\\\\Users\\\\tta12\\\\Documents\\\\저장소\\\\gaym\\\\gaym\\\\gaym.sln\" -p:Configuration=Release -p:Platform=x64)"
+      "Bash(\"C:\\\\Program Files\\\\Microsoft Visual Studio\\\\2022\\\\Community\\\\MSBuild\\\\Current\\\\Bin\\\\amd64\\\\MSBuild.exe\" \"C:\\\\Users\\\\tta12\\\\Documents\\\\저장소\\\\gaym\\\\gaym\\\\gaym.sln\" -p:Configuration=Release -p:Platform=x64)",
+      "Read(//c/Users/khj16/Capstones/Assets/TerrainSampleAssets/Textures/Heightmaps/**)",
+      "Read(//c/Users/khj16/Capstones/Assets/TerrainSampleAssets/Textures/Terrain/**)"
     ]
   }
 }

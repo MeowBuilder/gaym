@@ -853,6 +853,16 @@ void Scene::Render(ID3D12GraphicsCommandList* pCommandList, D3D12_GPU_DESCRIPTOR
                        m_d3dFoamOpacityGpuHandle, m_d3dFoamDiffuseGpuHandle);
     }
 
+    // Terrain 렌더 (불투명, 전용 힙 사용)
+    if (m_pTerrain && m_pTerrain->IsLoaded())
+    {
+        m_pTerrain->Render(pCommandList, GetPassCBVAddress());
+
+        // Terrain 전용 힙 사용 후 → 메인 힙 복구
+        ID3D12DescriptorHeap* mainHeaps[] = { m_pDescriptorHeap->GetHeap() };
+        pCommandList->SetDescriptorHeaps(1, mainHeaps);
+    }
+
     // Render projectiles (after main rendering, pipeline state is already set)
     if (m_pProjectileManager)
     {
@@ -1830,6 +1840,28 @@ std::vector<GameObject*> Scene::GetAllPlayers() const
     return players;
 }
 
+// ================================================================
+// Terrain 로드
+// ================================================================
+void Scene::LoadTerrain(const char* configJsonPath, int subdivisionStep)
+{
+    ID3D12Device*              pDevice      = Dx12App::GetInstance()->GetDevice();
+    ID3D12GraphicsCommandList* pCommandList = Dx12App::GetInstance()->GetCommandList();
+
+    m_pTerrain = std::make_unique<Terrain>();
+    if (!m_pTerrain->Load(pDevice, pCommandList, configJsonPath, subdivisionStep))
+    {
+        OutputDebugString(L"[Scene] Terrain load failed!\n");
+        m_pTerrain.reset();
+    }
+    else
+    {
+        wchar_t msg[256];
+        swprintf_s(msg, L"[Scene] Terrain loaded: %hs\n", configJsonPath);
+        OutputDebugString(msg);
+    }
+}
+
 // 적에게 모든 플레이어 등록 (어그로 시스템용)
 void Scene::RegisterPlayersToEnemy(EnemyComponent* pEnemy)
 {
@@ -2187,6 +2219,23 @@ void Scene::TransitionToWaterStage()
         m_pcbMappedPass->m_Waves[4].m_fFadeSpeed = 0.0f;
 
         OutputDebugString(L"[Scene] Balanced ocean waves (visible + natural)\n");
+    }
+
+    // ── 13. 장식용 터레인 로드 (파일이 있으면)
+    {
+        const char* terrainConfig = "Assets/Terrain/terrain_config.json";
+        // 파일 존재 여부 확인 후 로드
+        FILE* f = nullptr;
+        fopen_s(&f, terrainConfig, "r");
+        if (f)
+        {
+            fclose(f);
+            LoadTerrain(terrainConfig, 4);
+        }
+        else
+        {
+            OutputDebugString(L"[Scene] terrain_config.json not found – skipping terrain load\n");
+        }
     }
 
     OutputDebugString(L"[Scene] Water stage ready!\n");

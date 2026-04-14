@@ -20,6 +20,7 @@
 #include "FluidSkillVFXManager.h" // Added FluidSkillVFXManager include
 #include "ScreenSpaceFluid.h" // Screen-Space Fluid Renderer
 #include "DebugRenderer.h" // Added DebugRenderer include
+#include "Terrain.h"       // Decorative terrain
 
 struct ID3D12Device;
 struct ID3D12GraphicsCommandList;
@@ -277,6 +278,10 @@ private:
 
     // Torch System (flickering lights and flame billboards)
     std::unique_ptr<TorchSystem> m_pTorchSystem;
+
+    // Decorative terrain (장식용, 충돌 없음)
+    std::unique_ptr<Terrain> m_pTerrain;
+    void LoadTerrain(const char* configJsonPath, int subdivisionStep = 4);
 
     void PrintHierarchy(GameObject* pGameObject, int nDepth);
     void CollectColliders(GameObject* pGameObject, std::vector<ColliderComponent*>& outColliders);
