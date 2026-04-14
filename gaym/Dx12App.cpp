@@ -1,5 +1,7 @@
 #include "stdafx.h"
 #include "Dx12App.h"
+#include "DamageNumberManager.h"
+#include "Camera.h"
 #include "d3dx12.h"
 #include "SkillComponent.h"
 #include "ISkillBehavior.h"
@@ -362,6 +364,9 @@ void Dx12App::FrameAdvance()
 
     // Update scene first (calculates light matrices)
     m_pScene->Update(m_GameTimer.GetTimeElapsed(), &m_inputSystem);
+
+    // Update damage number animations
+    DamageNumberManager::Get().Update(m_GameTimer.GetTimeElapsed());
 
     // ========================================================================
     // Shadow Pass: Render depth from light's perspective
@@ -1164,6 +1169,18 @@ void Dx12App::RenderText()
                 }
             }
         }
+    }
+
+    // Floating damage numbers (world → screen projection)
+    if (m_pScene && m_pScene->GetCamera())
+    {
+        CCamera* pCam = m_pScene->GetCamera();
+        XMMATRIX vp = XMLoadFloat4x4(&pCam->GetViewMatrix()) *
+                      XMLoadFloat4x4(&pCam->GetProjectionMatrix());
+        XMFLOAT4X4 vp4x4;
+        XMStoreFloat4x4(&vp4x4, vp);
+        DamageNumberManager::Get().Render(m_spriteBatch.get(), m_spriteFont.get(),
+                                          vp4x4, (int)m_nWndClientWidth, (int)m_nWndClientHeight);
     }
 
     m_spriteBatch->End();

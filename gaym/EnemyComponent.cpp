@@ -1,5 +1,6 @@
 #include "stdafx.h"
 #include "EnemyComponent.h"
+#include "DamageNumberManager.h"
 #include "GameObject.h"
 #include "TransformComponent.h"
 #include "IAttackBehavior.h"
@@ -22,6 +23,14 @@ EnemyComponent::~EnemyComponent()
 
 void EnemyComponent::Update(float deltaTime)
 {
+    // Decay hit flash every frame
+    if (m_fHitFlashTimer > 0.f)
+    {
+        m_fHitFlashTimer -= deltaTime;
+        float flash = (m_fHitFlashTimer > 0.f) ? (m_fHitFlashTimer / FLASH_DURATION) : 0.f;
+        if (m_pOwner) m_pOwner->SetHitFlash(flash);
+    }
+
     // Boss intro cutscene takes priority
     if (IsInIntro())
     {
@@ -213,6 +222,18 @@ void EnemyComponent::TakeDamage(float fDamage, bool bTriggerStagger)
     }
 
     m_Stats.m_fCurrentHP -= fDamage;
+
+    // Hit flash
+    m_fHitFlashTimer = FLASH_DURATION;
+    if (m_pOwner) m_pOwner->SetHitFlash(1.f);
+
+    // Floating damage number
+    if (m_pOwner && m_pOwner->GetTransform())
+    {
+        XMFLOAT3 pos = m_pOwner->GetTransform()->GetPosition();
+        pos.y += 2.0f;
+        DamageNumberManager::Get().AddNumber(pos, fDamage);
+    }
 
     wchar_t buffer[128];
     swprintf_s(buffer, L"[Enemy] Took %.1f damage, HP: %.1f/%.1f\n",
