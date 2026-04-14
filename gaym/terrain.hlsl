@@ -20,7 +20,12 @@ cbuffer TerrainCB : register(b0)
     float  g_TerrainSizeX;
     float  g_TerrainSizeZ;
     float  g_Pad0;
-    float  g_Pad1[28];
+    // 플레이어 공간 홀: 이 XZ 범위 내 픽셀은 discard
+    float  g_HoleMinX;
+    float  g_HoleMaxX;
+    float  g_HoleMinZ;
+    float  g_HoleMaxZ;
+    float  g_Pad1[24];
 };
 
 // PassCB: shaders.hlsl과 동일한 레이아웃 (필요한 필드만 사용)
@@ -101,6 +106,13 @@ PS_INPUT VS_Terrain(VS_INPUT input)
 // ────────────────────────────────────────────────────────────────
 float4 PS_Terrain(PS_INPUT input) : SV_TARGET
 {
+    // 플레이어 게임플레이 영역은 렌더링 제외
+    float px = input.worldPos.x;
+    float pz = input.worldPos.z;
+    if (px > g_HoleMinX && px < g_HoleMaxX &&
+        pz > g_HoleMinZ && pz < g_HoleMaxZ)
+        discard;
+
     float3 N = normalize(input.normal);
 
     // ── 스플랫맵 가중치 읽기 ──
