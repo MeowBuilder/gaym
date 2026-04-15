@@ -17,7 +17,7 @@ cbuffer cbGameObject : register(b0)
     uint bIsLava;
     uint bIsWater;
     uint bHasEmissiveTexture;
-    uint cbPad1;
+    float g_HitFlash;
     MATERIAL gMaterial;
     matrix gBoneTransforms[128];
 };
@@ -558,6 +558,16 @@ float4 PS(PS_INPUT input) : SV_TARGET
         finalColor.rgb  = lerp(finalColor.rgb, fresnelColor, waterFresnel * 0.18f);
 
         return float4(finalColor.rgb, waterAlpha);
+    }
+
+    // Hit Flash: rim-based white outline flash
+    if (g_HitFlash > 0.001f)
+    {
+        float3 viewDir = normalize(g_CameraPosition - input.worldPosition);
+        float rim = 1.0 - saturate(dot(normalize(input.worldNormal), viewDir));
+        float outline = saturate(pow(rim, 2.5) * 3.0);
+        float flashMix = g_HitFlash * (outline * 0.7 + 0.3);
+        finalColor.rgb = lerp(finalColor.rgb, float3(1, 1, 1), saturate(flashMix));
     }
 
     return float4(finalColor.rgb, 1.0f);

@@ -241,9 +241,11 @@ private:
     float m_fAttackCooldownTimer = 0.0f;
     float m_fStaggerTimer = 0.0f;
     float m_fDeadTimer = 0.0f;
+    float m_fHitFlashTimer = 0.0f;
 
     // Constants
     static constexpr float STAGGER_DURATION = 0.5f;
+    static constexpr float FLASH_DURATION   = 0.15f;
     static constexpr float DEAD_LINGER_TIME = 2.0f;
 
     // Separation (avoid stacking)

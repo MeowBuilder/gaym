@@ -73,6 +73,7 @@ public:
     XMFLOAT3 GetWaveOrigin(int id) const;         // 파도 스폰 위치 (back wall)
     XMFLOAT3 GetWaveDir(int id) const;            // 파도 진행 방향
     bool     IsWaveActive(int id) const;          // 파도가 아직 이동 중이면 true
+    bool     IsPointInWave(int id, const XMFLOAT3& point) const; // 점이 VFX 파도 영역 안에 있으면 true
 
     void Update(float deltaTime);
 

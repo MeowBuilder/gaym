@@ -2,11 +2,14 @@
 
 #include "ISkillBehavior.h"
 #include "SkillData.h"
+#include <vector>
+#include <unordered_set>
 
 class FluidSkillVFXManager;
 class Scene;
+class EnemyComponent;
 
-// Q 슬롯 - 웨이브 슬래시 (박스 확장 VFX)
+// Q 슬롯 - 웨이브 슬래시 (파도 본체 단타 + 불꽃 자국 DoT)
 class WaveSlashBehavior : public ISkillBehavior
 {
 public:
@@ -26,7 +29,21 @@ public:
 
 private:
     uint32_t GetRuneFlags(GameObject* caster) const;
-    void     HitEnemiesInWave(float damage);
+
+    // 파도 본체: 처음 닿은 적만 단타
+    void HitEnemiesInWave(float damage);
+
+    // 불꽃 자국: 파도가 지나간 위치에 DoT 존 생성/업데이트
+    void DropFireTrail();
+    void UpdateFireTrail(float deltaTime);
+
+    // 불꽃 자국 존
+    struct FireZone
+    {
+        DirectX::XMFLOAT3 center;
+        float lifetime;
+        float tickTimer;
+    };
 
     SkillData  m_SkillData;
     bool       m_bIsFinished = true;
@@ -35,14 +52,26 @@ private:
     Scene*     m_pScene     = nullptr;
     int        m_vfxId      = -1;
 
-    // 히트 판정용
-    XMFLOAT3   m_waveOrigin  = {};
-    XMFLOAT3   m_waveDir     = {0,0,1};
-    float      m_damageMult  = 1.f;
-    float      m_hitTimer    = 0.f;
-    static constexpr float HIT_INTERVAL  = 0.4f;  // 다단히트 간격 (초)
-    static constexpr float WAVE_HALF_W   = 5.0f;  // VFXLibrary waveHalfW 와 일치
-    static constexpr float WAVE_HALF_H   = 3.0f;  // 수직 판정 범위 (약간 여유)
-    // 파티클이 실제로 집중된 파도 선두 두께 (선두에서 뒤로 HIT_DEPTH만큼만 판정)
-    static constexpr float WAVE_HIT_DEPTH = 5.0f;
+    float      m_damageMult        = 1.f;
+    float      m_waveElapsed       = 0.f;
+    float      m_trailDropTimer    = 0.f;
+
+    std::unordered_set<EnemyComponent*> m_hitEnemies;  // 파도 본체에 이미 히트된 적
+    std::vector<FireZone>               m_fireTrail;   // 활성 불꽃 자국 존
+
+    // 파도 본체 히트 판정
+    // WAVE_PARTICLE_SPEED: VFXLibrary maxParticleSpeed(20)에 맞춰 실제 파티클 선두 속도 사용
+    // waveSpeed(10)는 타이머 전용 — 파티클은 push force로 훨씬 빠르게 이동
+    static constexpr float WAVE_DURATION        = 2.0f;   // waveMaxDist(20) / waveSpeed(10)
+    static constexpr float WAVE_PARTICLE_SPEED  = 20.0f;  // 히트 슬랩 선두 속도 (m/s) ← 조정 가능
+    static constexpr float WAVE_HIT_DEPTH       = 6.0f;   // 히트 슬랩 두께 (m)
+    static constexpr float WAVE_HALF_W          = 5.0f;   // = VFXLibrary waveHalfW
+    static constexpr float WAVE_HALF_H          = 3.0f;   // 수직 판정 여유
+
+    // 불꽃 자국
+    static constexpr float TRAIL_DROP_INTERVAL = 0.15f;  // 존 생성 간격 (초)
+    static constexpr float TRAIL_ZONE_RADIUS   = 4.0f;   // 존 반경 (m)
+    static constexpr float TRAIL_LIFETIME      = 3.0f;   // 존 지속 시간 (초)
+    static constexpr float TRAIL_TICK_INTERVAL = 0.5f;   // DoT 간격 (초)
+    static constexpr float TRAIL_DMG_MULT      = 0.25f;  // 자국 데미지 배율 (파도 본체 대비)
 };
