@@ -132,8 +132,9 @@ public:
     bool IsNearPortalCube() const;
     void TriggerPortalInteraction();
     void TransitionToNextRoom();
-    void TransitionToBossRoom();  // 보스전 전환 (4스테이지 후 또는 테스트용)
-    void TransitionToWaterStage();  // 물 스테이지 전환 (N키 테스트용)
+    void TransitionToBossRoom();       // 보스전 전환 (4스테이지 후 또는 테스트용)
+    void TransitionToWaterStage();     // 물 스테이지 전환 (N키 테스트용)
+    void TransitionToWaterBossRoom();  // 물 보스전 전환 (물 맵에서 B키)
 
     // Drop interaction system
     DropInteractionState GetDropInteractionState() const { return m_eDropState; }

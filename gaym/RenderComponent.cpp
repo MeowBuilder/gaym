@@ -51,5 +51,16 @@ void RenderComponent::Render(ID3D12GraphicsCommandList* pCommandList)
     if (m_pOwner->HasRoughnessMap())
         pCommandList->SetGraphicsRootDescriptorTable(8, m_pOwner->GetRoughnessMapSrvHandle());
 
+    // 서브메쉬가 여러 개면 모두 렌더 (스킨드 메쉬 다리 등)
+    if (auto* pMFF = dynamic_cast<MeshFromFile*>(m_pMesh))
+    {
+        int nSubs = pMFF->GetSubMeshCount();
+        if (nSubs > 1)
+        {
+            for (int i = 0; i < nSubs; i++)
+                m_pMesh->Render(pCommandList, i);
+            return;
+        }
+    }
     m_pMesh->Render(pCommandList, 0);
 }

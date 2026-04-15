@@ -379,6 +379,45 @@ void EnemySpawner::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pComma
 
     RegisterEnemyPreset("Dragon", dragon);
 
+    // Register Kraken Boss preset (Water stage boss)
+    EnemySpawnData kraken;
+    kraken.m_strMeshPath      = "Assets/Enemies/Kraken/KRAKEN.bin";
+    kraken.m_strAnimationPath = "Assets/Enemies/Kraken/KRAKEN_Anim.bin";
+    kraken.m_strTexturePath   = "Assets/Enemies/Kraken/Textures/Tex_KRAKEN_BODY_BaseColor.png";
+    kraken.m_xmf3Scale = XMFLOAT3(3.0f, 3.0f, 3.0f);
+    kraken.m_xmf4Color = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
+
+    kraken.m_Stats.m_fMaxHP              = 1000.0f;
+    kraken.m_Stats.m_fCurrentHP          = 1000.0f;
+    kraken.m_Stats.m_fMoveSpeed          = 6.0f;
+    kraken.m_Stats.m_fAttackRange        = 15.0f;
+    kraken.m_Stats.m_fAttackCooldown     = 2.0f;
+    kraken.m_Stats.m_fLongRangeThreshold = 30.0f;
+    kraken.m_Stats.m_fMidRangeThreshold  = 15.0f;
+
+    kraken.m_bIsBoss = true;
+    kraken.m_fSpecialAttackCooldown = 6.0f;
+    kraken.m_nSpecialAttackChance   = 40;
+
+    kraken.m_AnimConfig.m_strIdleClip    = "Idle";
+    kraken.m_AnimConfig.m_strChaseClip   = "Walk";
+    kraken.m_AnimConfig.m_strAttackClip  = "Attack_Forward";
+    kraken.m_AnimConfig.m_strStaggerClip = "Hit";
+    kraken.m_AnimConfig.m_strDeathClip   = "Death";
+
+    kraken.m_IndicatorConfig.m_eType      = IndicatorType::Circle;
+    kraken.m_IndicatorConfig.m_fHitRadius = 12.0f;
+
+    kraken.m_fnCreateAttack = []() {
+        return std::make_unique<MeleeAttackBehavior>(40.0f, 0.5f, 0.3f, 0.5f);
+    };
+
+    kraken.m_fnCreateSpecialAttack = [pProjMgr]() {
+        return std::make_unique<RushAoEAttackBehavior>(60.0f, 12.0f, 1.5f, 0.4f, 0.3f, 0.5f, 8.0f);
+    };
+
+    RegisterEnemyPreset("Kraken", kraken);
+
     // Create shared meshes for attack indicators
     m_pRingMesh = new RingMesh(pDevice, pCommandList, 1.0f, 0.93f, 48);
     m_pRingMesh->AddRef();

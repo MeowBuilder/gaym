@@ -45,8 +45,13 @@ struct TerrainCB
     float      TerrainSizeX;            // 4 bytes
     float      TerrainSizeZ;            // 4 bytes
     float      pad0;                    // 4 bytes
-    // 총 144 bytes → 256으로 맞추기
-    float      pad1[28];                // 112 bytes
+    // 플레이어 공간 홀 (이 영역 내 픽셀은 discard)
+    float      HoleMinX;                // 4 bytes
+    float      HoleMaxX;                // 4 bytes
+    float      HoleMinZ;                // 4 bytes
+    float      HoleMaxZ;                // 4 bytes
+    // 총 160 bytes → 256으로 맞추기
+    float      pad1[24];                // 96 bytes
 };
 static_assert(sizeof(TerrainCB) == 256, "TerrainCB must be 256 bytes");
 
@@ -128,6 +133,11 @@ private:
     XMFLOAT3               m_xmf3WorldOffset = {0, 0, 0};
     int                    m_nLayerCount    = 0;
     int                    m_nSplatmapCount = 0;
+    // 플레이 공간 홀: 이 XZ 범위 내 픽셀은 렌더링하지 않음
+    float                  m_fHoleMinX = -200.f;
+    float                  m_fHoleMaxX =  200.f;
+    float                  m_fHoleMinZ = -300.f;
+    float                  m_fHoleMaxZ =  100.f;
     TerrainLayerInfo       m_Layers[TERRAIN_MAX_LAYERS];
     std::string            m_sSplatmapPaths[TERRAIN_MAX_SPLATMAPS];
 

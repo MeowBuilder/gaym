@@ -92,6 +92,16 @@ bool Terrain::ParseConfig(const char* configPath, const std::string& baseDir)
         m_Layers[i].splatmapChannel = l["splatmapChannel"].i();
     }
 
+    // ── 플레이 공간 홀 (선택 항목, 없으면 기본값 유지) ──
+    if (root.has("playAreaHole"))
+    {
+        const JsonVal& hole = root["playAreaHole"];
+        m_fHoleMinX = hole["minX"].f();
+        m_fHoleMaxX = hole["maxX"].f();
+        m_fHoleMinZ = hole["minZ"].f();
+        m_fHoleMaxZ = hole["maxZ"].f();
+    }
+
     // ── 스플랫맵 경로 ──
     const JsonVal& splats = root["splatmaps"];
     m_nSplatmapCount = (int)std::min(splats.size(), (size_t)TERRAIN_MAX_SPLATMAPS);
@@ -186,7 +196,7 @@ bool Terrain::BuildMesh(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pComma
         }
     }
 
-    // ── 인덱스 생성 (CW winding, PSO는 CULL_NONE이라 무방향) ──
+    // ── 인덱스 생성 (CW winding, FrontCounterClockwise=TRUE → CCW=앞면, CW=뒷면 컬링) ──
     std::vector<UINT> indices;
     indices.reserve((gridRes - 1) * (gridRes - 1) * 6);
 
@@ -542,7 +552,7 @@ void Terrain::BuildRootSigAndPSO(ID3D12Device* pDevice)
 
     psoDesc.RasterizerState.FillMode              = D3D12_FILL_MODE_SOLID;
     psoDesc.RasterizerState.CullMode              = D3D12_CULL_MODE_BACK;
-    psoDesc.RasterizerState.FrontCounterClockwise = FALSE;
+    psoDesc.RasterizerState.FrontCounterClockwise = TRUE;  // 인덱스가 CW 와인딩이므로 CCW=앞면
 
     psoDesc.BlendState.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
 
@@ -608,6 +618,10 @@ void Terrain::UpdateConstantBuffer()
     m_pMappedCB->LayerCount    = m_nLayerCount;
     m_pMappedCB->TerrainSizeX  = m_xmf3TerrainSize.x;
     m_pMappedCB->TerrainSizeZ  = m_xmf3TerrainSize.z;
+    m_pMappedCB->HoleMinX      = m_fHoleMinX;
+    m_pMappedCB->HoleMaxX      = m_fHoleMaxX;
+    m_pMappedCB->HoleMinZ      = m_fHoleMinZ;
+    m_pMappedCB->HoleMaxZ      = m_fHoleMaxZ;
 }
 
 // ================================================================
