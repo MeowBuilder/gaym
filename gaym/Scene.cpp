@@ -518,26 +518,44 @@ void Scene::Update(float deltaTime, InputSystem* pInputSystem)
         OutputDebugString(m_pDebugRenderer->IsEnabled() ? L"[Debug] Colliders ON\n" : L"[Debug] Colliders OFF\n");
     }
 
-    // B 키: 보스전 테스트 (물 테마면 크라켄, 불 테마면 드래곤)
+    // B 키: 현재 테마에 맞는 보스전
     if (pInputSystem && pInputSystem->IsKeyPressed('B'))
     {
-        if (m_eCurrentTheme == StageTheme::Water)
+        switch (m_eCurrentTheme)
         {
-            OutputDebugString(L"[Scene] Boss test key pressed - entering water boss room (Kraken)!\n");
-            TransitionToWaterBossRoom();
-        }
-        else
-        {
-            OutputDebugString(L"[Scene] Boss test key pressed - entering boss room (Dragon)!\n");
-            TransitionToBossRoom();
+        case StageTheme::Water:
+            OutputDebugString(L"[Scene] B key - Water boss (Kraken)\n");
+            TransitionToWaterBossRoom(); break;
+        case StageTheme::Earth:
+            OutputDebugString(L"[Scene] B key - Earth boss (Golem)\n");
+            TransitionToEarthBossRoom(); break;
+        case StageTheme::Grass:
+            OutputDebugString(L"[Scene] B key - Grass boss (Demon)\n");
+            TransitionToGrassBossRoom(); break;
+        default:
+            OutputDebugString(L"[Scene] B key - Fire boss (Dragon)\n");
+            TransitionToBossRoom(); break;
         }
     }
 
-    // N 키: 물 스테이지 테스트 (즉시 물 맵으로 전환)
+    // N 키: 다음 스테이지로 전환 (불→물→땅→풀)
     if (pInputSystem && pInputSystem->IsKeyPressed('N'))
     {
-        OutputDebugString(L"[Scene] Water stage test key pressed - entering water stage!\n");
-        TransitionToWaterStage();
+        switch (m_eCurrentTheme)
+        {
+        case StageTheme::Fire:
+            OutputDebugString(L"[Scene] N key - Fire → Water\n");
+            TransitionToWaterStage(); break;
+        case StageTheme::Water:
+            OutputDebugString(L"[Scene] N key - Water → Earth\n");
+            TransitionToEarthStage(); break;
+        case StageTheme::Earth:
+            OutputDebugString(L"[Scene] N key - Earth → Grass\n");
+            TransitionToGrassStage(); break;
+        case StageTheme::Grass:
+            OutputDebugString(L"[Scene] N key - Grass → Fire\n");
+            TransitionToBossRoom(); break;  // 풀 이후는 처음으로
+        }
     }
 
     // L 키: 보스 메가 브레스 강제 실행 (테스트용)
@@ -599,17 +617,26 @@ void Scene::Update(float deltaTime, InputSystem* pInputSystem)
 
     // Set lighting parameters based on current theme
     XMVECTOR lightDir;
-    if (m_eCurrentTheme == StageTheme::Water)
+    switch (m_eCurrentTheme)
     {
-        // 밝은 태양빛 for water stage
-        m_pcbMappedPass->m_xmf4LightColor = XMFLOAT4(2.0f, 1.9f, 1.7f, 1.0f);  // 밝게 상향
+    case StageTheme::Water:
+        m_pcbMappedPass->m_xmf4LightColor = XMFLOAT4(2.0f, 1.9f, 1.7f, 1.0f);
         lightDir = XMVector3Normalize(XMVectorSet(-0.8f, -0.3f, 0.5f, 0.0f));
-    }
-    else
-    {
-        // Warm orange light for fire/volcanic stage
-        m_pcbMappedPass->m_xmf4LightColor = XMFLOAT4(2.0f, 1.3f, 0.8f, 1.0f);  // 밝게 상향
+        break;
+    case StageTheme::Earth:
+        // 따뜻한 황토빛 태양
+        m_pcbMappedPass->m_xmf4LightColor = XMFLOAT4(1.9f, 1.7f, 1.2f, 1.0f);
+        lightDir = XMVector3Normalize(XMVectorSet(-0.5f, -0.6f, 0.4f, 0.0f));
+        break;
+    case StageTheme::Grass:
+        // 밝은 낮 햇빛 (청량한 하늘)
+        m_pcbMappedPass->m_xmf4LightColor = XMFLOAT4(2.1f, 2.0f, 1.8f, 1.0f);
+        lightDir = XMVector3Normalize(XMVectorSet(-0.4f, -0.8f, 0.3f, 0.0f));
+        break;
+    default: // Fire
+        m_pcbMappedPass->m_xmf4LightColor = XMFLOAT4(2.0f, 1.3f, 0.8f, 1.0f);
         lightDir = XMVector3Normalize(XMVectorSet(-0.6f, -0.7f, 0.3f, 0.0f));
+        break;
     }
     XMStoreFloat3(&m_pcbMappedPass->m_xmf3LightDirection, lightDir);
 
@@ -656,15 +683,20 @@ void Scene::Update(float deltaTime, InputSystem* pInputSystem)
     m_pcbMappedPass->m_fPad3 = 0.0f; // Padding
     m_pcbMappedPass->m_fPad4 = 0.0f; // Padding
 
-    if (m_eCurrentTheme == StageTheme::Water)
+    switch (m_eCurrentTheme)
     {
-        // 밝은 앰비언트 for water stage (맑은 날씨)
-        m_pcbMappedPass->m_xmf4AmbientLight = XMFLOAT4(0.6f, 0.65f, 0.75f, 1.0f);  // 밝게 상향
-    }
-    else
-    {
-        // 불 스테이지 앰비언트 (횃불 가시성 유지하면서 밝게)
-        m_pcbMappedPass->m_xmf4AmbientLight = XMFLOAT4(0.35f, 0.2f, 0.1f, 1.0f);  // 밝게 상향
+    case StageTheme::Water:
+        m_pcbMappedPass->m_xmf4AmbientLight = XMFLOAT4(0.6f, 0.65f, 0.75f, 1.0f);
+        break;
+    case StageTheme::Earth:
+        m_pcbMappedPass->m_xmf4AmbientLight = XMFLOAT4(0.5f, 0.42f, 0.3f, 1.0f);
+        break;
+    case StageTheme::Grass:
+        m_pcbMappedPass->m_xmf4AmbientLight = XMFLOAT4(0.5f, 0.6f, 0.4f, 1.0f);
+        break;
+    default: // Fire
+        m_pcbMappedPass->m_xmf4AmbientLight = XMFLOAT4(0.35f, 0.2f, 0.1f, 1.0f);
+        break;
     }
 
     // Set Camera Position for Specular Calculation
@@ -704,6 +736,20 @@ void Scene::Update(float deltaTime, InputSystem* pInputSystem)
     if (m_pCurrentRoom)
     {
         m_pCurrentRoom->Update(deltaTime);
+
+        // 보스 클리어 감지 → 다음 스테이지 자동 전환
+        if (m_bInBossRoom && m_pCurrentRoom->GetState() == RoomState::Cleared)
+        {
+            m_bInBossRoom = false;
+            OutputDebugString(L"[Scene] Boss defeated! Transitioning to next stage...\n");
+            switch (m_eCurrentTheme)
+            {
+            case StageTheme::Fire:  TransitionToWaterStage();  break;
+            case StageTheme::Water: TransitionToEarthStage();  break;
+            case StageTheme::Earth: TransitionToGrassStage();  break;
+            case StageTheme::Grass: TransitionToWaterStage();  break;  // 풀 보스 이후는 처음부터
+            }
+        }
     }
 
     // Update player specific logic
@@ -1751,6 +1797,7 @@ void Scene::TransitionToBossRoom()
         if (pPC) pPC->ResetGroundY();
     }
 
+    m_bInBossRoom = true;
     OutputDebugString(L"[Scene] Boss room ready - Dragon spawned!\n");
 }
 
@@ -2455,5 +2502,256 @@ void Scene::TransitionToWaterBossRoom()
         m_pcbMappedPass->m_Waves[4].m_fFadeSpeed  = 0.0f;
     }
 
+    m_bInBossRoom = true;
     OutputDebugString(L"[Scene] Water boss room ready - Kraken spawned!\n");
+}
+
+void Scene::TransitionToEarthStage()
+{
+    OutputDebugString(L"[Scene] ========== EARTH STAGE ==========\n");
+
+    m_eCurrentTheme = StageTheme::Earth;
+    m_bInBossRoom = false;
+
+    m_vShaders[0]->ClearRenderComponents();
+    ProcessPendingDeletions();
+    m_vRooms.clear();
+    m_pCurrentRoom = nullptr;
+    m_nNextDescriptorIndex = m_nPersistentDescriptorEnd;
+    if (m_pTorchSystem) m_pTorchSystem->Clear();
+
+    // 용암·물 바닥 숨기기
+    if (m_pLavaPlane)  m_pLavaPlane->GetTransform()->SetPosition(0.0f, -10000.0f, 0.0f);
+    if (m_pWaterPlane) m_pWaterPlane->GetTransform()->SetPosition(0.0f, -10000.0f, 0.0f);
+
+    for (auto& pGO : m_vGameObjects)
+    {
+        if (pGO.get() != m_pLavaPlane && pGO.get() != m_pWaterPlane)
+            ReAddRenderComponentsToShader(pGO.get());
+    }
+
+    ID3D12Device*              pDevice      = Dx12App::GetInstance()->GetDevice();
+    ID3D12GraphicsCommandList* pCommandList = Dx12App::GetInstance()->GetCommandList();
+
+    if (!m_vMapPool.empty()) m_strCurrentMap = m_vMapPool[0];
+    bool bLoaded = MapLoader::LoadIntoScene(
+        m_strCurrentMap.c_str(), this, pDevice, pCommandList, m_vShaders[0].get());
+    if (!bLoaded) { OutputDebugString(L"[Scene] Earth stage map load failed!\n"); return; }
+
+    if (m_pCurrentRoom) {
+        for (const auto& pGO : m_pCurrentRoom->GetGameObjects()) pGO->Update(0.0f);
+        m_pCurrentRoom->SetState(RoomState::Active);
+    }
+
+    if (m_pInteractionCube) {
+        auto* pI = m_pInteractionCube->GetComponent<InteractableComponent>();
+        if (pI) pI->Hide();
+        m_bInteractionCubeActive = false;
+    }
+    if (m_pPlayerGameObject) {
+        auto* pPC = m_pPlayerGameObject->GetComponent<PlayerComponent>();
+        if (pPC) pPC->ResetGroundY();
+    }
+
+    // Gerstner Wave를 꺼줌 (땅 맵엔 물 없음)
+    if (m_pcbMappedPass)
+        for (int i = 0; i < 5; i++) m_pcbMappedPass->m_Waves[i].m_fAmplitude = 0.0f;
+
+    OutputDebugString(L"[Scene] Earth stage ready!\n");
+}
+
+void Scene::TransitionToGrassStage()
+{
+    OutputDebugString(L"[Scene] ========== GRASS STAGE ==========\n");
+
+    m_eCurrentTheme = StageTheme::Grass;
+    m_bInBossRoom = false;
+
+    m_vShaders[0]->ClearRenderComponents();
+    ProcessPendingDeletions();
+    m_vRooms.clear();
+    m_pCurrentRoom = nullptr;
+    m_nNextDescriptorIndex = m_nPersistentDescriptorEnd;
+    if (m_pTorchSystem) m_pTorchSystem->Clear();
+
+    if (m_pLavaPlane)  m_pLavaPlane->GetTransform()->SetPosition(0.0f, -10000.0f, 0.0f);
+    if (m_pWaterPlane) m_pWaterPlane->GetTransform()->SetPosition(0.0f, -10000.0f, 0.0f);
+
+    for (auto& pGO : m_vGameObjects)
+    {
+        if (pGO.get() != m_pLavaPlane && pGO.get() != m_pWaterPlane)
+            ReAddRenderComponentsToShader(pGO.get());
+    }
+
+    ID3D12Device*              pDevice      = Dx12App::GetInstance()->GetDevice();
+    ID3D12GraphicsCommandList* pCommandList = Dx12App::GetInstance()->GetCommandList();
+
+    if (!m_vMapPool.empty()) m_strCurrentMap = m_vMapPool[0];
+    bool bLoaded = MapLoader::LoadIntoScene(
+        m_strCurrentMap.c_str(), this, pDevice, pCommandList, m_vShaders[0].get());
+    if (!bLoaded) { OutputDebugString(L"[Scene] Grass stage map load failed!\n"); return; }
+
+    if (m_pCurrentRoom) {
+        for (const auto& pGO : m_pCurrentRoom->GetGameObjects()) pGO->Update(0.0f);
+        m_pCurrentRoom->SetState(RoomState::Active);
+    }
+
+    if (m_pInteractionCube) {
+        auto* pI = m_pInteractionCube->GetComponent<InteractableComponent>();
+        if (pI) pI->Hide();
+        m_bInteractionCubeActive = false;
+    }
+    if (m_pPlayerGameObject) {
+        auto* pPC = m_pPlayerGameObject->GetComponent<PlayerComponent>();
+        if (pPC) pPC->ResetGroundY();
+    }
+
+    if (m_pcbMappedPass)
+        for (int i = 0; i < 5; i++) m_pcbMappedPass->m_Waves[i].m_fAmplitude = 0.0f;
+
+    OutputDebugString(L"[Scene] Grass stage ready!\n");
+}
+
+void Scene::TransitionToEarthBossRoom()
+{
+    OutputDebugString(L"[Scene] ========== EARTH BOSS ROOM (GOLEM) ==========\n");
+
+    m_eCurrentTheme = StageTheme::Earth;
+
+    m_vShaders[0]->ClearRenderComponents();
+    ProcessPendingDeletions();
+    m_vRooms.clear();
+    m_pCurrentRoom = nullptr;
+    m_nNextDescriptorIndex = m_nPersistentDescriptorEnd;
+    if (m_pTorchSystem) m_pTorchSystem->Clear();
+
+    if (m_pLavaPlane)  m_pLavaPlane->GetTransform()->SetPosition(0.0f, -10000.0f, 0.0f);
+    if (m_pWaterPlane) m_pWaterPlane->GetTransform()->SetPosition(0.0f, -10000.0f, 0.0f);
+
+    for (auto& pGO : m_vGameObjects)
+    {
+        if (pGO.get() != m_pLavaPlane && pGO.get() != m_pWaterPlane)
+            ReAddRenderComponentsToShader(pGO.get());
+    }
+
+    ID3D12Device*              pDevice      = Dx12App::GetInstance()->GetDevice();
+    ID3D12GraphicsCommandList* pCommandList = Dx12App::GetInstance()->GetCommandList();
+
+    if (!m_vMapPool.empty()) m_strCurrentMap = m_vMapPool[0];
+    bool bLoaded = MapLoader::LoadIntoScene(
+        m_strCurrentMap.c_str(), this, pDevice, pCommandList, m_vShaders[0].get());
+    if (!bLoaded) { OutputDebugString(L"[Scene] Earth boss map load failed!\n"); return; }
+
+    if (m_pCurrentRoom)
+        for (const auto& pGO : m_pCurrentRoom->GetGameObjects()) pGO->Update(0.0f);
+
+    if (m_pCurrentRoom && m_pEnemySpawner)
+    {
+        RoomSpawnConfig emptyConfig;
+        m_pCurrentRoom->SetSpawnConfig(emptyConfig);
+
+        OutputDebugString(L"[Scene] Spawning Golem boss\n");
+        XMFLOAT3 golemPos = XMFLOAT3(0.0f, 0.0f, 25.0f);
+        if (m_pPlayerGameObject)
+        {
+            XMFLOAT3 p = m_pPlayerGameObject->GetTransform()->GetPosition();
+            golemPos = XMFLOAT3(p.x, p.y, p.z + 25.0f);
+        }
+
+        GameObject* pGolem = m_pEnemySpawner->SpawnEnemy(m_pCurrentRoom, "Golem", golemPos, m_pPlayerGameObject);
+        if (pGolem)
+        {
+            EnemyComponent* pEnemy = pGolem->GetComponent<EnemyComponent>();
+            if (pEnemy) pEnemy->StartBossIntro(3.0f);
+        }
+
+        m_pCurrentRoom->SetState(RoomState::Active);
+    }
+
+    if (m_pInteractionCube) {
+        auto* pI = m_pInteractionCube->GetComponent<InteractableComponent>();
+        if (pI) pI->Hide();
+        m_bInteractionCubeActive = false;
+    }
+    if (m_pPlayerGameObject) {
+        auto* pPC = m_pPlayerGameObject->GetComponent<PlayerComponent>();
+        if (pPC) pPC->ResetGroundY();
+    }
+    if (m_pcbMappedPass)
+        for (int i = 0; i < 5; i++) m_pcbMappedPass->m_Waves[i].m_fAmplitude = 0.0f;
+
+    m_bInBossRoom = true;
+    OutputDebugString(L"[Scene] Earth boss room ready - Golem spawned!\n");
+}
+
+void Scene::TransitionToGrassBossRoom()
+{
+    OutputDebugString(L"[Scene] ========== GRASS BOSS ROOM (DEMON) ==========\n");
+
+    m_eCurrentTheme = StageTheme::Grass;
+
+    m_vShaders[0]->ClearRenderComponents();
+    ProcessPendingDeletions();
+    m_vRooms.clear();
+    m_pCurrentRoom = nullptr;
+    m_nNextDescriptorIndex = m_nPersistentDescriptorEnd;
+    if (m_pTorchSystem) m_pTorchSystem->Clear();
+
+    if (m_pLavaPlane)  m_pLavaPlane->GetTransform()->SetPosition(0.0f, -10000.0f, 0.0f);
+    if (m_pWaterPlane) m_pWaterPlane->GetTransform()->SetPosition(0.0f, -10000.0f, 0.0f);
+
+    for (auto& pGO : m_vGameObjects)
+    {
+        if (pGO.get() != m_pLavaPlane && pGO.get() != m_pWaterPlane)
+            ReAddRenderComponentsToShader(pGO.get());
+    }
+
+    ID3D12Device*              pDevice      = Dx12App::GetInstance()->GetDevice();
+    ID3D12GraphicsCommandList* pCommandList = Dx12App::GetInstance()->GetCommandList();
+
+    if (!m_vMapPool.empty()) m_strCurrentMap = m_vMapPool[0];
+    bool bLoaded = MapLoader::LoadIntoScene(
+        m_strCurrentMap.c_str(), this, pDevice, pCommandList, m_vShaders[0].get());
+    if (!bLoaded) { OutputDebugString(L"[Scene] Grass boss map load failed!\n"); return; }
+
+    if (m_pCurrentRoom)
+        for (const auto& pGO : m_pCurrentRoom->GetGameObjects()) pGO->Update(0.0f);
+
+    if (m_pCurrentRoom && m_pEnemySpawner)
+    {
+        RoomSpawnConfig emptyConfig;
+        m_pCurrentRoom->SetSpawnConfig(emptyConfig);
+
+        OutputDebugString(L"[Scene] Spawning Demon boss\n");
+        XMFLOAT3 demonPos = XMFLOAT3(0.0f, 0.0f, 20.0f);
+        if (m_pPlayerGameObject)
+        {
+            XMFLOAT3 p = m_pPlayerGameObject->GetTransform()->GetPosition();
+            demonPos = XMFLOAT3(p.x, p.y, p.z + 20.0f);
+        }
+
+        GameObject* pDemon = m_pEnemySpawner->SpawnEnemy(m_pCurrentRoom, "Demon", demonPos, m_pPlayerGameObject);
+        if (pDemon)
+        {
+            EnemyComponent* pEnemy = pDemon->GetComponent<EnemyComponent>();
+            if (pEnemy) pEnemy->StartBossIntro(4.0f);
+        }
+
+        m_pCurrentRoom->SetState(RoomState::Active);
+    }
+
+    if (m_pInteractionCube) {
+        auto* pI = m_pInteractionCube->GetComponent<InteractableComponent>();
+        if (pI) pI->Hide();
+        m_bInteractionCubeActive = false;
+    }
+    if (m_pPlayerGameObject) {
+        auto* pPC = m_pPlayerGameObject->GetComponent<PlayerComponent>();
+        if (pPC) pPC->ResetGroundY();
+    }
+    if (m_pcbMappedPass)
+        for (int i = 0; i < 5; i++) m_pcbMappedPass->m_Waves[i].m_fAmplitude = 0.0f;
+
+    m_bInBossRoom = true;
+    OutputDebugString(L"[Scene] Grass boss room ready - Demon spawned!\n");
 }

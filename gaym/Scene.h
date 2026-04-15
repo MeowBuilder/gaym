@@ -29,7 +29,9 @@ struct ID3D12GraphicsCommandList;
 enum class StageTheme
 {
     Fire,   // Volcanic/lava theme (default)
-    Water   // Ocean/water theme
+    Water,  // Ocean/water theme
+    Earth,  // Ground/rock theme
+    Grass   // Wind/forest theme
 };
 
 // Drop interaction state machine
@@ -132,9 +134,13 @@ public:
     bool IsNearPortalCube() const;
     void TriggerPortalInteraction();
     void TransitionToNextRoom();
-    void TransitionToBossRoom();       // 보스전 전환 (4스테이지 후 또는 테스트용)
-    void TransitionToWaterStage();     // 물 스테이지 전환 (N키 테스트용)
-    void TransitionToWaterBossRoom();  // 물 보스전 전환 (물 맵에서 B키)
+    void TransitionToBossRoom();        // 불 보스전 (Dragon)
+    void TransitionToWaterStage();      // 물 스테이지 (N: 불→물)
+    void TransitionToWaterBossRoom();   // 물 보스전 (Kraken)
+    void TransitionToEarthStage();      // 땅 스테이지 (N: 물→땅)
+    void TransitionToEarthBossRoom();   // 땅 보스전 (Golem)
+    void TransitionToGrassStage();      // 풀 스테이지 (N: 땅→풀)
+    void TransitionToGrassBossRoom();   // 풀 보스전 (Demon)
 
     // Drop interaction system
     DropInteractionState GetDropInteractionState() const { return m_eDropState; }
@@ -185,8 +191,9 @@ public:
     D3D12_GPU_VIRTUAL_ADDRESS GetPassCBVAddress() const { if(m_pd3dcbPass) return m_pd3dcbPass->GetGPUVirtualAddress(); return 0; }
 
 private:
-    float m_fTotalTime = 0.0f; // 누적 시간 (용암 애니메이션용)
-    float m_fLastDeltaTime = 0.016f; // 최근 deltaTime (GPU SPH dispatch용)
+    float m_fTotalTime = 0.0f;
+    float m_fLastDeltaTime = 0.016f;
+    bool m_bInBossRoom = false;  // 보스 룸 여부 (클리어 시 다음 스테이지 전환)
     StageTheme m_eCurrentTheme = StageTheme::Fire; // 현재 스테이지 테마
     GameObject* m_pLavaPlane = nullptr; // 용암 바닥 평면
     GameObject* m_pWaterPlane = nullptr; // 물 바닥 평면

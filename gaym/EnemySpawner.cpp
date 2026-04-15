@@ -418,6 +418,84 @@ void EnemySpawner::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pComma
 
     RegisterEnemyPreset("Kraken", kraken);
 
+    // Register Golem Boss preset (Earth stage boss - stationary colossus like Mordeum)
+    EnemySpawnData golem;
+    golem.m_strMeshPath      = "Assets/Enemies/golem/Golem01_Generic_prefab.bin";
+    golem.m_strAnimationPath = "Assets/Enemies/golem/Golem01_Generic_prefab_Anim.bin";
+    golem.m_strTexturePath   = "Assets/Enemies/golem/Textures/chr_04_Golem_alb.png";
+    golem.m_xmf3Scale = XMFLOAT3(8.0f, 8.0f, 8.0f);  // 거대 보스
+    golem.m_xmf4Color = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
+
+    golem.m_Stats.m_fMaxHP              = 2000.0f;
+    golem.m_Stats.m_fCurrentHP          = 2000.0f;
+    golem.m_Stats.m_fMoveSpeed          = 1.0f;   // 거의 안 움직임
+    golem.m_Stats.m_fAttackRange        = 22.0f;  // 큰 체구에 맞는 넓은 범위
+    golem.m_Stats.m_fAttackCooldown     = 3.0f;   // 느린 공격
+    golem.m_Stats.m_fLongRangeThreshold = 40.0f;
+    golem.m_Stats.m_fMidRangeThreshold  = 22.0f;
+
+    golem.m_bIsBoss = true;
+    golem.m_fSpecialAttackCooldown = 8.0f;
+    golem.m_nSpecialAttackChance   = 50;
+
+    golem.m_AnimConfig.m_strIdleClip    = "Golem_battle_stand_ge";
+    golem.m_AnimConfig.m_strChaseClip   = "Golem_battle_walk_ge";
+    golem.m_AnimConfig.m_strAttackClip  = "Golem_battle_attack01_ge";
+    golem.m_AnimConfig.m_strStaggerClip = "Golem_battle_damage_ge";
+    golem.m_AnimConfig.m_strDeathClip   = "Golem_battle_die_ge";
+
+    golem.m_IndicatorConfig.m_eType      = IndicatorType::Circle;
+    golem.m_IndicatorConfig.m_fHitRadius = 18.0f;
+
+    // 광역 내려찍기 - 범위 넓고 데미지 강함
+    golem.m_fnCreateAttack = []() {
+        return std::make_unique<JumpSlamAttackBehavior>(80.0f, 0.0f, 0.6f, 12.0f, 0.3f, 0.5f, true);
+    };
+    // 특수: 전방 360도 지진 스텝
+    golem.m_fnCreateSpecialAttack = []() {
+        return std::make_unique<TailSweepAttackBehavior>(100.0f, 0.5f, 0.4f, 0.6f, 15.0f, 360.0f, true);
+    };
+
+    RegisterEnemyPreset("Golem", golem);
+
+    // Register Demon Boss preset (Grass/Wind stage boss - agile dark druid)
+    EnemySpawnData demon;
+    demon.m_strMeshPath      = "Assets/Enemies/demon/Demon.bin";
+    demon.m_strAnimationPath = "Assets/Enemies/demon/Demon_Anim.bin";
+    demon.m_strTexturePath   = "Assets/Enemies/demon/Textures/_Albedo.png";
+    demon.m_xmf3Scale = XMFLOAT3(3.5f, 3.5f, 3.5f);
+    demon.m_xmf4Color = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
+
+    demon.m_Stats.m_fMaxHP              = 1500.0f;
+    demon.m_Stats.m_fCurrentHP          = 1500.0f;
+    demon.m_Stats.m_fMoveSpeed          = 9.0f;   // 빠르고 공격적
+    demon.m_Stats.m_fAttackRange        = 12.0f;
+    demon.m_Stats.m_fAttackCooldown     = 1.5f;
+    demon.m_Stats.m_fLongRangeThreshold = 30.0f;
+    demon.m_Stats.m_fMidRangeThreshold  = 15.0f;
+
+    demon.m_bIsBoss = true;
+    demon.m_fSpecialAttackCooldown = 5.0f;
+    demon.m_nSpecialAttackChance   = 45;
+
+    demon.m_AnimConfig.m_strIdleClip    = "Idle1";
+    demon.m_AnimConfig.m_strChaseClip   = "Run";
+    demon.m_AnimConfig.m_strAttackClip  = "attack1";
+    demon.m_AnimConfig.m_strStaggerClip = "gethit1";
+    demon.m_AnimConfig.m_strDeathClip   = "Death1";
+
+    demon.m_IndicatorConfig.m_eType      = IndicatorType::Circle;
+    demon.m_IndicatorConfig.m_fHitRadius = 10.0f;
+
+    demon.m_fnCreateAttack = []() {
+        return std::make_unique<MeleeAttackBehavior>(50.0f, 0.3f, 0.2f, 0.4f);
+    };
+    demon.m_fnCreateSpecialAttack = [pProjMgr]() {
+        return std::make_unique<RushFrontAttackBehavior>(70.0f, 20.0f, 1.0f, 0.2f, 0.2f, 0.3f, 6.0f, 80.0f);
+    };
+
+    RegisterEnemyPreset("Demon", demon);
+
     // Create shared meshes for attack indicators
     m_pRingMesh = new RingMesh(pDevice, pCommandList, 1.0f, 0.93f, 48);
     m_pRingMesh->AddRef();
@@ -719,6 +797,35 @@ GameObject* EnemySpawner::CreateMeshEnemy(CRoom* pRoom, const XMFLOAT3& position
 void EnemySpawner::AddRenderComponentsToHierarchy(GameObject* pGameObject)
 {
     if (!pGameObject || !m_pShader) return;
+
+    // Skip Unity export helper nodes (BlobShadow, shadow projectors, etc.)
+    {
+        const char* name = pGameObject->m_pstrFrameName;
+        bool bSkip = false;
+        if (name)
+        {
+            // Case-insensitive substring check for known Unity helper node names
+            std::string sName(name);
+            for (char& c : sName) c = (char)tolower((unsigned char)c);
+            if (sName == "bs" ||
+                sName.find("shadow") != std::string::npos ||
+                sName.find("blobshadow") != std::string::npos ||
+                sName.find("projector") != std::string::npos)
+            {
+                bSkip = true;
+                wchar_t buf[128];
+                swprintf_s(buf, L"[EnemySpawner] Skipped helper node: %hs\n", name);
+                OutputDebugString(buf);
+            }
+        }
+        if (bSkip)
+        {
+            // Still traverse siblings (don't traverse children of skipped node)
+            if (pGameObject->m_pSibling)
+                AddRenderComponentsToHierarchy(pGameObject->m_pSibling);
+            return;
+        }
+    }
 
     if (pGameObject->GetMesh())
     {
