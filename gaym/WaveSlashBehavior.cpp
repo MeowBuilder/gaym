@@ -8,13 +8,12 @@
 #include "Scene.h"
 #include "Room.h"
 #include "EnemyComponent.h"
-#include <cmath>
+#include <algorithm>
 
 WaveSlashBehavior::WaveSlashBehavior()
     : m_SkillData(FireSkillPresets::FlameWave())
 {
-    // FlameWave 프리셋 사용 (이름만 변경)
-    m_SkillData.name = "WaveSlash";
+    m_SkillData.name     = "WaveSlash";
     m_SkillData.cooldown = 3.0f;
 }
 
@@ -35,40 +34,35 @@ void WaveSlashBehavior::Execute(GameObject* caster, const DirectX::XMFLOAT3& tar
         return;
     }
 
-    // 1. 플레이어 위치 (origin), 방향 (direction) 얻기
-    XMFLOAT3 origin = { 0.f, 0.f, 0.f };
+    // 1. 플레이어 위치·방향
+    XMFLOAT3 origin    = { 0.f, 0.f, 0.f };
     XMFLOAT3 direction = { 0.f, 0.f, 1.f };
 
     if (caster && caster->GetTransform())
     {
         origin = caster->GetTransform()->GetPosition();
-        origin.y += 0.5f; // 지면 근처 — 불길이 바닥에 깔리도록
+        origin.y += 0.5f;
 
-        // 타겟 방향 계산 (Y축 무시, 수평 방향)
         XMVECTOR originV = XMLoadFloat3(&origin);
         XMVECTOR targetV = XMLoadFloat3(&targetPosition);
-        XMVECTOR dirV = XMVectorSubtract(targetV, originV);
-        dirV = XMVectorSetY(dirV, 0.f); // 수평으로 플래튼
+        XMVECTOR dirV    = XMVectorSubtract(targetV, originV);
+        dirV = XMVectorSetY(dirV, 0.f);
         dirV = XMVector3Normalize(dirV);
 
-        // 방향이 유효하지 않으면 캐릭터 Look 방향 사용
         if (XMVectorGetX(XMVector3LengthSq(dirV)) < 0.001f)
         {
             dirV = caster->GetTransform()->GetLook();
             dirV = XMVectorSetY(dirV, 0.f);
             dirV = XMVector3Normalize(dirV);
         }
-
         XMStoreFloat3(&direction, dirV);
     }
 
-    // 2. 룬 비트마스크 계산
+    // 2. 룬 플래그 → VFX 시퀀스 정의
     uint32_t runeFlags = GetRuneFlags(caster);
-
-    // 3. VFXLibrary에서 시퀀스 정의 가져오기 (스킬 속성색 적용)
     VFXSequenceDef seqDef = VFXLibrary::Get().GetDef(SkillSlot::Q, runeFlags, m_SkillData.element);
 
-    // 4. 시퀀스 이펙트 생성
+    // 3. VFX 스폰
     m_vfxId = m_pVFXManager->SpawnSequenceEffect(origin, direction, seqDef);
 
     wchar_t buf[256];
@@ -76,14 +70,17 @@ void WaveSlashBehavior::Execute(GameObject* caster, const DirectX::XMFLOAT3& tar
         m_vfxId, runeFlags, damageMultiplier);
     OutputDebugString(buf);
 
-    if (m_vfxId >= 0) {
-        m_bWaveActive = true;
-        m_waveOrigin  = origin;
-        m_waveDir     = direction;
-        m_damageMult  = damageMultiplier > 0.f ? damageMultiplier : 1.f;
-        m_hitTimer    = 0.f;
-        // m_bIsFinished = false 유지 → Update()에서 충돌 감지 후 true로 설정
-    } else {
+    if (m_vfxId >= 0)
+    {
+        m_bWaveActive    = true;
+        m_damageMult     = damageMultiplier > 0.f ? damageMultiplier : 1.f;
+        m_waveElapsed    = 0.f;
+        m_trailDropTimer = 0.f;
+        m_hitEnemies.clear();
+        m_fireTrail.clear();
+    }
+    else
+    {
         m_bIsFinished = true;
     }
 }
@@ -92,18 +89,27 @@ void WaveSlashBehavior::Update(float deltaTime)
 {
     if (!m_bWaveActive || m_vfxId < 0 || !m_pVFXManager) return;
 
-    // 파도가 최대 거리에 도달하면 종료
-    if (!m_pVFXManager->IsWaveActive(m_vfxId)) {
-        m_bWaveActive = false;
-        m_bIsFinished = true;
-        return;
+    m_waveElapsed += deltaTime;
+
+    // 1. 파도 본체: VFX 영역 안 적 단타 (아직 안 맞은 적만)
+    HitEnemiesInWave(m_SkillData.damage * m_damageMult);
+
+    // 2. 파도 자국 생성: 현재 파도 선두 위치에 불꽃 존 드롭
+    m_trailDropTimer += deltaTime;
+    if (m_trailDropTimer >= TRAIL_DROP_INTERVAL)
+    {
+        m_trailDropTimer = 0.f;
+        DropFireTrail();
     }
 
-    // 다단 히트: HIT_INTERVAL마다 파도 범위 안 적 데미지
-    m_hitTimer += deltaTime;
-    if (m_hitTimer >= HIT_INTERVAL) {
-        m_hitTimer -= HIT_INTERVAL;
-        HitEnemiesInWave(m_SkillData.damage * m_damageMult);
+    // 3. 불꽃 자국 DoT 업데이트
+    UpdateFireTrail(deltaTime);
+
+    // 4. 파도 종료 (안전 타이머)
+    if (m_waveElapsed >= WAVE_DURATION)
+    {
+        m_bWaveActive = false;
+        m_bIsFinished = true;
     }
 }
 
@@ -114,15 +120,15 @@ void WaveSlashBehavior::HitEnemiesInWave(float damage)
     CRoom* pRoom = m_pScene->GetCurrentRoom();
     if (!pRoom) return;
 
-    float waveDist = m_pVFXManager->GetWaveDist(m_vfxId);
-    if (waveDist <= 0.01f) return;
+    // 실제 파티클 선두 위치: VFX 스폰 원점 + elapsed × WAVE_PARTICLE_SPEED
+    // (waveDist 타이머는 waveSpeed=10 m/s — 파티클보다 2배 느림)
+    XMFLOAT3 waveOrigin = m_pVFXManager->GetWaveOrigin(m_vfxId);
+    XMFLOAT3 waveDir    = m_pVFXManager->GetWaveDir(m_vfxId);
+    XMVECTOR originV    = XMLoadFloat3(&waveOrigin);
+    XMVECTOR dirV       = XMVector3Normalize(XMLoadFloat3(&waveDir));
 
-    XMVECTOR originV = XMLoadFloat3(&m_waveOrigin);
-    XMVECTOR dirV    = XMVector3Normalize(XMLoadFloat3(&m_waveDir));
-
-    // 파티클은 파도 선두 근처에 집중됨 — 선두에서 WAVE_HIT_DEPTH 만큼만 판정
-    float frontZ  = waveDist;
-    float backZ   = (std::max)(0.f, waveDist - WAVE_HIT_DEPTH);
+    float hitFront = m_waveElapsed * WAVE_PARTICLE_SPEED;
+    float hitBack  = (std::max)(0.f, hitFront - WAVE_HIT_DEPTH);
 
     const auto& gameObjects = pRoom->GetGameObjects();
     for (const auto& obj : gameObjects)
@@ -130,30 +136,96 @@ void WaveSlashBehavior::HitEnemiesInWave(float damage)
         if (!obj) continue;
         EnemyComponent* pEnemy = obj->GetComponent<EnemyComponent>();
         if (!pEnemy || pEnemy->IsDead()) continue;
+        if (m_hitEnemies.count(pEnemy)) continue;
 
         TransformComponent* pTransform = obj->GetTransform();
         if (!pTransform) continue;
 
-        XMFLOAT3 ePos = pTransform->GetPosition();
-        XMVECTOR toEnemyV = XMVectorSubtract(XMLoadFloat3(&ePos), originV);
+        XMFLOAT3 ePos    = pTransform->GetPosition();
+        XMVECTOR toEnemy = XMVectorSubtract(XMLoadFloat3(&ePos), originV);
 
-        // 전진 축 투영: 파도 선두 슬랩 안에 있어야 함
-        float fwdProj = XMVectorGetX(XMVector3Dot(toEnemyV, dirV));
-        if (fwdProj < backZ || fwdProj > frontZ) continue;
+        // 전진 방향 거리: 슬랩 범위 체크
+        float fwdProj = XMVectorGetX(XMVector3Dot(toEnemy, dirV));
+        if (fwdProj < hitBack || fwdProj > hitFront) continue;
 
-        // 수평 측면 거리 (파도 너비)
-        XMVECTOR lateralV = XMVectorSubtract(toEnemyV, XMVectorScale(dirV, fwdProj));
+        // 수평 측면 거리
+        XMVECTOR lateralV = XMVectorSubtract(toEnemy, XMVectorScale(dirV, fwdProj));
         lateralV = XMVectorSetY(lateralV, 0.f);
-        float lateralDist = XMVectorGetX(XMVector3Length(lateralV));
-        if (lateralDist > WAVE_HALF_W) continue;
+        if (XMVectorGetX(XMVector3Length(lateralV)) > WAVE_HALF_W) continue;
 
         // 수직 범위
-        float heightDiff = fabsf(ePos.y - m_waveOrigin.y);
-        if (heightDiff > WAVE_HALF_H) continue;
+        if (fabsf(ePos.y - waveOrigin.y) > WAVE_HALF_H) continue;
 
-        // 다단히트: 경직 없음
         pEnemy->TakeDamage(damage, false);
+        m_hitEnemies.insert(pEnemy);
     }
+}
+
+void WaveSlashBehavior::DropFireTrail()
+{
+    if (m_vfxId < 0 || !m_pVFXManager) return;
+
+    // 히트 판정과 동일한 기준: 파티클 선두 위치 추정
+    XMFLOAT3 waveOrigin = m_pVFXManager->GetWaveOrigin(m_vfxId);
+    XMFLOAT3 waveDir    = m_pVFXManager->GetWaveDir(m_vfxId);
+    XMVECTOR frontV = XMVectorAdd(
+        XMLoadFloat3(&waveOrigin),
+        XMVectorScale(XMVector3Normalize(XMLoadFloat3(&waveDir)),
+                      m_waveElapsed * WAVE_PARTICLE_SPEED));
+    XMFLOAT3 frontPos;
+    XMStoreFloat3(&frontPos, frontV);
+    frontPos.y = 0.f;
+
+    FireZone zone;
+    zone.center    = frontPos;
+    zone.lifetime  = TRAIL_LIFETIME;
+    zone.tickTimer = 0.f;
+    m_fireTrail.push_back(zone);
+}
+
+void WaveSlashBehavior::UpdateFireTrail(float deltaTime)
+{
+    if (!m_pScene || m_fireTrail.empty()) return;
+
+    CRoom* pRoom = m_pScene->GetCurrentRoom();
+    if (!pRoom) return;
+
+    const auto& gameObjects = pRoom->GetGameObjects();
+    float dotDamage = m_SkillData.damage * m_damageMult * TRAIL_DMG_MULT;
+
+    for (auto& zone : m_fireTrail)
+    {
+        zone.lifetime  -= deltaTime;
+        zone.tickTimer += deltaTime;
+
+        if (zone.tickTimer < TRAIL_TICK_INTERVAL) continue;
+        zone.tickTimer = 0.f;
+
+        // 존 안의 적에게 DoT (경직 없음)
+        for (const auto& obj : gameObjects)
+        {
+            if (!obj) continue;
+            EnemyComponent* pEnemy = obj->GetComponent<EnemyComponent>();
+            if (!pEnemy || pEnemy->IsDead()) continue;
+
+            TransformComponent* pT = obj->GetTransform();
+            if (!pT) continue;
+
+            XMFLOAT3 ePos = pT->GetPosition();
+            float dx = ePos.x - zone.center.x;
+            float dz = ePos.z - zone.center.z;
+            if (dx * dx + dz * dz <= TRAIL_ZONE_RADIUS * TRAIL_ZONE_RADIUS)
+            {
+                pEnemy->TakeDamage(dotDamage, false);
+            }
+        }
+    }
+
+    // 만료된 존 제거
+    m_fireTrail.erase(
+        std::remove_if(m_fireTrail.begin(), m_fireTrail.end(),
+            [](const FireZone& z) { return z.lifetime <= 0.f; }),
+        m_fireTrail.end());
 }
 
 bool WaveSlashBehavior::IsFinished() const
@@ -165,7 +237,9 @@ void WaveSlashBehavior::Reset()
 {
     m_bIsFinished = true;
     m_bWaveActive = false;
-    m_vfxId = -1;
+    m_vfxId       = -1;
+    m_hitEnemies.clear();
+    m_fireTrail.clear();
 }
 
 uint32_t WaveSlashBehavior::GetRuneFlags(GameObject* caster) const

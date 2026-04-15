@@ -1126,3 +1126,33 @@ bool FluidSkillVFXManager::IsWaveActive(int id) const
     if (id < 0 || id >= MAX_EFFECTS || !m_Slots[id].isActive) return false;
     return m_Slots[id].isWaveMode && !m_Slots[id].waveStopped;
 }
+
+bool FluidSkillVFXManager::IsPointInWave(int id, const XMFLOAT3& point) const
+{
+    if (id < 0 || id >= MAX_EFFECTS || !m_Slots[id].isActive) return false;
+    const FluidVFXSlot& slot = m_Slots[id];
+    if (!slot.isWaveMode) return false;
+
+    // 파도 로컬 좌표계 (fwd/right/up)
+    XMVECTOR fwdV    = XMVector3Normalize(XMLoadFloat3(&slot.direction));
+    XMVECTOR worldUp = XMVectorSet(0, 1, 0, 0);
+    float    dotUp   = XMVectorGetX(XMVector3Dot(fwdV, worldUp));
+    XMVECTOR rightV  = (fabsf(dotUp) > 0.99f)
+        ? XMVectorSet(1, 0, 0, 0)
+        : XMVector3Normalize(XMVector3Cross(worldUp, fwdV));
+    XMVECTOR upV     = XMVector3Cross(fwdV, rightV);
+
+    // 파도 스폰 위치 (back wall) → 점까지 벡터
+    XMVECTOR toPoint = XMVectorSubtract(XMLoadFloat3(&point), XMLoadFloat3(&slot.origin));
+
+    float fwdDist   = XMVectorGetX(XMVector3Dot(toPoint, fwdV));
+    float rightDist = fabsf(XMVectorGetX(XMVector3Dot(toPoint, rightV)));
+    float upDist    = fabsf(XMVectorGetX(XMVector3Dot(toPoint, upV)));
+
+    // 파도 선두(waveDist)와 back wall(0) 사이, 폭/높이 범위 내
+    if (fwdDist < 0.f || fwdDist > slot.waveDist) return false;
+    if (rightDist > slot.sequenceDef.waveHalfW)   return false;
+    if (upDist    > slot.sequenceDef.waveHalfH * 2.0f) return false; // 높이는 여유 있게
+
+    return true;
+}
