@@ -518,11 +518,19 @@ void Scene::Update(float deltaTime, InputSystem* pInputSystem)
         OutputDebugString(m_pDebugRenderer->IsEnabled() ? L"[Debug] Colliders ON\n" : L"[Debug] Colliders OFF\n");
     }
 
-    // B 키: 보스전 테스트 (즉시 보스 맵으로 전환)
+    // B 키: 보스전 테스트 (물 테마면 크라켄, 불 테마면 드래곤)
     if (pInputSystem && pInputSystem->IsKeyPressed('B'))
     {
-        OutputDebugString(L"[Scene] Boss test key pressed - entering boss room!\n");
-        TransitionToBossRoom();
+        if (m_eCurrentTheme == StageTheme::Water)
+        {
+            OutputDebugString(L"[Scene] Boss test key pressed - entering water boss room (Kraken)!\n");
+            TransitionToWaterBossRoom();
+        }
+        else
+        {
+            OutputDebugString(L"[Scene] Boss test key pressed - entering boss room (Dragon)!\n");
+            TransitionToBossRoom();
+        }
     }
 
     // N 키: 물 스테이지 테스트 (즉시 물 맵으로 전환)
@@ -594,15 +602,14 @@ void Scene::Update(float deltaTime, InputSystem* pInputSystem)
     if (m_eCurrentTheme == StageTheme::Water)
     {
         // 밝은 태양빛 for water stage
-        m_pcbMappedPass->m_xmf4LightColor = XMFLOAT4(1.2f, 1.15f, 1.0f, 1.0f);  // HDR 밝기
-        // 낮은 각도 조명 (석양 느낌) - 스펙큘러가 잘 보이도록
+        m_pcbMappedPass->m_xmf4LightColor = XMFLOAT4(2.0f, 1.9f, 1.7f, 1.0f);  // 밝게 상향
         lightDir = XMVector3Normalize(XMVectorSet(-0.8f, -0.3f, 0.5f, 0.0f));
     }
     else
     {
         // Warm orange light for fire/volcanic stage
-        m_pcbMappedPass->m_xmf4LightColor = XMFLOAT4(1.0f, 0.6f, 0.35f, 1.0f);
-        lightDir = XMVector3Normalize(XMVectorSet(-0.6f, -0.7f, 0.3f, 0.0f)); // 비스듬한 조명 (옆으로 긴 그림자)
+        m_pcbMappedPass->m_xmf4LightColor = XMFLOAT4(2.0f, 1.3f, 0.8f, 1.0f);  // 밝게 상향
+        lightDir = XMVector3Normalize(XMVectorSet(-0.6f, -0.7f, 0.3f, 0.0f));
     }
     XMStoreFloat3(&m_pcbMappedPass->m_xmf3LightDirection, lightDir);
 
@@ -652,12 +659,12 @@ void Scene::Update(float deltaTime, InputSystem* pInputSystem)
     if (m_eCurrentTheme == StageTheme::Water)
     {
         // 밝은 앰비언트 for water stage (맑은 날씨)
-        m_pcbMappedPass->m_xmf4AmbientLight = XMFLOAT4(0.35f, 0.4f, 0.5f, 1.0f);
+        m_pcbMappedPass->m_xmf4AmbientLight = XMFLOAT4(0.6f, 0.65f, 0.75f, 1.0f);  // 밝게 상향
     }
     else
     {
-        // 어두운 앰비언트 for fire stage (횃불 가시성용)
-        m_pcbMappedPass->m_xmf4AmbientLight = XMFLOAT4(0.12f, 0.05f, 0.02f, 1.0f);
+        // 불 스테이지 앰비언트 (횃불 가시성 유지하면서 밝게)
+        m_pcbMappedPass->m_xmf4AmbientLight = XMFLOAT4(0.35f, 0.2f, 0.1f, 1.0f);  // 밝게 상향
     }
 
     // Set Camera Position for Specular Calculation
@@ -2260,4 +2267,193 @@ void Scene::TransitionToWaterStage()
     }
 
     OutputDebugString(L"[Scene] Water stage ready!\n");
+}
+
+void Scene::TransitionToWaterBossRoom()
+{
+    OutputDebugString(L"[Scene] ========== WATER BOSS ROOM (KRAKEN) ==========\n");
+
+    // ── 1. 테마를 Water로 유지
+    m_eCurrentTheme = StageTheme::Water;
+
+    // ── 2. 셰이더 RC 목록 전체 클리어
+    m_vShaders[0]->ClearRenderComponents();
+    ProcessPendingDeletions();
+
+    // ── 3. 기존 룸 전체 파기
+    m_vRooms.clear();
+    m_pCurrentRoom = nullptr;
+
+    // ── 4. 디스크립터 인덱스를 워터마크로 리셋
+    m_nNextDescriptorIndex = m_nPersistentDescriptorEnd;
+
+    // ── 5. 횃불 시스템 클리어
+    if (m_pTorchSystem) m_pTorchSystem->Clear();
+
+    // ── 6. 용암 평면 숨기기
+    if (m_pLavaPlane)
+        m_pLavaPlane->GetTransform()->SetPosition(0.0f, -10000.0f, 0.0f);
+
+    // ── 7. 물 평면 숨기기 (재생성하기 위해)
+    m_pWaterPlane = nullptr;
+
+    // ── 8. 영속 오브젝트 RC 재등록 (용암 제외)
+    for (auto& pGO : m_vGameObjects)
+    {
+        if (pGO.get() != m_pLavaPlane)
+            ReAddRenderComponentsToShader(pGO.get());
+    }
+
+    ID3D12Device*              pDevice      = Dx12App::GetInstance()->GetDevice();
+    ID3D12GraphicsCommandList* pCommandList = Dx12App::GetInstance()->GetCommandList();
+
+    // ── 9. 물 맵 로드 (첫 번째 맵 풀 사용)
+    if (!m_vMapPool.empty())
+        m_strCurrentMap = m_vMapPool[0];
+    bool bLoaded = MapLoader::LoadIntoScene(
+        m_strCurrentMap.c_str(), this, pDevice, pCommandList, m_vShaders[0].get());
+    if (!bLoaded)
+    {
+        OutputDebugString(L"[Scene] Water boss map load failed!\n");
+        return;
+    }
+
+    // ── 10. 물 바닥 평면 생성 (TransitionToWaterStage와 동일)
+    {
+        CRoom* pTempRoom = m_pCurrentRoom;
+        m_pCurrentRoom = nullptr;
+
+        m_pWaterPlane = CreateGameObject(pDevice, pCommandList);
+        m_pCurrentRoom = pTempRoom;
+
+        if (m_pWaterPlane)
+        {
+            GridPlaneMesh* pPlaneMesh = new GridPlaneMesh(pDevice, pCommandList, 1.0f, 1.0f, 256, 256);
+            m_pWaterPlane->SetMesh(pPlaneMesh);
+            m_pWaterPlane->GetTransform()->SetPosition(0.0f, -1.0f, -200.0f);
+            m_pWaterPlane->GetTransform()->SetScale(2000.0f, 1.0f, 2000.0f);
+            m_pWaterPlane->SetWater(true);
+
+            MATERIAL waterMat;
+            waterMat.m_cAmbient  = XMFLOAT4(0.1f, 0.15f, 0.25f, 1.0f);
+            waterMat.m_cDiffuse  = XMFLOAT4(0.8f, 0.9f, 1.0f, 1.0f);
+            waterMat.m_cSpecular = XMFLOAT4(0.95f, 0.95f, 0.95f, 64.0f);
+            waterMat.m_cEmissive = XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f);
+            m_pWaterPlane->SetMaterial(waterMat);
+
+            m_pWaterPlane->SetTextureName("Assets/Stylize Water Texture/Textures/Vol_36_5_Base_Color.png");
+            D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle; D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle;
+            AllocateDescriptor(&cpuHandle, &gpuHandle);
+            m_pWaterPlane->LoadTexture(pDevice, pCommandList, cpuHandle);
+            m_pWaterPlane->SetSrvGpuDescriptorHandle(gpuHandle);
+
+            m_pWaterPlane->SetNormalMapName("Assets/Stylize Water Texture/Textures/Vol_36_5_Normal.png");
+            D3D12_CPU_DESCRIPTOR_HANDLE normalCpu; D3D12_GPU_DESCRIPTOR_HANDLE normalGpu;
+            AllocateDescriptor(&normalCpu, &normalGpu);
+            m_pWaterPlane->LoadNormalMap(pDevice, pCommandList, normalCpu);
+            m_pWaterPlane->SetNormalMapSrvGpuHandle(normalGpu);
+
+            m_pWaterPlane->SetHeightMapName("Assets/Stylize Water Texture/Textures/Vol_36_5_Height.png");
+            D3D12_CPU_DESCRIPTOR_HANDLE heightCpu; D3D12_GPU_DESCRIPTOR_HANDLE heightGpu;
+            AllocateDescriptor(&heightCpu, &heightGpu);
+            m_pWaterPlane->LoadHeightMap(pDevice, pCommandList, heightCpu);
+            m_pWaterPlane->SetHeightMapSrvGpuHandle(heightGpu);
+
+            auto* pRC = m_pWaterPlane->AddComponent<RenderComponent>();
+            pRC->SetMesh(pPlaneMesh);
+            pRC->SetCastsShadow(false);
+            pRC->SetTransparent(true);
+            m_vShaders[0]->AddRenderComponent(pRC);
+        }
+        OutputDebugString(L"[Scene] Water boss room floor placed\n");
+    }
+
+    // ── 11. 맵 정적 오브젝트 상수 버퍼 초기화
+    if (m_pCurrentRoom)
+    {
+        for (const auto& pGO : m_pCurrentRoom->GetGameObjects())
+            pGO->Update(0.0f);
+    }
+
+    // ── 12. 크라켄 스폰
+    if (m_pCurrentRoom && m_pEnemySpawner)
+    {
+        RoomSpawnConfig emptyConfig;
+        m_pCurrentRoom->SetSpawnConfig(emptyConfig);
+
+        OutputDebugString(L"[Scene] Spawning Kraken boss\n");
+        XMFLOAT3 krakenPos = XMFLOAT3(0.0f, 0.0f, 20.0f);
+        if (m_pPlayerGameObject)
+        {
+            XMFLOAT3 playerPos = m_pPlayerGameObject->GetTransform()->GetPosition();
+            krakenPos = XMFLOAT3(playerPos.x, playerPos.y, playerPos.z + 20.0f);
+        }
+
+        GameObject* pKraken = m_pEnemySpawner->SpawnEnemy(m_pCurrentRoom, "Kraken", krakenPos, m_pPlayerGameObject);
+
+        if (pKraken)
+        {
+            EnemyComponent* pEnemy = pKraken->GetComponent<EnemyComponent>();
+            if (pEnemy)
+                pEnemy->StartBossIntro(5.0f);  // 5유닛 위에서 착지 (수중 등장)
+        }
+
+        m_pCurrentRoom->SetState(RoomState::Active);
+    }
+
+    // ── 13. 인터랙션 큐브 숨김
+    if (m_pInteractionCube)
+    {
+        auto* pInteractable = m_pInteractionCube->GetComponent<InteractableComponent>();
+        if (pInteractable) pInteractable->Hide();
+        m_bInteractionCubeActive = false;
+    }
+
+    // ── 14. 플레이어 groundY 리셋
+    if (m_pPlayerGameObject)
+    {
+        auto* pPC = m_pPlayerGameObject->GetComponent<PlayerComponent>();
+        if (pPC) pPC->ResetGroundY();
+    }
+
+    // ── 15. Gerstner Waves (보스전용 거친 파도)
+    if (m_pcbMappedPass)
+    {
+        m_pcbMappedPass->m_Waves[0].m_fWavelength = 70.0f;
+        m_pcbMappedPass->m_Waves[0].m_fAmplitude  = 12.0f;
+        m_pcbMappedPass->m_Waves[0].m_fSteepness  = 0.4f;
+        m_pcbMappedPass->m_Waves[0].m_fSpeed      = 5.0f;
+        m_pcbMappedPass->m_Waves[0].m_xmf2Direction = XMFLOAT2(1.0f, 0.3f);
+        m_pcbMappedPass->m_Waves[0].m_fFadeSpeed  = 0.1f;
+
+        m_pcbMappedPass->m_Waves[1].m_fWavelength = 45.0f;
+        m_pcbMappedPass->m_Waves[1].m_fAmplitude  = 8.0f;
+        m_pcbMappedPass->m_Waves[1].m_fSteepness  = 0.35f;
+        m_pcbMappedPass->m_Waves[1].m_fSpeed      = 7.0f;
+        m_pcbMappedPass->m_Waves[1].m_xmf2Direction = XMFLOAT2(-0.7f, 0.7f);
+        m_pcbMappedPass->m_Waves[1].m_fFadeSpeed  = 0.12f;
+
+        m_pcbMappedPass->m_Waves[2].m_fWavelength = 28.0f;
+        m_pcbMappedPass->m_Waves[2].m_fAmplitude  = 5.0f;
+        m_pcbMappedPass->m_Waves[2].m_fSteepness  = 0.3f;
+        m_pcbMappedPass->m_Waves[2].m_fSpeed      = 9.0f;
+        m_pcbMappedPass->m_Waves[2].m_xmf2Direction = XMFLOAT2(0.6f, -0.8f);
+        m_pcbMappedPass->m_Waves[2].m_fFadeSpeed  = 0.15f;
+
+        m_pcbMappedPass->m_Waves[3].m_fWavelength = 30.0f;
+        m_pcbMappedPass->m_Waves[3].m_fAmplitude  = 2.5f;
+        m_pcbMappedPass->m_Waves[3].m_fSteepness  = 0.25f;
+        m_pcbMappedPass->m_Waves[3].m_fSpeed      = 10.0f;
+        m_pcbMappedPass->m_Waves[3].m_xmf2Direction = XMFLOAT2(0.5f, 0.9f);
+        m_pcbMappedPass->m_Waves[3].m_fFadeSpeed  = 0.0f;
+
+        m_pcbMappedPass->m_Waves[4].m_fWavelength = 22.0f;
+        m_pcbMappedPass->m_Waves[4].m_fAmplitude  = 1.5f;
+        m_pcbMappedPass->m_Waves[4].m_fSteepness  = 0.2f;
+        m_pcbMappedPass->m_Waves[4].m_fSpeed      = 12.0f;
+        m_pcbMappedPass->m_Waves[4].m_xmf2Direction = XMFLOAT2(-0.9f, 0.4f);
+        m_pcbMappedPass->m_Waves[4].m_fFadeSpeed  = 0.0f;
+    }
+
+    OutputDebugString(L"[Scene] Water boss room ready - Kraken spawned!\n");
 }
