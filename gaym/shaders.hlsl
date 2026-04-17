@@ -180,6 +180,14 @@ void ApplyGerstnerWaves(inout float3 worldPos, inout float3 normal, out float cr
         totalSteepness += g_Waves[i].steepness;
     }
 
+    // 위로 상승하는 변위는 소프트 캡으로 점근 제한 (플레이어 발밑 넘어오지 않게)
+    // 작은 파도는 거의 그대로 (0.5 → 0.45 수준), 큰 피크만 자연스럽게 수렴
+    const float MAX_UP_DISP = 2.5f;   // 베이스라인 기준 최대 상승
+    if (totalOffset.y > 0.0f)
+    {
+        totalOffset.y = MAX_UP_DISP * (1.0f - exp(-totalOffset.y / MAX_UP_DISP));
+    }
+
     // Apply displacement to world position
     worldPos += totalOffset;
 

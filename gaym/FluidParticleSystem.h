@@ -63,7 +63,7 @@ struct SPHConstants {
     float    velocityColorBoost; float _foamPad;                       //  8 (offset 360)
     // Near-pressure + SPH 커널 상수 (Sebastian Lague 이중 밀도 완화)
     float nearPressureMult; float kSpikyPow2; float kSpikyPow3; float kSpikyPow2Grad;  // 16 (offset 368)
-    float kSpikyPow3Grad;   float elapsedTime; float explodeFade; float _kPad;            // 16 (offset 384)
+    float kSpikyPow3Grad;   float elapsedTime; float explodeFade; float particleSizeMult; // 16 (offset 384) — particleSizeMult: dynSize 곱셈 배율 (1.0=기본)
     // Traveling wave oscillation (Q스킬 파도 수직 요동)
     float waveOscAmplitude; float waveOscFrequency; float waveOscWaveNumber; float waveOscEnabled; // 16 (offset 400)
     XMFLOAT3 waveOscFwdDir; float _woPad0;                                                          // 16 (offset 416)

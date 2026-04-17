@@ -208,7 +208,8 @@ void EnemySpawner::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pComma
 
     // Normal attack: Breath attack (reduced projectile count for performance)
     dragon.m_fnCreateAttack = [pProjMgr]() {
-        return std::make_unique<BreathAttackBehavior>(pProjMgr, 32.0f, 38.0f, 5, 50.0f, 0.4f, 0.8f, 0.3f);
+        // scale 3.0 (뭉친 클러스터 크기 up)
+        return std::make_unique<BreathAttackBehavior>(pProjMgr, 32.0f, 38.0f, 5, 50.0f, 0.4f, 0.8f, 0.3f, 1.0f, 3.0f);
     };
 
     // Special attack (fallback if no phase controller, reduced wave count)
@@ -503,10 +504,10 @@ void EnemySpawner::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pComma
     blueDragon.m_strTexturePath   = "Assets/Enemies/Dragon_blue/Textures/BlueHP.png";
     blueDragon.m_xmf3Scale = XMFLOAT3(3.0f, 3.0f, 3.0f);
     blueDragon.m_xmf4Color = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
-    blueDragon.m_fColliderXZMultiplier = 0.65f;  // 뚱뚱한 몸집에 맞게 피격 판정 확대
+    blueDragon.m_fColliderXZMultiplier = 1.0f;   // 뚱뚱한 몸집에 맞게 피격 판정 확대 (기본 0.3 → 1.0)
 
-    blueDragon.m_Stats.m_fMaxHP              = 800.0f;
-    blueDragon.m_Stats.m_fCurrentHP          = 800.0f;
+    blueDragon.m_Stats.m_fMaxHP              = 80.0f;
+    blueDragon.m_Stats.m_fCurrentHP          = 80.0f;
     blueDragon.m_Stats.m_fMoveSpeed          = 9.0f;
     blueDragon.m_Stats.m_fAttackRange        = 35.0f;
     blueDragon.m_Stats.m_fAttackCooldown     = 2.2f;  // 기본 공격 텀 넉넉하게
@@ -522,7 +523,7 @@ void EnemySpawner::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pComma
 
     blueDragon.m_AnimConfig.m_strIdleClip    = "Idle";
     blueDragon.m_AnimConfig.m_strChaseClip   = "Walk";
-    blueDragon.m_AnimConfig.m_strAttackClip  = "Basic Attack";
+    blueDragon.m_AnimConfig.m_strAttackClip  = "Fireball Shoot";  // 브레스 전용 애니 (Basic Attack은 근접 물기)
     blueDragon.m_AnimConfig.m_strStaggerClip = "Get Hit";
     blueDragon.m_AnimConfig.m_strDeathClip   = "Die";
     blueDragon.m_AnimConfig.m_bLoopAttack    = true;  // 행동 지속 시간 동안 공격 포즈 유지
@@ -530,14 +531,10 @@ void EnemySpawner::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pComma
     blueDragon.m_IndicatorConfig.m_eType      = IndicatorType::Circle;
     blueDragon.m_IndicatorConfig.m_fHitRadius = 14.0f;
 
-    // 기본 공격: 파란 물덩어리 브레스
-    blueDragon.m_fnCreateAttack = [pProjMgr]() -> std::unique_ptr<IAttackBehavior> {
-        if (rand() % 2 == 0)
-            // 퍼지는 브레스 3발 — scale 8
-            return std::make_unique<BreathAttackBehavior>(pProjMgr, 28.0f, 14.0f, 3, 40.0f, 0.65f, 1.1f, 0.55f, 3.0f, 8.0f, ElementType::Water);
-        else
-            // 집중 브레스 2발 — scale 11
-            return std::make_unique<BreathAttackBehavior>(pProjMgr, 35.0f, 16.0f, 2, 18.0f, 0.55f, 0.85f, 0.45f, 4.0f, 11.0f, ElementType::Water);
+    // 기본 공격: 레드 드래곤과 완전 동일 파라미터, 색상만 Water
+    blueDragon.m_fnCreateAttack = [pProjMgr]() {
+        return std::make_unique<BreathAttackBehavior>(
+            pProjMgr, 32.0f, 38.0f, 5, 50.0f, 0.4f, 0.8f, 0.3f, 1.0f, 3.0f, ElementType::Water);
     };
 
     // 특수 공격: 뚱뚱한 몸집에 맞는 묵직하고 느린 패턴들

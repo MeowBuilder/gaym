@@ -1608,7 +1608,7 @@ static const char* g_SPHComputeShader = R"_SPH_A_(
         float  gKSpikyPow3Grad; // 45/(PI*h^6)    - SpikyPow3 미분 상수
         float  gElapsedTime;    // 박동 펄스용 누적 시간
         float  gExplodeFade;    // 폭발 페이드: 2.0=정상, 1.0..0.0=폭발 소멸
-        float  _gKPad;
+        float  gParticleSizeMult; // 파티클 크기 배율 (기본 1.0, Config.particleSize / 0.35 로 계산)
         // Traveling wave 수직 진동 (Q스킬 파도용)
         float  gWaveOscAmplitude; float gWaveOscFrequency; float gWaveOscWaveNumber; float gWaveOscEnabled;
         float3 gWaveOscFwdDir;  float _gWOPad0;
@@ -1964,7 +1964,7 @@ R"_SPH_B_(
         // 일반 모드: fadeMult 선형 (소멸 시 일반 축소)
         float explodeBase = lerp(dynSize, 0.65f, isExplodingF);
         float sizeScale   = lerp(fadeMult, fadeMult * fadeMult * 0.8f, isExplodingF);
-        dynSize = explodeBase * sizeScale;
+        dynSize = explodeBase * sizeScale * gParticleSizeMult;
 
         gRenderData[i].position = gParticles[i].pos;
         gRenderData[i].size     = dynSize;
@@ -2217,6 +2217,8 @@ void FluidParticleSystem::DispatchSPH(ID3D12GraphicsCommandList* pCmdList, float
             cb.kSpikyPow3Grad   = 45.0f / (PI_K * powf(h, 6.0f));         // 3 * kSpikyPow3
             cb.elapsedTime      = m_fElapsed;
             cb.explodeFade      = m_explodeFade;
+            // 기본 baseline = 0.35 (FluidSkillVFXDef 기본 particleSize 기준)
+            cb.particleSizeMult = (m_Config.particleSize > 0.0f) ? (m_Config.particleSize / 0.35f) : 1.0f;
         }
 
         // Traveling wave 수직 진동

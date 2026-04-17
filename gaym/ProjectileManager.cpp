@@ -100,21 +100,46 @@ void ProjectileManager::SpawnProjectile(const Projectile& projectile)
             vfxDef.particleCount = static_cast<int>(vfxDef.particleCount * 0.3f);
             if (vfxDef.particleCount < 100) vfxDef.particleCount = 100;
 
+            // 적 투사체 기본 파티클 크기 (0.35→0.75) — 존재감 강화
+            vfxDef.particleSize = 0.75f;
+
             // proj.scale을 VFX 크기에 반영 (기본 scale=1.5 기준 배율)
+            // 개별 파티클 크기 캡 기준값: 레드 드래곤 기준 s (원하는 "좋은 느낌")
+            constexpr float PARTICLE_SIZE_S_CAP = 2.0f;      // Red scale=3.0 기준
+            constexpr float SMOOTHING_S_CAP     = 2.5f;      // SPH 안정성 — 너무 크면 진동
             if (proj.scale > 1.5f)
             {
                 float s = proj.scale / 1.5f;
+                float orbitMult = sqrtf(s);  // 궤도는 sqrt로 덜 확대 → 꽉 뭉친 느낌
                 for (auto& cpd : vfxDef.cpDescs)
                 {
-                    cpd.orbitRadius        *= s;
-                    cpd.sphereRadius       *= s;
-                    cpd.attractionStrength /= sqrtf(s);  // 너무 약해지면 구형이 됨
+                    bool isNucleus = (cpd.orbitRadius < 0.001f);
+                    if (isNucleus)
+                    {
+                        // 핵: 큰 반경 + 강한 인력 → 중심으로 빨아들임
+                        cpd.sphereRadius       *= s * 2.5f;
+                        cpd.attractionStrength *= s * 1.4f;
+                    }
+                    else
+                    {
+                        // 위성: 궤도는 sqrt(s)로 덜 확대, 인력은 원값 유지 → 타이트
+                        cpd.orbitRadius        *= orbitMult;
+                        cpd.sphereRadius       *= s;
+                    }
                 }
-                vfxDef.spawnRadius    *= s;
-                vfxDef.smoothingRadius = 1.2f * s;        // 물리 덩어리 크기 핵심
-                vfxDef.restDensity     = 7.0f / s;        // 낮을수록 파티클이 퍼짐
-                // particleSize는 고정 — 개별 파티클은 작게 유지해야 유체처럼 보임
-                vfxDef.particleCount   = static_cast<int>(vfxDef.particleCount * min(s, 6.0f));
+                vfxDef.spawnRadius    *= orbitMult;
+                // smoothingRadius는 캡으로 고정 → 큰 s에서도 SPH 안정적
+                vfxDef.smoothingRadius = 1.0f * (std::min)(s, SMOOTHING_S_CAP);
+                vfxDef.restDensity     = 11.0f;             // 꽉 뭉치게
+                // 개별 파티클 크기 캡 → 레드 기준 유지, 블루도 동일 크기
+                vfxDef.particleSize    = 0.75f * (std::min)(s, PARTICLE_SIZE_S_CAP);
+                // 파티클 수: s에 따른 성장 완만히 (sqrt 기반) — 너무 많으면 움직임 산만
+                vfxDef.particleCount   = static_cast<int>(vfxDef.particleCount * (std::min)(sqrtf(s) * 1.5f, 6.0f));
+            }
+            else
+            {
+                // 기본 scale 투사체도 더 뭉치게
+                vfxDef.restDensity = 11.0f;
             }
 
             proj.fluidVFXId = m_pFluidVFXManager->SpawnEffect(
@@ -265,9 +290,9 @@ void ProjectileManager::CheckProjectileCollisions(Projectile& projectile)
             XMFLOAT3 enemyPos = pTransform->GetPosition();
             XMFLOAT3 enemyScale = pTransform->GetScale();
 
-            // Scale collision sphere based on enemy size
+            // Scale collision sphere based on enemy size (1.2 → 1.5 — 뚱뚱한 메시도 커버)
             float maxScale = max(enemyScale.x, max(enemyScale.y, enemyScale.z));
-            float radius = max(1.5f, maxScale * 1.2f);
+            float radius = max(1.5f, maxScale * 1.5f);
 
             BoundingSphere enemySphere(enemyPos, radius);
             enemySphere.Center.y += radius * 0.7f;
@@ -357,9 +382,9 @@ void ProjectileManager::ApplyAoEDamage(Projectile& projectile, const XMFLOAT3& i
         XMFLOAT3 enemyPos = pTransform->GetPosition();
         XMFLOAT3 enemyScale = pTransform->GetScale();
 
-        // Scale collision sphere based on enemy size
+        // Scale collision sphere based on enemy size (1.2 → 1.5)
         float maxScale = max(enemyScale.x, max(enemyScale.y, enemyScale.z));
-        float radius = max(1.5f, maxScale * 1.2f);
+        float radius = max(1.5f, maxScale * 1.5f);
 
         BoundingSphere enemySphere(enemyPos, radius);
         enemySphere.Center.y += radius * 0.7f;

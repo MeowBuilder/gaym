@@ -43,7 +43,11 @@ int FluidSkillVFXManager::SpawnEffect(const XMFLOAT3& origin, const XMFLOAT3& di
             cfg.stiffness         = 50.0f;
             cfg.viscosity         = 0.25f;
             cfg.boundaryStiffness = 150.0f;
-            cfg.particleSize      = (def.particleSize    > 0.0f) ? def.particleSize    : 0.03f;
+            cfg.particleSize      = (def.particleSize    > 0.0f) ? def.particleSize    : 0.35f;
+
+            // 적 투사체: 핵 전용 스폰으로 중앙 공백 방지 (cpGroup=0 → 위성 무시하고 핵만 응답)
+            cfg.nucleusFraction   = 0.55f;   // 55% 파티클을 핵에 집중 (더 꽉 뭉치게)
+            cfg.nucleusRadius     = 0.5f;    // 중앙 작은 구체 (타이트)
 
             slot.pSystem->Spawn(origin, cfg);
             PushControlPoints(slot);

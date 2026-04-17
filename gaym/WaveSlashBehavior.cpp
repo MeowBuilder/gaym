@@ -144,17 +144,22 @@ void WaveSlashBehavior::HitEnemiesInWave(float damage)
         XMFLOAT3 ePos    = pTransform->GetPosition();
         XMVECTOR toEnemy = XMVectorSubtract(XMLoadFloat3(&ePos), originV);
 
-        // 전진 방향 거리: 슬랩 범위 체크
-        float fwdProj = XMVectorGetX(XMVector3Dot(toEnemy, dirV));
-        if (fwdProj < hitBack || fwdProj > hitFront) continue;
+        // 적 크기 반영 (FireBeam/Meteor 와 동일한 스타일) — 뚱뚱한 보스도 잘 맞게
+        XMFLOAT3 eScale = pTransform->GetScale();
+        float eRadius = max(0.f, max(eScale.x, eScale.z) * 0.9f);
 
-        // 수평 측면 거리
+        // 전진 방향 거리: 슬랩 범위 체크 (적 반경만큼 관대하게)
+        float fwdProj = XMVectorGetX(XMVector3Dot(toEnemy, dirV));
+        if (fwdProj < hitBack - eRadius || fwdProj > hitFront + eRadius) continue;
+
+        // 수평 측면 거리 (적 반경만큼 관대하게)
         XMVECTOR lateralV = XMVectorSubtract(toEnemy, XMVectorScale(dirV, fwdProj));
         lateralV = XMVectorSetY(lateralV, 0.f);
-        if (XMVectorGetX(XMVector3Length(lateralV)) > WAVE_HALF_W) continue;
+        if (XMVectorGetX(XMVector3Length(lateralV)) > WAVE_HALF_W + eRadius) continue;
 
-        // 수직 범위
-        if (fabsf(ePos.y - waveOrigin.y) > WAVE_HALF_H) continue;
+        // 수직 범위 (적 키만큼 관대하게)
+        float yTolerance = max(0.f, eScale.y * 0.6f);
+        if (fabsf(ePos.y - waveOrigin.y) > WAVE_HALF_H + yTolerance) continue;
 
         pEnemy->TakeDamage(damage, false);
         m_hitEnemies.insert(pEnemy);

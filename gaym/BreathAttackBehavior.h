@@ -28,7 +28,7 @@ public:
     virtual void Update(float dt, EnemyComponent* pEnemy) override;
     virtual bool IsFinished() const override;
     virtual void Reset() override;
-    virtual const char* GetAnimClipName() const override { return "Fireball Shoot"; }
+    // 클립은 EnemySpawner의 m_AnimConfig.m_strAttackClip 사용 (드래곤별로 다름)
 
 private:
     void FireBreathProjectile(EnemyComponent* pEnemy, float angleOffset);

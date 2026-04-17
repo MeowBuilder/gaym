@@ -409,7 +409,9 @@ bool MapLoader::LoadIntoScene(
     Scene*                      pScene,
     ID3D12Device*               pDevice,
     ID3D12GraphicsCommandList*  pCommandList,
-    Shader*                     pShader)
+    Shader*                     pShader,
+    DirectX::XMFLOAT3           positionOffset,
+    bool                        skipRoomAndSpawn)
 {
     // s_meshCache / s_jsonCache / s_textureCache — cleared 하지 않고 재사용
 
@@ -426,25 +428,28 @@ bool MapLoader::LoadIntoScene(
     const JsonVal& root = s_jsonCache[jsonPath];
 
     // ── 1. Rooms ─────────────────────────────────────────────────────────────
-    const JsonVal& rooms = root["rooms"];
-    for (size_t i = 0; i < rooms.size(); i++) {
-        const JsonVal& r = rooms[i];
-        const JsonVal& bMin = r["boundsMin"];
-        const JsonVal& bMax = r["boundsMax"];
-        XMFLOAT3 mn(bMin[0].f()*MAP_SCALE, bMin[1].f()*MAP_SCALE, -bMin[2].f()*MAP_SCALE);
-        XMFLOAT3 mx(bMax[0].f()*MAP_SCALE, bMax[1].f()*MAP_SCALE, -bMax[2].f()*MAP_SCALE);
-        XMFLOAT3 center((mn.x+mx.x)*0.5f, (mn.y+mx.y)*0.5f, (mn.z+mx.z)*0.5f);
-        XMFLOAT3 extents(fabsf(mx.x-mn.x)*0.5f, fabsf(mx.y-mn.y)*0.5f, fabsf(mx.z-mn.z)*0.5f);
+    if (!skipRoomAndSpawn)
+    {
+        const JsonVal& rooms = root["rooms"];
+        for (size_t i = 0; i < rooms.size(); i++) {
+            const JsonVal& r = rooms[i];
+            const JsonVal& bMin = r["boundsMin"];
+            const JsonVal& bMax = r["boundsMax"];
+            XMFLOAT3 mn(bMin[0].f()*MAP_SCALE, bMin[1].f()*MAP_SCALE, -bMin[2].f()*MAP_SCALE);
+            XMFLOAT3 mx(bMax[0].f()*MAP_SCALE, bMax[1].f()*MAP_SCALE, -bMax[2].f()*MAP_SCALE);
+            XMFLOAT3 center((mn.x+mx.x)*0.5f, (mn.y+mx.y)*0.5f, (mn.z+mx.z)*0.5f);
+            XMFLOAT3 extents(fabsf(mx.x-mn.x)*0.5f, fabsf(mx.y-mn.y)*0.5f, fabsf(mx.z-mn.z)*0.5f);
 
-        pScene->CreateRoomFromBounds(center, extents);
+            pScene->CreateRoomFromBounds(center, extents);
+        }
+
+        // Default to first room for objects below
+        if (!pScene->GetCurrentRoom() && !pScene->GetRooms().empty())
+            pScene->SetCurrentRoom(pScene->GetRooms()[0].get());
     }
 
-    // Default to first room for objects below
-    if (!pScene->GetCurrentRoom() && !pScene->GetRooms().empty())
-        pScene->SetCurrentRoom(pScene->GetRooms()[0].get());
-
     // ── 2. Player spawn ───────────────────────────────────────────────────────
-    if (root.has("playerSpawn")) {
+    if (!skipRoomAndSpawn && root.has("playerSpawn")) {
         const JsonVal& ps = root["playerSpawn"];
         const JsonVal& pos = ps["position"];
         if (pScene->GetPlayer()) {
@@ -480,13 +485,15 @@ bool MapLoader::LoadIntoScene(
             pGO->SetLava(true);
         }
 
-        // Transform
+        // Transform (+ positionOffset 적용 — 복제 시 오프셋 위치에 배치)
         const JsonVal& pos = mo["position"];
         const JsonVal& rot = mo["rotation"];
         const JsonVal& scl = mo["scale"];
         float sx = scl[0].f()*MAP_SCALE, sy = scl[1].f()*MAP_SCALE, sz = scl[2].f()*MAP_SCALE;
         pGO->GetTransform()->SetPosition(
-            pos[0].f()*MAP_SCALE, pos[1].f()*MAP_SCALE, -pos[2].f()*MAP_SCALE);
+            pos[0].f()*MAP_SCALE + positionOffset.x,
+            pos[1].f()*MAP_SCALE + positionOffset.y,
+            -pos[2].f()*MAP_SCALE + positionOffset.z);
         pGO->GetTransform()->SetRotation(XMFLOAT4(rot[0].f(), rot[1].f(), -rot[2].f(), rot[3].f()));
         pGO->GetTransform()->SetScale(sx, sy, sz);
 
@@ -621,8 +628,9 @@ bool MapLoader::LoadIntoScene(
     }
 
     // ── 3b. Torch placement at player spawn (for testing) ────────────────────────
+    // 복제 로딩 시 중복 횃불 방지
     TorchSystem* pTorchSystem = pScene->GetTorchSystem();
-    if (pTorchSystem) {
+    if (!skipRoomAndSpawn && pTorchSystem) {
         const JsonVal& spawn = root["playerSpawn"];
         const JsonVal& spawnPos = spawn["position"];
         XMFLOAT3 torchPos(
@@ -643,7 +651,9 @@ bool MapLoader::LoadIntoScene(
 
         GameObject* pGO = pScene->CreateGameObject(pDevice, pCommandList);
         pGO->GetTransform()->SetPosition(
-            center[0].f()*MAP_SCALE, center[1].f()*MAP_SCALE, -center[2].f()*MAP_SCALE);
+            center[0].f()*MAP_SCALE + positionOffset.x,
+            center[1].f()*MAP_SCALE + positionOffset.y,
+            -center[2].f()*MAP_SCALE + positionOffset.z);
 
         auto* pCol = pGO->AddComponent<ColliderComponent>();
         pCol->SetExtents(size[0].f()*MAP_SCALE*0.5f, size[1].f()*MAP_SCALE*0.5f, size[2].f()*MAP_SCALE*0.5f);
@@ -653,6 +663,9 @@ bool MapLoader::LoadIntoScene(
     }
 
     // ── 5. Enemy spawns → RoomSpawnConfig ────────────────────────────────────
+    // 복제 로딩 시 적 스폰 건너뜀 (중복 등록 방지)
+    if (skipRoomAndSpawn) return true;
+
     const JsonVal& enemySpawns = root["enemySpawns"];
     RoomSpawnConfig spawnConfig;
 
@@ -757,7 +770,7 @@ bool MapLoader::LoadIntoScene(
 
     char buf[128];
     sprintf_s(buf, "[MapLoader] Loaded: %zu rooms, %zu mapObjects, %zu obstacles, %zu enemySpawns\n",
-        rooms.size(), mapObjs.size(), obstacles.size(), enemySpawns.size());
+        root["rooms"].size(), mapObjs.size(), obstacles.size(), enemySpawns.size());
     OutputDebugStringA(buf);
     return true;
 }

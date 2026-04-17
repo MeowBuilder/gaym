@@ -628,13 +628,182 @@ void Scene::Update(float deltaTime, InputSystem* pInputSystem)
 
             if (T >= KRAKEN_T_REVEAL)
             {
-                // Cutscene over: return camera to player, start combat
-                m_eKrakenStage = KrakenCutsceneStage::None;
+                // Reveal 완료 → 포효 단계로
+                m_eKrakenStage = KrakenCutsceneStage::Roar;
+                // 포효: 카메라 더 가까이 Kraken 얼굴 중심
+                XMFLOAT3 camFocus = m_xmf3PendingKrakenPos; camFocus.y = 4.0f;
+                m_pCamera->StartCinematic(camFocus, 35.0f, 20.0f, 180.0f);
+
+                // Unreal Take 애니메이션 재생 (포효)
+                if (pKrakenObj)
+                {
+                    auto* pAnim = pKrakenObj->GetComponent<AnimationComponent>();
+                    if (pAnim) pAnim->CrossFade("Unreal Take", 0.15f, false);
+                }
+                OutputDebugString(L"[Scene] Kraken cutscene: ROAR\n");
+            }
+        }
+        // ── Stage: Roar (KRAKEN_T_REVEAL ~ KRAKEN_T_ROAR) ────────────────────
+        else if (m_eKrakenStage == KrakenCutsceneStage::Roar)
+        {
+            if (T >= KRAKEN_T_ROAR)
+            {
+                m_eKrakenStage = KrakenCutsceneStage::MoveToSlam;
+
+                // 이동 시작/목표 지점 기록
+                if (pKrakenObj)
+                    m_xmf3KrakenRoarPos = pKrakenObj->GetTransform()->GetPosition();
+                m_xmf3KrakenSlamPos = {
+                    m_xmf3PendingKrakenPos.x + KRAKEN_SLAM_OFFSET_X,
+                    KRAKEN_SLAM_Y,
+                    m_xmf3PendingKrakenPos.z + KRAKEN_SLAM_OFFSET_Z
+                };
+
+                // 이동 추적 카메라 (크라켄과 슬램 지점 중간 지점)
+                XMFLOAT3 camFocus = {
+                    (m_xmf3KrakenRoarPos.x + m_xmf3KrakenSlamPos.x) * 0.5f,
+                    3.0f,
+                    (m_xmf3KrakenRoarPos.z + m_xmf3KrakenSlamPos.z) * 0.5f
+                };
+                m_pCamera->StartCinematic(camFocus, 80.0f, 30.0f, 200.0f);
+
+                // 이동 애니메이션
+                if (pKrakenObj)
+                {
+                    auto* pAnim = pKrakenObj->GetComponent<AnimationComponent>();
+                    if (pAnim) pAnim->CrossFade("Walk", 0.2f, true);
+                }
+                OutputDebugString(L"[Scene] Kraken cutscene: MOVE TO SLAM\n");
+            }
+        }
+        // ── Stage: MoveToSlam (KRAKEN_T_ROAR ~ KRAKEN_T_MOVE_TO_SLAM) ────────
+        else if (m_eKrakenStage == KrakenCutsceneStage::MoveToSlam)
+        {
+            float t = (T - KRAKEN_T_ROAR) / (KRAKEN_T_MOVE_TO_SLAM - KRAKEN_T_ROAR);
+            if (t > 1.0f) t = 1.0f;
+            float e = easeInOutQuad(t);
+
+            // 크라켄 XYZ 이징 이동: Roar 위치 → Slam 목표 (맵 바깥 수면 위)
+            if (pKrakenObj)
+            {
+                XMFLOAT3 pos;
+                pos.x = lerp(m_xmf3KrakenRoarPos.x, m_xmf3KrakenSlamPos.x, e);
+                pos.y = lerp(m_xmf3KrakenRoarPos.y, m_xmf3KrakenSlamPos.y, e);
+                pos.z = lerp(m_xmf3KrakenRoarPos.z, m_xmf3KrakenSlamPos.z, e);
+                pKrakenObj->GetTransform()->SetPosition(pos);
+
+                // 진행 방향 바라보게 yaw 회전 (이동 방향 계산)
+                XMFLOAT3 dir = {
+                    m_xmf3KrakenSlamPos.x - m_xmf3KrakenRoarPos.x,
+                    0.0f,
+                    m_xmf3KrakenSlamPos.z - m_xmf3KrakenRoarPos.z
+                };
+                float yawDeg = atan2f(dir.x, dir.z) * (180.0f / XM_PI);
+                XMFLOAT3 rot = pKrakenObj->GetTransform()->GetRotation();
+                rot.y = yawDeg;
+                pKrakenObj->GetTransform()->SetRotation(rot);
+            }
+
+            if (T >= KRAKEN_T_MOVE_TO_SLAM)
+            {
+                m_eKrakenStage = KrakenCutsceneStage::Slam;
+                m_bSlamShakeTriggered = false;
+
+                // 슬램 임팩트용 카메라 (크라켄 근접)
+                XMFLOAT3 camFocus = m_xmf3KrakenSlamPos;
+                camFocus.y = 2.0f;
+                m_pCamera->StartCinematic(camFocus, 50.0f, 30.0f, 200.0f);
+
+                // 슬램 애니메이션
+                if (pKrakenObj)
+                {
+                    auto* pAnim = pKrakenObj->GetComponent<AnimationComponent>();
+                    if (pAnim) pAnim->CrossFade("Attack_Forward", 0.1f, false);
+                }
+                OutputDebugString(L"[Scene] Kraken cutscene: SLAM\n");
+            }
+        }
+        // ── Stage: Slam (KRAKEN_T_MOVE_TO_SLAM ~ KRAKEN_T_SLAM) ──────────────
+        else if (m_eKrakenStage == KrakenCutsceneStage::Slam)
+        {
+            // 진입 시 한 번 강한 카메라 쉐이크
+            if (!m_bSlamShakeTriggered)
+            {
+                m_pCamera->StartShake(3.5f, 0.7f);
+                m_bSlamShakeTriggered = true;
+            }
+
+            if (T >= KRAKEN_T_SLAM)
+            {
+                m_eKrakenStage = KrakenCutsceneStage::WaterRise;
+                // 플레이어 초기 XYZ 기록 (XZ 수평이동 + Y 리프트 기준점)
+                if (m_pPlayerGameObject)
+                    m_vPlayerRiseStartXYZ = m_pPlayerGameObject->GetTransform()->GetPosition();
+
+                // 상부 맵을 제자리로 복원 (숨김 Y 오프셋 -10000 제거)
+                for (GameObject* pUpObj : m_vUpperMapObjects)
+                {
+                    if (!pUpObj) continue;
+                    XMFLOAT3 p = pUpObj->GetTransform()->GetPosition();
+                    p.y += 10000.0f;
+                    pUpObj->GetTransform()->SetPosition(p);
+                }
+
+                // 카메라 / 조작 권한 플레이어에게 반환 — WaterRise는 일반 게임플레이
                 m_pCamera->StopCinematic();
 
-                m_pPreloadedKraken->SetTarget(m_pPlayerGameObject);
-                m_pPreloadedKraken = nullptr;
-                OutputDebugString(L"[Scene] Kraken fully emerged - combat begins\n");
+                // 크라켄이 플레이어 타겟팅 시작 (슬램 지점에서 전투 재개)
+                // 포인터는 WaterRise에서 물 따라 부상 업데이트 위해 유지, None 진입 시 해제
+                if (m_pPreloadedKraken)
+                    m_pPreloadedKraken->SetTarget(m_pPlayerGameObject);
+                OutputDebugString(L"[Scene] Kraken cutscene: WATER RISE (control returned to player)\n");
+            }
+        }
+        // ── Stage: WaterRise — 플레이어 조작 가능, 물만 자동 상승 ────────────
+        else if (m_eKrakenStage == KrakenCutsceneStage::WaterRise)
+        {
+            float t = (T - KRAKEN_T_SLAM) / (KRAKEN_T_WATER_RISE - KRAKEN_T_SLAM);
+            if (t > 1.0f) t = 1.0f;
+            float e = easeInOutQuad(t);
+
+            // 물 표면 Y: 천천히 상승 (-4 → 22)
+            float waterY = lerp(KRAKEN_WATER_Y_START, KRAKEN_WATER_Y_TARGET, e);
+            if (m_pWaterPlane)
+            {
+                XMFLOAT3 wp = m_pWaterPlane->GetTransform()->GetPosition();
+                wp.y = waterY;
+                m_pWaterPlane->GetTransform()->SetPosition(wp);
+            }
+
+            // 크라켄도 물 따라 부상 (슬램 지점 유지, Y만 물 표면 살짝 아래)
+            if (pKrakenObj)
+            {
+                XMFLOAT3 pos = pKrakenObj->GetTransform()->GetPosition();
+                pos.y = waterY - 2.0f;
+                pKrakenObj->GetTransform()->SetPosition(pos);
+            }
+
+            // 플레이어는 자유 조작 — 물 표면에 떠 있기만
+            // 중력이 있지만 물이 플레이어 발밑을 넘으면 수면에 띄움
+            if (m_pPlayerGameObject)
+            {
+                XMFLOAT3 ppos = m_pPlayerGameObject->GetTransform()->GetPosition();
+                if (waterY > ppos.y)
+                {
+                    ppos.y = waterY;
+                    m_pPlayerGameObject->GetTransform()->SetPosition(ppos);
+                    // 플레이어가 수면 위에 있도록 onGround 유지
+                    auto* pPC = m_pPlayerGameObject->GetComponent<PlayerComponent>();
+                    if (pPC) pPC->ResetGroundY();
+                }
+            }
+
+            if (T >= KRAKEN_T_WATER_RISE)
+            {
+                // 상승 완료 — WaterRise 종료, 일반 게임플레이 (이미 조작 가능)
+                m_eKrakenStage = KrakenCutsceneStage::None;
+                m_pPreloadedKraken = nullptr;  // 여기서 해제 (WaterRise 중엔 유지됨)
+                OutputDebugString(L"[Scene] Water rise complete — upper platform reached\n");
             }
         }
     }
@@ -951,8 +1120,10 @@ void Scene::Update(float deltaTime, InputSystem* pInputSystem)
     }
 
     // Player input: allowed during FlyingIn so player can walk in,
-    // blocked only during Landing/Roaring and Kraken cutscene
-    bool bBlockInput = (m_eKrakenStage != KrakenCutsceneStage::None)
+    // blocked only during Landing/Roaring and Kraken cutscene (단, WaterRise는 조작 가능)
+    bool bKrakenBlocking = (m_eKrakenStage != KrakenCutsceneStage::None)
+        && (m_eKrakenStage != KrakenCutsceneStage::WaterRise);
+    bool bBlockInput = bKrakenBlocking
         || (m_pDragonIntroEnemy != nullptr
             && m_eLastDragonPhase != BossIntroPhase::FlyingIn
             && m_eLastDragonPhase != BossIntroPhase::None);
@@ -1935,6 +2106,14 @@ void Scene::TransitionToBossRoom()
 {
     OutputDebugString(L"[Scene] ========== BOSS ROOM ==========\n");
 
+    if (m_pPlayerGameObject)
+    {
+        XMFLOAT3 pp = m_pPlayerGameObject->GetTransform()->GetPosition();
+        pp.y = 0.0f;
+        m_pPlayerGameObject->GetTransform()->SetPosition(pp);
+    }
+    m_eKrakenStage = KrakenCutsceneStage::None;
+
     // ── 1. 셰이더 RC 목록 전체 클리어
     m_vShaders[0]->ClearRenderComponents();
     ProcessPendingDeletions();
@@ -2195,6 +2374,19 @@ void Scene::TransitionToWaterStage()
 {
     OutputDebugString(L"[Scene] ========== WATER STAGE ==========\n");
 
+    // ── 0. 플레이어 Y 복원 (이전 스테이지에서 리프트 됐을 가능성 방어)
+    //    MapLoader가 playerSpawn 정의하면 이후 덮어씀
+    if (m_pPlayerGameObject)
+    {
+        XMFLOAT3 pp = m_pPlayerGameObject->GetTransform()->GetPosition();
+        pp.y = 0.0f;
+        m_pPlayerGameObject->GetTransform()->SetPosition(pp);
+    }
+    // 크라켄 cutscene 상태도 초기화 (잔여 상승 효과 방지)
+    m_eKrakenStage = KrakenCutsceneStage::None;
+    m_bPendingKrakenSpawn = false;
+    m_bKrakenEmerging = false;
+
     // ── 1. 테마 변경 (조명 색상에 영향)
     m_eCurrentTheme = StageTheme::Water;
 
@@ -2253,8 +2445,9 @@ void Scene::TransitionToWaterStage()
             GridPlaneMesh* pPlaneMesh = new GridPlaneMesh(pDevice, pCommandList, 1.0f, 1.0f, 256, 256);
             m_pWaterPlane->SetMesh(pPlaneMesh);
 
-            // 맵이 살짝 잠기도록 높이 조정
-            m_pWaterPlane->GetTransform()->SetPosition(0.0f, -1.0f, -200.0f);
+            // Y=-4: 탑뷰에서 물 표면 잘 보이는 위치. 셰이더 소프트 캡(2.5)으로 피크 제한.
+            // 최대 피크 = -4 + 2.5 = -1.5 (플레이어 발 Y=0 아래로 마진 1.5)
+            m_pWaterPlane->GetTransform()->SetPosition(0.0f, -4.0f, -200.0f);
             m_pWaterPlane->GetTransform()->SetScale(2000.0f, 1.0f, 2000.0f);
 
             m_pWaterPlane->SetWater(true);
@@ -2565,6 +2758,15 @@ void Scene::TransitionToWaterBossRoom()
 {
     OutputDebugString(L"[Scene] ========== WATER BOSS ROOM (KRAKEN) ==========\n");
 
+    // 플레이어 Y 복원 (이전 리프트 상태 방어)
+    if (m_pPlayerGameObject)
+    {
+        XMFLOAT3 pp = m_pPlayerGameObject->GetTransform()->GetPosition();
+        pp.y = 0.0f;
+        m_pPlayerGameObject->GetTransform()->SetPosition(pp);
+    }
+    m_eKrakenStage = KrakenCutsceneStage::None;
+
     // ── 1. 테마를 Water로 유지
     m_eCurrentTheme = StageTheme::Water;
 
@@ -2586,25 +2788,32 @@ void Scene::TransitionToWaterBossRoom()
     if (m_pLavaPlane)
         m_pLavaPlane->GetTransform()->SetPosition(0.0f, -10000.0f, 0.0f);
 
-    // ── 7. 물 평면 제거 (이전 물 평면을 m_vGameObjects에서 삭제)
+    // ── 7. 물 평면 + 이전 상부 맵 오브젝트들 제거 (재진입 시 중복 방지)
     GameObject* pOldWaterPlane = m_pWaterPlane;
-    m_pWaterPlane = nullptr;
+    std::vector<GameObject*> vOldUpperObjs = m_vUpperMapObjects;
+    m_pWaterPlane    = nullptr;
+    m_pUpperPlatform = nullptr;
+    m_vUpperMapObjects.clear();
 
-    // ── 8. 영속 오브젝트 RC 재등록 (용암, 이전 물 평면 제외)
+    auto isOldUpperObj = [&vOldUpperObjs](GameObject* p) -> bool {
+        for (auto* o : vOldUpperObjs) { if (o == p) return true; }
+        return false;
+    };
+
+    // ── 8. 영속 오브젝트 RC 재등록 (용암/이전 물/이전 상부 맵 제외)
     for (auto& pGO : m_vGameObjects)
     {
-        if (pGO.get() != m_pLavaPlane && pGO.get() != pOldWaterPlane)
+        if (pGO.get() != m_pLavaPlane && pGO.get() != pOldWaterPlane && !isOldUpperObj(pGO.get()))
             ReAddRenderComponentsToShader(pGO.get());
     }
 
-    // 이전 물 평면을 m_vGameObjects에서 제거 (고아 RC 방지)
-    if (pOldWaterPlane)
-    {
-        m_vGameObjects.erase(
-            std::remove_if(m_vGameObjects.begin(), m_vGameObjects.end(),
-                [pOldWaterPlane](const std::unique_ptr<GameObject>& p) { return p.get() == pOldWaterPlane; }),
-            m_vGameObjects.end());
-    }
+    // 이전 평면/상부 맵 오브젝트들을 m_vGameObjects에서 제거 (고아 RC 방지)
+    auto removeCond = [pOldWaterPlane, &isOldUpperObj](const std::unique_ptr<GameObject>& p) {
+        return p.get() == pOldWaterPlane || isOldUpperObj(p.get());
+    };
+    m_vGameObjects.erase(
+        std::remove_if(m_vGameObjects.begin(), m_vGameObjects.end(), removeCond),
+        m_vGameObjects.end());
 
     ID3D12Device*              pDevice      = Dx12App::GetInstance()->GetDevice();
     ID3D12GraphicsCommandList* pCommandList = Dx12App::GetInstance()->GetCommandList();
@@ -2632,7 +2841,9 @@ void Scene::TransitionToWaterBossRoom()
         {
             GridPlaneMesh* pPlaneMesh = new GridPlaneMesh(pDevice, pCommandList, 1.0f, 1.0f, 256, 256);
             m_pWaterPlane->SetMesh(pPlaneMesh);
-            m_pWaterPlane->GetTransform()->SetPosition(0.0f, -1.0f, -200.0f);
+            // Y=-4: 탑뷰에서 물 표면 잘 보이는 위치. 셰이더 소프트 캡(2.5)으로 피크 제한.
+            // 최대 피크 = -4 + 2.5 = -1.5 (플레이어 발 Y=0 아래로 마진 1.5)
+            m_pWaterPlane->GetTransform()->SetPosition(0.0f, -4.0f, -200.0f);
             m_pWaterPlane->GetTransform()->SetScale(2000.0f, 1.0f, 2000.0f);
             m_pWaterPlane->SetWater(true);
 
@@ -2670,6 +2881,35 @@ void Scene::TransitionToWaterBossRoom()
         OutputDebugString(L"[Scene] Water boss room floor placed\n");
     }
 
+    // ── 10b. 상부 맵 복제 (크라켄 물 상승 기믹 대상): 하부 맵 위 Y=+25 + XZ 오프셋에 원본 맵 복제
+    // 초기엔 Y=-10000으로 숨겨둔 후 WaterRise 단계 시작 시 Y=+25로 이동 (+ XZ 오프셋)
+    {
+        size_t nBefore = m_vGameObjects.size();
+        // 목표 오프셋 = (XZ 오프셋, Y=+25). 초기엔 Y에 -10000 추가로 숨김.
+        // WaterRise 진입 시 y += 10000 으로 제자리 복귀.
+        XMFLOAT3 hideOffset = {
+            KRAKEN_UPPER_OFFSET_X,
+            KRAKEN_UPPER_PLATFORM_Y - 10000.0f,  // 최종 Y=+25에서 10000 아래로 숨김
+            KRAKEN_UPPER_OFFSET_Z
+        };
+        bool bUpperLoaded = MapLoader::LoadIntoScene(
+            m_strCurrentMap.c_str(), this, pDevice, pCommandList, m_vShaders[0].get(),
+            hideOffset, /*skipRoomAndSpawn=*/true);
+
+        if (bUpperLoaded)
+        {
+            // 복제된 게임 오브젝트들을 별도 리스트에 저장 → WaterRise 시 재배치
+            m_vUpperMapObjects.clear();
+            for (size_t i = nBefore; i < m_vGameObjects.size(); ++i)
+                m_vUpperMapObjects.push_back(m_vGameObjects[i].get());
+            OutputDebugString(L"[Scene] Upper map duplicated (hidden until WaterRise)\n");
+        }
+        else
+        {
+            OutputDebugString(L"[Scene] Upper map duplication failed\n");
+        }
+    }
+
     // ── 11. 맵 정적 오브젝트 상수 버퍼 초기화
     if (m_pCurrentRoom)
     {
@@ -2695,7 +2935,8 @@ void Scene::TransitionToWaterBossRoom()
         }
 
         // Pre-spawn Kraken hidden underground (no target) to avoid mid-combat GPU upload lag
-        XMFLOAT3 hidePos = XMFLOAT3(bossPos.x, -500.0f, bossPos.z);
+        // Y=-10000: 시야/프러스텀 밖으로 완전히 숨김 (다른 숨긴 오브젝트들과 동일 깊이)
+        XMFLOAT3 hidePos = XMFLOAT3(bossPos.x, -10000.0f, bossPos.z);
         GameObject* pKraken = m_pEnemySpawner->SpawnEnemy(m_pCurrentRoom, "Kraken", hidePos, nullptr);
         if (pKraken)
         {
@@ -2793,6 +3034,14 @@ void Scene::TransitionToEarthStage()
 {
     OutputDebugString(L"[Scene] ========== EARTH STAGE ==========\n");
 
+    if (m_pPlayerGameObject)
+    {
+        XMFLOAT3 pp = m_pPlayerGameObject->GetTransform()->GetPosition();
+        pp.y = 0.0f;
+        m_pPlayerGameObject->GetTransform()->SetPosition(pp);
+    }
+    m_eKrakenStage = KrakenCutsceneStage::None;
+
     m_eCurrentTheme = StageTheme::Earth;
     m_bInBossRoom = false;
 
@@ -2806,6 +3055,8 @@ void Scene::TransitionToEarthStage()
     // 용암·물 바닥 숨기기
     if (m_pLavaPlane)  m_pLavaPlane->GetTransform()->SetPosition(0.0f, -10000.0f, 0.0f);
     if (m_pWaterPlane) m_pWaterPlane->GetTransform()->SetPosition(0.0f, -10000.0f, 0.0f);
+    for (GameObject* pUp : m_vUpperMapObjects)
+        if (pUp) pUp->GetTransform()->SetPosition(0.0f, -10000.0f, 0.0f);
 
     for (auto& pGO : m_vGameObjects)
     {
@@ -2847,6 +3098,14 @@ void Scene::TransitionToGrassStage()
 {
     OutputDebugString(L"[Scene] ========== GRASS STAGE ==========\n");
 
+    if (m_pPlayerGameObject)
+    {
+        XMFLOAT3 pp = m_pPlayerGameObject->GetTransform()->GetPosition();
+        pp.y = 0.0f;
+        m_pPlayerGameObject->GetTransform()->SetPosition(pp);
+    }
+    m_eKrakenStage = KrakenCutsceneStage::None;
+
     m_eCurrentTheme = StageTheme::Grass;
     m_bInBossRoom = false;
 
@@ -2859,6 +3118,8 @@ void Scene::TransitionToGrassStage()
 
     if (m_pLavaPlane)  m_pLavaPlane->GetTransform()->SetPosition(0.0f, -10000.0f, 0.0f);
     if (m_pWaterPlane) m_pWaterPlane->GetTransform()->SetPosition(0.0f, -10000.0f, 0.0f);
+    for (GameObject* pUp : m_vUpperMapObjects)
+        if (pUp) pUp->GetTransform()->SetPosition(0.0f, -10000.0f, 0.0f);
 
     for (auto& pGO : m_vGameObjects)
     {
@@ -2899,6 +3160,14 @@ void Scene::TransitionToEarthBossRoom()
 {
     OutputDebugString(L"[Scene] ========== EARTH BOSS ROOM (GOLEM) ==========\n");
 
+    if (m_pPlayerGameObject)
+    {
+        XMFLOAT3 pp = m_pPlayerGameObject->GetTransform()->GetPosition();
+        pp.y = 0.0f;
+        m_pPlayerGameObject->GetTransform()->SetPosition(pp);
+    }
+    m_eKrakenStage = KrakenCutsceneStage::None;
+
     m_eCurrentTheme = StageTheme::Earth;
 
     m_vShaders[0]->ClearRenderComponents();
@@ -2910,6 +3179,8 @@ void Scene::TransitionToEarthBossRoom()
 
     if (m_pLavaPlane)  m_pLavaPlane->GetTransform()->SetPosition(0.0f, -10000.0f, 0.0f);
     if (m_pWaterPlane) m_pWaterPlane->GetTransform()->SetPosition(0.0f, -10000.0f, 0.0f);
+    for (GameObject* pUp : m_vUpperMapObjects)
+        if (pUp) pUp->GetTransform()->SetPosition(0.0f, -10000.0f, 0.0f);
 
     for (auto& pGO : m_vGameObjects)
     {
@@ -2971,6 +3242,14 @@ void Scene::TransitionToGrassBossRoom()
 {
     OutputDebugString(L"[Scene] ========== GRASS BOSS ROOM (DEMON) ==========\n");
 
+    if (m_pPlayerGameObject)
+    {
+        XMFLOAT3 pp = m_pPlayerGameObject->GetTransform()->GetPosition();
+        pp.y = 0.0f;
+        m_pPlayerGameObject->GetTransform()->SetPosition(pp);
+    }
+    m_eKrakenStage = KrakenCutsceneStage::None;
+
     m_eCurrentTheme = StageTheme::Grass;
 
     m_vShaders[0]->ClearRenderComponents();
@@ -2982,6 +3261,8 @@ void Scene::TransitionToGrassBossRoom()
 
     if (m_pLavaPlane)  m_pLavaPlane->GetTransform()->SetPosition(0.0f, -10000.0f, 0.0f);
     if (m_pWaterPlane) m_pWaterPlane->GetTransform()->SetPosition(0.0f, -10000.0f, 0.0f);
+    for (GameObject* pUp : m_vUpperMapObjects)
+        if (pUp) pUp->GetTransform()->SetPosition(0.0f, -10000.0f, 0.0f);
 
     for (auto& pGO : m_vGameObjects)
     {

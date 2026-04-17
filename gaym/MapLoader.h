@@ -53,12 +53,16 @@ struct ID3D12GraphicsCommandList;
 class MapLoader
 {
 public:
+    // positionOffset: 모든 맵 오브젝트 위치에 추가 오프셋 적용 (복제용)
+    // skipRoomAndSpawn: 방 생성/플레이어 스폰 재설정을 건너뜀 (기존 맵 위에 중첩 로딩용)
     static bool LoadIntoScene(
         const char*                     jsonPath,
         Scene*                          pScene,
         ID3D12Device*                   pDevice,
         ID3D12GraphicsCommandList*      pCommandList,
-        Shader*                         pShader);
+        Shader*                         pShader,
+        DirectX::XMFLOAT3               positionOffset    = {0.0f, 0.0f, 0.0f},
+        bool                            skipRoomAndSpawn  = false);
 
     // Manually load an OBJ mesh from file (cached)
     static class Mesh* LoadMesh(

@@ -22,8 +22,9 @@ public:
     float GetMaxHP() const { return m_fMaxHP; }
     bool IsDead() const { return m_fCurrentHP <= 0.0f; }
 
-    // Reset velocity when teleported
-    void ResetGroundY() { m_fVelocityY = 0.0f; m_bOnGround = true; }
+    // Reset velocity when teleported — 중력이 플레이어를 바닥까지 끌어내리도록 onGround=false
+    // (텔레포트 Y가 바닥보다 높으면 gravity가 자연스럽게 스냅; Y=0이면 즉시 ground 판정)
+    void ResetGroundY() { m_fVelocityY = 0.0f; m_bOnGround = false; }
 
 private:
     float m_fMaxHP = 100.0f;

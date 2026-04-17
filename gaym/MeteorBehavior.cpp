@@ -126,7 +126,7 @@ void MeteorBehavior::ApplyExplosionDamage(float damage, float radius, bool bTrig
 
         XMFLOAT3 ePos = pTransform->GetPosition();
         XMFLOAT3 eScale = pTransform->GetScale();
-        float eRadius = max(1.5f, max(eScale.x, max(eScale.y, eScale.z)) * 1.2f);
+        float eRadius = max(1.5f, max(eScale.x, max(eScale.y, eScale.z)) * 1.5f);
 
         float dist = XMVectorGetX(XMVector3Length(
             XMVectorSubtract(XMLoadFloat3(&ePos), centerV)));

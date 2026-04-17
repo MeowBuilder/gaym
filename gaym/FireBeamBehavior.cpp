@@ -177,9 +177,9 @@ void FireBeamBehavior::HitEnemiesInBeam(float damage)
         XMVECTOR lateralV = XMVectorSubtract(toEnemyV, XMVectorScale(dirV, fwdProj));
         float lateralDist = XMVectorGetX(XMVector3Length(lateralV));
 
-        // 적 반경 고려 (최소 1.5m)
+        // 적 반경 고려 (최소 1.5m, 1.2 → 1.5 — 뚱뚱한 메시도 커버)
         XMFLOAT3 eScale = pTransform->GetScale();
-        float eRadius = max(1.5f, max(eScale.x, eScale.z) * 1.2f);
+        float eRadius = max(1.5f, max(eScale.x, eScale.z) * 1.5f);
 
         if (lateralDist < BEAM_RADIUS + eRadius)
             pEnemy->TakeDamage(damage, false);  // 다단히트: 경직 없음

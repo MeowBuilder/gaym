@@ -102,9 +102,13 @@ namespace FluidElementColors
         switch (e)
         {
         case ElementType::Fire:
-            return { {1.0f, 0.45f, 0.05f, 0.95f}, {1.0f, 0.1f, 0.0f, 0.25f} };
+            // core: 진한 주황 (채도 ↑)
+            // edge: 짙은 빨강 (alpha 강화)
+            return { {1.0f, 0.55f, 0.08f, 1.0f}, {1.0f, 0.12f, 0.0f, 0.75f} };
         case ElementType::Water:
-            return { {0.15f, 0.88f, 0.98f, 0.95f}, {0.0f, 0.18f, 0.72f, 0.30f} };
+            // core: 진한 청 (vivid blue core)
+            // edge: 짙은 파랑 (alpha 강화)
+            return { {0.15f, 0.70f, 1.0f, 1.0f}, {0.0f, 0.18f, 0.85f, 0.75f} };
         case ElementType::Wind:
             return { {0.75f, 1.0f, 0.75f, 0.75f}, {0.35f, 0.85f, 0.35f, 0.20f} };
         case ElementType::Earth:
