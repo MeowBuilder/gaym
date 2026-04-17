@@ -9,6 +9,8 @@
 // GPU 텍스처 캐시 — 맵 전환 시 동일 파일을 재업로드하지 않도록 유지
 static std::map<std::wstring, ComPtr<ID3D12Resource>> s_textureCache;
 
+bool GameObject::s_bDebugNoTexture = false;
+
 GameObject::GameObject()
     : m_Material({XMFLOAT4(0.1f, 0.1f, 0.1f, 1.0f), // Ambient
                   XMFLOAT4(0.7f, 0.7f, 0.7f, 1.0f), // Diffuse
@@ -45,7 +47,7 @@ void GameObject::Update(float deltaTime)
         XMStoreFloat4x4(&m_pcbMappedGameObject->m_xmf4x4World, XMMatrixTranspose(worldMatrix));
         m_pcbMappedGameObject->m_nMaterialIndex = m_nMaterialIndex;
         m_pcbMappedGameObject->mMaterial = m_Material; // Copy the new material struct
-        m_pcbMappedGameObject->m_bHasTexture = HasTexture() ? 1 : 0; // Set texture flag
+        m_pcbMappedGameObject->m_bHasTexture = (HasTexture() && !s_bDebugNoTexture) ? 1 : 0;
     }
 
     // Recurse for children and siblings

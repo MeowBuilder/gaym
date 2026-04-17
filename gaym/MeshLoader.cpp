@@ -209,7 +209,25 @@ GameObject* MeshLoader::LoadFrameHierarchyFromFile(Scene* pScene, ID3D12Device* 
                 Mesh *pMesh = NULL;
                 if (pMeshInfo->m_nType & VERTEXT_BONE_INDEX_WEIGHT)
                 {
-                    OutputDebugStringA("MeshLoader: Creating SkinnedMesh\n");
+                    char _dbgBuf[512];
+                    sprintf_s(_dbgBuf, "MeshLoader: SkinnedMesh AABB center=(%.2f,%.2f,%.2f) extents=(%.2f,%.2f,%.2f) bones=%d\n",
+                        pMeshInfo->m_xmf3AABBCenter.x, pMeshInfo->m_xmf3AABBCenter.y, pMeshInfo->m_xmf3AABBCenter.z,
+                        pMeshInfo->m_xmf3AABBExtents.x, pMeshInfo->m_xmf3AABBExtents.y, pMeshInfo->m_xmf3AABBExtents.z,
+                        (int)pMeshInfo->m_vBoneNames.size());
+                    OutputDebugStringA(_dbgBuf);
+                    // Print first 5 vertex positions to verify if mesh is upright or flat
+                    if (pMeshInfo->m_pxmf3Positions)
+                    {
+                        int nPrint = min(5, pMeshInfo->m_nVertices);
+                        for (int _vi = 0; _vi < nPrint; ++_vi)
+                        {
+                            sprintf_s(_dbgBuf, "  v[%d]=(%.3f, %.3f, %.3f)\n", _vi,
+                                pMeshInfo->m_pxmf3Positions[_vi].x,
+                                pMeshInfo->m_pxmf3Positions[_vi].y,
+                                pMeshInfo->m_pxmf3Positions[_vi].z);
+                            OutputDebugStringA(_dbgBuf);
+                        }
+                    }
                     pMesh = new SkinnedMesh(pd3dDevice, pd3dCommandList, pMeshInfo);
                 }
                 else if (pMeshInfo->m_nType & VERTEXT_NORMAL)

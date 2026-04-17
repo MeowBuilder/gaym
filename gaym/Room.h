@@ -52,6 +52,7 @@ public:
     // Enemy tracking
     void RegisterEnemy(EnemyComponent* pEnemy);
     void OnEnemyDeath(EnemyComponent* pEnemy);
+    void AddExpectedEnemies(int n) { m_nTotalEnemies += n; }
     int GetAliveEnemyCount() const { return m_nTotalEnemies - m_nDeadEnemies; }
     int GetTotalEnemyCount() const { return m_nTotalEnemies; }
     const std::vector<EnemyComponent*>& GetEnemies() const { return m_vEnemies; }

@@ -58,7 +58,11 @@ public:
 		// 이전 오너(예: 스킨드 적)가 남긴 bIsSkinned 플래그를 초기화.
 		// AnimationComponent가 있으면 Update()에서 SetSkinned(true)로 다시 설정한다.
 		if (m_pcbMappedGameObject)
-			m_pcbMappedGameObject->m_bIsSkinned = 0;
+		{
+			// 이전 오너의 모든 플래그/상태를 초기화 (bIsWater, bIsLava, bIsSkinned 등)
+			// Update()가 매 프레임 world matrix, material, bHasTexture를 다시 쓴다.
+			ZeroMemory(m_pcbMappedGameObject, sizeof(ObjectConstants));
+		}
 	}
 	ComPtr<ID3D12Resource> GetConstantBufferResource() const { return m_pd3dcbGameObject; }
 
@@ -155,6 +159,9 @@ public:
         if (m_pcbMappedGameObject)
             m_pcbMappedGameObject->m_fHitFlash = f;
     }
+
+    // Debug: F4 = force all objects to render without texture (see raw geometry/material)
+    static bool s_bDebugNoTexture;
 
 	void ReleaseUploadBuffers();
 

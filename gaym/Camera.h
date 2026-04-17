@@ -41,6 +41,13 @@ public:
     void StopShake();
     bool IsShaking() const { return m_bShaking; }
 
+    // Cinematic mode: orbit around a world-space point instead of the follow target
+    void StartCinematic(const DirectX::XMFLOAT3& lookAt, float distance, float pitch, float yaw);
+    void StopCinematic();
+    bool IsCinematic() const { return m_bCinematic; }
+    // Smoothly adjust cinematic orbit params (call every frame during cutscene)
+    void SetCinematicOrbit(float distance, float pitch, float yaw) { m_fCinDist = distance; m_fCinPitch = pitch; m_fCinYaw = yaw; }
+
 private:
     void UpdateViewMatrix();
 
@@ -76,6 +83,13 @@ private:
     float m_freePitch = -30.0f;  // degrees (looking down)
     float m_freeMoveSpeed = 40.0f;
     float m_freeRotSpeed  = 0.15f;
+
+    // Cinematic mode
+    bool m_bCinematic = false;
+    DirectX::XMFLOAT3 m_cinLookAt = { 0.0f, 0.0f, 0.0f };
+    float m_fCinDist  = 30.0f;
+    float m_fCinPitch = 30.0f;
+    float m_fCinYaw   = 45.0f;
 
     // Camera shake
     bool m_bShaking = false;

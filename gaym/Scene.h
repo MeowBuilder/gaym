@@ -13,6 +13,7 @@
 #include "Room.h" // Added Room.h include
 #include "CollisionManager.h" // Added CollisionManager include
 #include "EnemySpawner.h" // Added EnemySpawner include
+#include "EnemyComponent.h" // For BossIntroPhase, EnemyComponent*
 #include "ProjectileManager.h" // Added ProjectileManager include
 #include "ParticleSystem.h" // Added ParticleSystem include
 #include "FluidParticleSystem.h" // Added FluidParticleSystem include
@@ -223,6 +224,27 @@ private:
     bool m_bInteractionCubeActive = true;
     bool m_bEnemiesSpawned = false;
     float m_fInteractionDistance = 5.0f;
+
+    // Fire boss Dragon intro cutscene
+    EnemyComponent* m_pDragonIntroEnemy = nullptr;
+    BossIntroPhase  m_eLastDragonPhase  = BossIntroPhase::None;
+
+    // Water boss 2-phase: Kraken pre-spawned, emerges after Blue Dragon dies
+    bool m_bPendingKrakenSpawn = false;          // death callback set this
+    XMFLOAT3 m_xmf3PendingKrakenPos = {};        // dragon death position
+    EnemyComponent* m_pPreloadedKraken = nullptr; // pre-spawned but hidden
+
+    // Kraken emergence cinematic
+    enum class KrakenCutsceneStage { None, Rumble, Rise, Burst, Reveal };
+    KrakenCutsceneStage m_eKrakenStage = KrakenCutsceneStage::None;
+    float m_fKrakenEmergeTimer = 0.0f;
+    bool  m_bKrakenEmerging = false;  // kept for compat; stage != None means active
+    static constexpr float KRAKEN_SCALE = 2.0f;
+    // Stage durations
+    static constexpr float KRAKEN_T_RUMBLE = 0.8f;
+    static constexpr float KRAKEN_T_RISE   = 1.7f;   // cumulative
+    static constexpr float KRAKEN_T_BURST  = 3.0f;   // cumulative
+    static constexpr float KRAKEN_T_REVEAL = 4.5f;   // cumulative (end)
 
     // Drop interaction
     DropInteractionState m_eDropState = DropInteractionState::None;

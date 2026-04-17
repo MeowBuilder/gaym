@@ -139,24 +139,35 @@ void CCamera::StopShake()
 
 void CCamera::UpdateViewMatrix()
 {
-    if (!m_pTarget)
-        return;
+    XMVECTOR lookAtPoint;
+    float yawRad, pitchRad, dist;
 
-    // Convert degrees to radians
-    float yawRad = XMConvertToRadians(m_yaw);
-    float pitchRad = XMConvertToRadians(m_pitch);
+    if (m_bCinematic)
+    {
+        // Orbit around fixed world-space point
+        lookAtPoint = XMLoadFloat3(&m_cinLookAt);
+        yawRad   = XMConvertToRadians(m_fCinYaw);
+        pitchRad = XMConvertToRadians(m_fCinPitch);
+        dist     = m_fCinDist;
+    }
+    else
+    {
+        if (!m_pTarget) return;
+        yawRad   = XMConvertToRadians(m_yaw);
+        pitchRad = XMConvertToRadians(m_pitch);
+        dist     = m_distance;
 
-    // Get target's position
-    TransformComponent* pTransform = m_pTarget->GetTransform();
-    XMVECTOR targetPos = XMLoadFloat3(&pTransform->GetPosition());
-    XMVECTOR lookAtPoint = targetPos + XMLoadFloat3(&m_lookAtOffset);
+        TransformComponent* pTransform = m_pTarget->GetTransform();
+        XMVECTOR targetPos = XMLoadFloat3(&pTransform->GetPosition());
+        lookAtPoint = targetPos + XMLoadFloat3(&m_lookAtOffset);
+    }
 
     // Calculate the camera's position based on orbit parameters
-    float x = m_distance * cosf(pitchRad) * sinf(yawRad);
-    float y = m_distance * sinf(pitchRad);
-    float z = m_distance * cosf(pitchRad) * cosf(yawRad);
+    float x = dist * cosf(pitchRad) * sinf(yawRad);
+    float y = dist * sinf(pitchRad);
+    float z = dist * cosf(pitchRad) * cosf(yawRad);
 
-    XMVECTOR cameraPos = targetPos + XMVectorSet(x, y, z, 0.0f);
+    XMVECTOR cameraPos = lookAtPoint + XMVectorSet(x, y, z, 0.0f);
 
     // Apply shake offset
     if (m_bShaking)
@@ -170,6 +181,20 @@ void CCamera::UpdateViewMatrix()
     XMVECTOR up = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
     XMMATRIX view = XMMatrixLookAtLH(cameraPos, lookAtPoint, up);
     XMStoreFloat4x4(&m_viewMatrix, view);
+}
+
+void CCamera::StartCinematic(const XMFLOAT3& lookAt, float distance, float pitch, float yaw)
+{
+    m_bCinematic = true;
+    m_cinLookAt  = lookAt;
+    m_fCinDist   = distance;
+    m_fCinPitch  = pitch;
+    m_fCinYaw    = yaw;
+}
+
+void CCamera::StopCinematic()
+{
+    m_bCinematic = false;
 }
 
 XMVECTOR CCamera::GetLookDirection() const

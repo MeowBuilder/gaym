@@ -23,7 +23,7 @@ public:
     bool IsDead() const { return m_fCurrentHP <= 0.0f; }
 
     // Reset velocity when teleported
-    void ResetGroundY() { m_fVelocityY = 0.0f; m_bOnGround = false; }
+    void ResetGroundY() { m_fVelocityY = 0.0f; m_bOnGround = true; }
 
 private:
     float m_fMaxHP = 100.0f;

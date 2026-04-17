@@ -290,6 +290,94 @@ void Scene::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList)
     m_bEnemiesSpawned = false;
 
     // --------------------------------------------------------------------------
+    // 용암 바닥 배치 (타일 아래에 큰 평면 하나) — 워터마크 이전에 생성해 영속 슬롯 확보
+    // --------------------------------------------------------------------------
+    {
+        CRoom* pTempRoom = m_pCurrentRoom;
+        m_pCurrentRoom = nullptr;  // m_vGameObjects에 등록 (룸에 속하지 않음)
+        m_pLavaPlane = CreateGameObject(pDevice, pCommandList);
+        m_pCurrentRoom = pTempRoom;
+
+        if (m_pLavaPlane)
+        {
+            // 하나의 큰 평면 메쉬 (타일 아래 전체를 덮음)
+            CubeMesh* pPlaneMesh = new CubeMesh(pDevice, pCommandList, 1.0f, 0.1f, 1.0f);
+            m_pLavaPlane->SetMesh(pPlaneMesh);
+
+            // 타일보다 약간 아래에 배치, 맵 + 화산 외곽까지 충분히 덮음
+            m_pLavaPlane->GetTransform()->SetPosition(0.0f, -3.5f, -200.0f);
+            m_pLavaPlane->GetTransform()->SetScale(2000.0f, 1.0f, 2000.0f);
+
+            m_pLavaPlane->SetLava(true);
+
+            // 용암 머티리얼 (텍스쳐 원본 색상 유지)
+            MATERIAL lavaMat;
+            lavaMat.m_cAmbient  = XMFLOAT4(0.25f, 0.25f, 0.25f, 1.0f);
+            lavaMat.m_cDiffuse  = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
+            lavaMat.m_cSpecular = XMFLOAT4(0.85f, 0.85f, 0.85f, 8.0f);  // smoothness 0.85
+            lavaMat.m_cEmissive = XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f);
+            m_pLavaPlane->SetMaterial(lavaMat);
+
+            // 텍스쳐 로드
+            m_pLavaPlane->SetTextureName("Assets/MapData/meshes/textures/lava-texture.png");
+            D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle;
+            D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle;
+            AllocateDescriptor(&cpuHandle, &gpuHandle);
+            m_pLavaPlane->LoadTexture(pDevice, pCommandList, cpuHandle);
+            m_pLavaPlane->SetSrvGpuDescriptorHandle(gpuHandle);
+
+            auto* pRC = m_pLavaPlane->AddComponent<RenderComponent>();
+            pRC->SetMesh(pPlaneMesh);
+            pRC->SetCastsShadow(false);
+            m_vShaders[0]->AddRenderComponent(pRC);
+        }
+        OutputDebugString(L"[Scene] Lava floor plane placed under tiles\n");
+    }
+
+    // --------------------------------------------------------------------------
+    // Volcano 장식 메쉬 배치 (맵 외곽 배경용) — 워터마크 이전에 생성해 영속 슬롯 확보
+    // --------------------------------------------------------------------------
+    {
+        struct VolcanoPlacement {
+            float x, y, z;
+            float scale;
+            float rotY;
+        };
+        // 대형 화산 3개 (맵 외곽 배경용 - 충분히 먼 거리로 배치)
+        VolcanoPlacement placements[] = {
+            { -600.0f, -8.0f, -800.0f, 3000.0f, 20.0f },   // 서북쪽 먼 외곽
+            { 600.0f, -8.0f, -800.0f, 2800.0f, -15.0f },   // 동북쪽 먼 외곽
+            { 0.0f, -10.0f, 400.0f, 5000.0f, 10.0f },      // 남쪽 외곽 (더 큰 화산)
+        };
+
+        XMFLOAT4X4 identity;
+        XMStoreFloat4x4(&identity, XMMatrixIdentity());
+
+        for (const auto& placement : placements)
+        {
+            CRoom* pTempRoom = m_pCurrentRoom;
+            m_pCurrentRoom = nullptr;  // m_vGameObjects에 등록 (룸에 속하지 않음)
+
+            GameObject* pVolcano = MeshLoader::LoadGeometryFromFile(
+                this, pDevice, pCommandList, NULL,
+                "Assets/MapData/meshes/volcano/volcano.bin");
+
+            m_pCurrentRoom = pTempRoom;
+
+            if (pVolcano)
+            {
+                pVolcano->GetTransform()->SetLocalMatrix(identity);
+                pVolcano->GetTransform()->SetPosition(placement.x, placement.y, placement.z);
+                pVolcano->GetTransform()->SetScale(placement.scale, placement.scale, placement.scale);
+                pVolcano->GetTransform()->SetRotation(-90.0f, placement.rotY, 0.0f);
+
+                AddRenderComponentsToHierarchy(pDevice, pCommandList, pVolcano, m_vShaders[0].get(), false);
+            }
+        }
+        OutputDebugString(L"[Scene] Volcano decorations placed (4 large volcanoes)\n");
+    }
+
+    // --------------------------------------------------------------------------
     // 영속 디스크립터 워터마크 기록
     // 이 시점 이후의 슬롯(맵 오브젝트·적·포탈 등)은 맵 전환 시 재활용됩니다.
     // --------------------------------------------------------------------------
@@ -346,95 +434,6 @@ void Scene::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList)
         XMFLOAT3 playerSpawn = m_pPlayerGameObject->GetTransform()->GetPosition();
         m_pInteractionCube->GetTransform()->SetPosition(
             playerSpawn.x + 5.0f, playerSpawn.y, playerSpawn.z);
-    }
-
-    // --------------------------------------------------------------------------
-    // 용암 바닥 배치 (타일 아래에 큰 평면 하나)
-    // --------------------------------------------------------------------------
-    {
-        CRoom* pTempRoom = m_pCurrentRoom;
-        m_pCurrentRoom = nullptr;
-
-        m_pLavaPlane = CreateGameObject(pDevice, pCommandList);
-        m_pCurrentRoom = pTempRoom;
-
-        if (m_pLavaPlane)
-        {
-            // 하나의 큰 평면 메쉬 (타일 아래 전체를 덮음)
-            CubeMesh* pPlaneMesh = new CubeMesh(pDevice, pCommandList, 1.0f, 0.1f, 1.0f);
-            m_pLavaPlane->SetMesh(pPlaneMesh);
-
-            // 타일보다 약간 아래에 배치, 맵 + 화산 외곽까지 충분히 덮음
-            m_pLavaPlane->GetTransform()->SetPosition(0.0f, -3.5f, -200.0f);
-            m_pLavaPlane->GetTransform()->SetScale(2000.0f, 1.0f, 2000.0f);
-
-            m_pLavaPlane->SetLava(true);
-
-            // 용암 머티리얼 (텍스쳐 원본 색상 유지)
-            MATERIAL lavaMat;
-            lavaMat.m_cAmbient  = XMFLOAT4(0.25f, 0.25f, 0.25f, 1.0f);
-            lavaMat.m_cDiffuse  = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
-            lavaMat.m_cSpecular = XMFLOAT4(0.85f, 0.85f, 0.85f, 8.0f);  // smoothness 0.85
-            lavaMat.m_cEmissive = XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f);
-            m_pLavaPlane->SetMaterial(lavaMat);
-
-            // 텍스쳐 로드
-            m_pLavaPlane->SetTextureName("Assets/MapData/meshes/textures/lava-texture.png");
-            D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle;
-            D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle;
-            AllocateDescriptor(&cpuHandle, &gpuHandle);
-            m_pLavaPlane->LoadTexture(pDevice, pCommandList, cpuHandle);
-            m_pLavaPlane->SetSrvGpuDescriptorHandle(gpuHandle);
-
-            auto* pRC = m_pLavaPlane->AddComponent<RenderComponent>();
-            pRC->SetMesh(pPlaneMesh);
-            pRC->SetCastsShadow(false);
-            m_vShaders[0]->AddRenderComponent(pRC);
-        }
-        OutputDebugString(L"[Scene] Lava floor plane placed under tiles\n");
-    }
-
-    // --------------------------------------------------------------------------
-    // Volcano 장식 메쉬 배치 (맵 외곽 배경용) - 개수 축소
-    // --------------------------------------------------------------------------
-    {
-        struct VolcanoPlacement {
-            float x, y, z;
-            float scale;
-            float rotY;
-        };
-        // 대형 화산 3개 (맵 외곽 배경용 - 충분히 먼 거리로 배치)
-        VolcanoPlacement placements[] = {
-            { -600.0f, -8.0f, -800.0f, 3000.0f, 20.0f },   // 서북쪽 먼 외곽
-            { 600.0f, -8.0f, -800.0f, 2800.0f, -15.0f },   // 동북쪽 먼 외곽
-            { 0.0f, -10.0f, 400.0f, 5000.0f, 10.0f },      // 남쪽 외곽 (더 큰 화산)
-        };
-
-        XMFLOAT4X4 identity;
-        XMStoreFloat4x4(&identity, XMMatrixIdentity());
-
-        for (const auto& placement : placements)
-        {
-            CRoom* pTempRoom = m_pCurrentRoom;
-            m_pCurrentRoom = nullptr;
-
-            GameObject* pVolcano = MeshLoader::LoadGeometryFromFile(
-                this, pDevice, pCommandList, NULL,
-                "Assets/MapData/meshes/volcano/volcano.bin");
-
-            m_pCurrentRoom = pTempRoom;
-
-            if (pVolcano)
-            {
-                pVolcano->GetTransform()->SetLocalMatrix(identity);
-                pVolcano->GetTransform()->SetPosition(placement.x, placement.y, placement.z);
-                pVolcano->GetTransform()->SetScale(placement.scale, placement.scale, placement.scale);
-                pVolcano->GetTransform()->SetRotation(-90.0f, placement.rotY, 0.0f);
-
-                AddRenderComponentsToHierarchy(pDevice, pCommandList, pVolcano, m_vShaders[0].get(), false);
-            }
-        }
-        OutputDebugString(L"[Scene] Volcano decorations placed (4 large volcanoes)\n");
     }
 
     // --------------------------------------------------------------------------
@@ -505,6 +504,141 @@ void Scene::Update(float deltaTime, InputSystem* pInputSystem)
 {
     m_fLastDeltaTime = deltaTime;
 
+    // ── Kraken emergence cinematic ──────────────────────────────────────────
+    // Trigger: death callback sets m_bPendingKrakenSpawn
+    if (m_bPendingKrakenSpawn && m_pPreloadedKraken)
+    {
+        m_bPendingKrakenSpawn = false;
+
+        GameObject* pKrakenObj = m_pPreloadedKraken->GetOwner();
+        if (pKrakenObj)
+        {
+            XMFLOAT3 emergePos = m_xmf3PendingKrakenPos;
+            emergePos.y = -5.0f;
+            pKrakenObj->GetTransform()->SetPosition(emergePos);
+            pKrakenObj->GetTransform()->SetScale(0.05f, 0.05f, 0.05f);
+        }
+
+        m_eKrakenStage = KrakenCutsceneStage::Rumble;
+        m_fKrakenEmergeTimer = 0.0f;
+
+        // Lock camera on emergence point + rumble shake
+        XMFLOAT3 camFocus = m_xmf3PendingKrakenPos;
+        camFocus.y = 0.0f;
+        m_pCamera->StartCinematic(camFocus, 45.0f, 25.0f, m_pCamera->IsFreeCam() ? 45.0f : 200.0f);
+        m_pCamera->StartShake(1.5f, KRAKEN_T_RUMBLE);
+
+        OutputDebugString(L"[Scene] Kraken cutscene: RUMBLE\n");
+    }
+
+    if (m_eKrakenStage != KrakenCutsceneStage::None && m_pPreloadedKraken)
+    {
+        m_fKrakenEmergeTimer += deltaTime;
+        float T = m_fKrakenEmergeTimer;
+
+        GameObject* pKrakenObj = m_pPreloadedKraken->GetOwner();
+
+        auto easeOutCubic = [](float t) { return 1.0f - (1.0f - t) * (1.0f - t) * (1.0f - t); };
+        auto easeInOutQuad = [](float t) { return t < 0.5f ? 2*t*t : 1 - (-2*t+2)*(-2*t+2)/2; };
+        auto lerp = [](float a, float b, float t) { return a + (b - a) * t; };
+
+        // ── Stage: Rumble (0 ~ KRAKEN_T_RUMBLE) ─────────────────────────────
+        if (m_eKrakenStage == KrakenCutsceneStage::Rumble)
+        {
+            // Kraken barely stirs underground
+            if (pKrakenObj)
+            {
+                float t = T / KRAKEN_T_RUMBLE;
+                float s = lerp(0.05f, 0.12f, easeOutCubic(t));
+                pKrakenObj->GetTransform()->SetScale(s, s, s);
+                XMFLOAT3 pos = m_xmf3PendingKrakenPos; pos.y = -5.0f;
+                pKrakenObj->GetTransform()->SetPosition(pos);
+            }
+
+            if (T >= KRAKEN_T_RUMBLE)
+            {
+                m_eKrakenStage = KrakenCutsceneStage::Rise;
+                // Zoom in closer for the rise
+                XMFLOAT3 camFocus = m_xmf3PendingKrakenPos; camFocus.y = 1.0f;
+                m_pCamera->StartCinematic(camFocus, 30.0f, 20.0f, 210.0f);
+                m_pCamera->StartShake(0.4f, KRAKEN_T_RISE - KRAKEN_T_RUMBLE);
+                OutputDebugString(L"[Scene] Kraken cutscene: RISE\n");
+            }
+        }
+        // ── Stage: Rise (KRAKEN_T_RUMBLE ~ KRAKEN_T_RISE) ───────────────────
+        else if (m_eKrakenStage == KrakenCutsceneStage::Rise)
+        {
+            float t = (T - KRAKEN_T_RUMBLE) / (KRAKEN_T_RISE - KRAKEN_T_RUMBLE);
+            if (t > 1.0f) t = 1.0f;
+            float e = easeInOutQuad(t);
+
+            if (pKrakenObj)
+            {
+                float s = lerp(0.12f, 0.55f, e);
+                pKrakenObj->GetTransform()->SetScale(s, s, s);
+                XMFLOAT3 pos = m_xmf3PendingKrakenPos;
+                pos.y = lerp(-5.0f, -1.0f, e);
+                pKrakenObj->GetTransform()->SetPosition(pos);
+            }
+
+            if (T >= KRAKEN_T_RISE)
+            {
+                m_eKrakenStage = KrakenCutsceneStage::Burst;
+                // Pull back dramatically for the burst
+                XMFLOAT3 camFocus = m_xmf3PendingKrakenPos; camFocus.y = 2.0f;
+                m_pCamera->StartCinematic(camFocus, 50.0f, 30.0f, 210.0f);
+                m_pCamera->StartShake(2.5f, KRAKEN_T_BURST - KRAKEN_T_RISE);
+                OutputDebugString(L"[Scene] Kraken cutscene: BURST\n");
+            }
+        }
+        // ── Stage: Burst (KRAKEN_T_RISE ~ KRAKEN_T_BURST) ───────────────────
+        else if (m_eKrakenStage == KrakenCutsceneStage::Burst)
+        {
+            float t = (T - KRAKEN_T_RISE) / (KRAKEN_T_BURST - KRAKEN_T_RISE);
+            if (t > 1.0f) t = 1.0f;
+            float e = easeOutCubic(t);
+
+            if (pKrakenObj)
+            {
+                float s = lerp(0.55f, KRAKEN_SCALE, e);
+                pKrakenObj->GetTransform()->SetScale(s, s, s);
+                XMFLOAT3 pos = m_xmf3PendingKrakenPos;
+                pos.y = lerp(-1.0f, 0.0f, e);
+                pKrakenObj->GetTransform()->SetPosition(pos);
+            }
+
+            if (T >= KRAKEN_T_BURST)
+            {
+                m_eKrakenStage = KrakenCutsceneStage::Reveal;
+                // Wide reveal shot
+                XMFLOAT3 camFocus = m_xmf3PendingKrakenPos; camFocus.y = 3.0f;
+                m_pCamera->StartCinematic(camFocus, 65.0f, 35.0f, 210.0f);
+                OutputDebugString(L"[Scene] Kraken cutscene: REVEAL\n");
+            }
+        }
+        // ── Stage: Reveal (KRAKEN_T_BURST ~ KRAKEN_T_REVEAL) ────────────────
+        else if (m_eKrakenStage == KrakenCutsceneStage::Reveal)
+        {
+            float t = (T - KRAKEN_T_BURST) / (KRAKEN_T_REVEAL - KRAKEN_T_BURST);
+            if (t > 1.0f) t = 1.0f;
+
+            // Slowly zoom out further during reveal
+            float dist = lerp(65.0f, 75.0f, t);
+            m_pCamera->SetCinematicOrbit(dist, 35.0f, 210.0f);
+
+            if (T >= KRAKEN_T_REVEAL)
+            {
+                // Cutscene over: return camera to player, start combat
+                m_eKrakenStage = KrakenCutsceneStage::None;
+                m_pCamera->StopCinematic();
+
+                m_pPreloadedKraken->SetTarget(m_pPlayerGameObject);
+                m_pPreloadedKraken = nullptr;
+                OutputDebugString(L"[Scene] Kraken fully emerged - combat begins\n");
+            }
+        }
+    }
+
     // F2: FreeCam 토글 (테스트용 자유 시점)
     if (pInputSystem && pInputSystem->IsKeyPressed(VK_F2))
     {
@@ -516,6 +650,24 @@ void Scene::Update(float deltaTime, InputSystem* pInputSystem)
     {
         m_pDebugRenderer->Toggle();
         OutputDebugString(m_pDebugRenderer->IsEnabled() ? L"[Debug] Colliders ON\n" : L"[Debug] Colliders OFF\n");
+    }
+
+    // F3: Toggle static bind pose (no skinning) — plane stays = mesh/material bug, disappears = skinning bug
+    if (pInputSystem && pInputSystem->IsKeyPressed(VK_F3))
+    {
+        AnimationComponent::s_bDebugStaticPose = !AnimationComponent::s_bDebugStaticPose;
+        OutputDebugString(AnimationComponent::s_bDebugStaticPose
+            ? L"[Debug] Static pose ON (skinning disabled)\n"
+            : L"[Debug] Static pose OFF (skinning enabled)\n");
+    }
+
+    // F4: Toggle no-texture mode — shows raw geometry with material color only
+    if (pInputSystem && pInputSystem->IsKeyPressed(VK_F4))
+    {
+        GameObject::s_bDebugNoTexture = !GameObject::s_bDebugNoTexture;
+        OutputDebugString(GameObject::s_bDebugNoTexture
+            ? L"[Debug] No-texture ON (solid color)\n"
+            : L"[Debug] No-texture OFF (textures enabled)\n");
     }
 
     // B 키: 현재 테마에 맞는 보스전
@@ -752,8 +904,60 @@ void Scene::Update(float deltaTime, InputSystem* pInputSystem)
         }
     }
 
-    // Update player specific logic
-    if (m_pPlayerGameObject && m_pPlayerGameObject->GetComponent<PlayerComponent>())
+    // ── Dragon boss intro cutscene ──────────────────────────────────────────
+    if (m_pDragonIntroEnemy)
+    {
+        if (m_pDragonIntroEnemy->IsInIntro())
+        {
+            BossIntroPhase phase = m_pDragonIntroEnemy->GetIntroPhase();
+            GameObject* pDragonObj = m_pDragonIntroEnemy->GetOwner();
+            XMFLOAT3 dragonPos = pDragonObj ? pDragonObj->GetTransform()->GetPosition() : XMFLOAT3(0,0,0);
+
+            if (phase != m_eLastDragonPhase)
+            {
+                m_eLastDragonPhase = phase;
+                switch (phase)
+                {
+                case BossIntroPhase::Landing:
+                    // Mid shot — watch the dragon touch down
+                    m_pCamera->StartCinematic({ dragonPos.x, 2.0f, dragonPos.z }, 60.0f, 25.0f, 200.0f);
+                    m_pCamera->StartShake(0.4f, 1.5f);
+                    break;
+                case BossIntroPhase::Roaring:
+                    // Dramatic side angle — strong shake, dragon fills frame
+                    m_pCamera->StartCinematic({ dragonPos.x, 4.0f, dragonPos.z }, 42.0f, 30.0f, 230.0f);
+                    m_pCamera->StartShake(2.2f, 2.2f);
+                    break;
+                default: break;
+                }
+            }
+
+            // FlyingIn: wide overhead shot tracking the dragon as it descends
+            // Player can move freely during this phase
+            if (phase == BossIntroPhase::FlyingIn && pDragonObj)
+            {
+                float focusY = dragonPos.y * 0.45f + 3.0f;
+                m_pCamera->StartCinematic({ dragonPos.x, focusY, dragonPos.z }, 95.0f, 22.0f, 185.0f);
+            }
+        }
+        else
+        {
+            // Intro done — return camera to player
+            m_pCamera->StopCinematic();
+            m_eLastDragonPhase = BossIntroPhase::None;
+            m_pDragonIntroEnemy = nullptr;
+            OutputDebugString(L"[Scene] Dragon intro complete - combat begins\n");
+        }
+    }
+
+    // Player input: allowed during FlyingIn so player can walk in,
+    // blocked only during Landing/Roaring and Kraken cutscene
+    bool bBlockInput = (m_eKrakenStage != KrakenCutsceneStage::None)
+        || (m_pDragonIntroEnemy != nullptr
+            && m_eLastDragonPhase != BossIntroPhase::FlyingIn
+            && m_eLastDragonPhase != BossIntroPhase::None);
+    if (m_pPlayerGameObject && m_pPlayerGameObject->GetComponent<PlayerComponent>()
+        && !bBlockInput)
     {
         m_pPlayerGameObject->GetComponent<PlayerComponent>()->PlayerUpdate(deltaTime, pInputSystem, m_pCamera.get());
     }
@@ -1775,6 +1979,13 @@ void Scene::TransitionToBossRoom()
             if (pEnemy)
             {
                 pEnemy->StartBossIntro(25.0f);  // 25유닛 위에서 착지
+
+                // Camera cinematic: wide-angle shot looking up at the sky where dragon appears
+                XMFLOAT3 landPos = dragonPos;
+                landPos.y = 0.0f;
+                m_pCamera->StartCinematic(landPos, 55.0f, 15.0f, 180.0f);
+                m_pDragonIntroEnemy = pEnemy;
+                m_eLastDragonPhase  = BossIntroPhase::None;
             }
         }
 
@@ -1790,9 +2001,12 @@ void Scene::TransitionToBossRoom()
         m_bInteractionCubeActive = false;
     }
 
-    // ── 10. 플레이어 groundY 리셋
+    // ── 10. 플레이어 지면 리셋 (공중에 뜨지 않도록 y=0 강제)
     if (m_pPlayerGameObject)
     {
+        XMFLOAT3 pPos = m_pPlayerGameObject->GetTransform()->GetPosition();
+        pPos.y = 0.0f;
+        m_pPlayerGameObject->GetTransform()->SetPosition(pPos);
         auto* pPC = m_pPlayerGameObject->GetComponent<PlayerComponent>();
         if (pPC) pPC->ResetGroundY();
     }
@@ -2341,14 +2555,24 @@ void Scene::TransitionToWaterBossRoom()
     if (m_pLavaPlane)
         m_pLavaPlane->GetTransform()->SetPosition(0.0f, -10000.0f, 0.0f);
 
-    // ── 7. 물 평면 숨기기 (재생성하기 위해)
+    // ── 7. 물 평면 제거 (이전 물 평면을 m_vGameObjects에서 삭제)
+    GameObject* pOldWaterPlane = m_pWaterPlane;
     m_pWaterPlane = nullptr;
 
-    // ── 8. 영속 오브젝트 RC 재등록 (용암 제외)
+    // ── 8. 영속 오브젝트 RC 재등록 (용암, 이전 물 평면 제외)
     for (auto& pGO : m_vGameObjects)
     {
-        if (pGO.get() != m_pLavaPlane)
+        if (pGO.get() != m_pLavaPlane && pGO.get() != pOldWaterPlane)
             ReAddRenderComponentsToShader(pGO.get());
+    }
+
+    // 이전 물 평면을 m_vGameObjects에서 제거 (고아 RC 방지)
+    if (pOldWaterPlane)
+    {
+        m_vGameObjects.erase(
+            std::remove_if(m_vGameObjects.begin(), m_vGameObjects.end(),
+                [pOldWaterPlane](const std::unique_ptr<GameObject>& p) { return p.get() == pOldWaterPlane; }),
+            m_vGameObjects.end());
     }
 
     ID3D12Device*              pDevice      = Dx12App::GetInstance()->GetDevice();
@@ -2422,27 +2646,55 @@ void Scene::TransitionToWaterBossRoom()
             pGO->Update(0.0f);
     }
 
-    // ── 12. 크라켄 스폰
+    // ── 12. 2페이즈 보스 스폰: Phase 1 = Blue Dragon, Phase 2 = Kraken (pre-loaded hidden)
+    m_pPreloadedKraken = nullptr;
+    m_bPendingKrakenSpawn = false;
+    m_bKrakenEmerging = false;
+
     if (m_pCurrentRoom && m_pEnemySpawner)
     {
         RoomSpawnConfig emptyConfig;
         m_pCurrentRoom->SetSpawnConfig(emptyConfig);
 
-        OutputDebugString(L"[Scene] Spawning Kraken boss\n");
-        XMFLOAT3 krakenPos = XMFLOAT3(0.0f, 0.0f, 20.0f);
+        XMFLOAT3 bossPos = XMFLOAT3(0.0f, 0.0f, 20.0f);
         if (m_pPlayerGameObject)
         {
             XMFLOAT3 playerPos = m_pPlayerGameObject->GetTransform()->GetPosition();
-            krakenPos = XMFLOAT3(playerPos.x, playerPos.y, playerPos.z + 20.0f);
+            bossPos = XMFLOAT3(playerPos.x, playerPos.y, playerPos.z + 20.0f);
         }
 
-        GameObject* pKraken = m_pEnemySpawner->SpawnEnemy(m_pCurrentRoom, "Kraken", krakenPos, m_pPlayerGameObject);
-
+        // Pre-spawn Kraken hidden underground (no target) to avoid mid-combat GPU upload lag
+        XMFLOAT3 hidePos = XMFLOAT3(bossPos.x, -500.0f, bossPos.z);
+        GameObject* pKraken = m_pEnemySpawner->SpawnEnemy(m_pCurrentRoom, "Kraken", hidePos, nullptr);
         if (pKraken)
         {
-            EnemyComponent* pEnemy = pKraken->GetComponent<EnemyComponent>();
-            if (pEnemy)
-                pEnemy->StartBossIntro(5.0f);  // 5유닛 위에서 착지 (수중 등장)
+            pKraken->GetTransform()->SetScale(0.05f, 0.05f, 0.05f);
+            m_pPreloadedKraken = pKraken->GetComponent<EnemyComponent>();
+        }
+
+        OutputDebugString(L"[Scene] Spawning Blue Dragon (Phase 1)\n");
+        GameObject* pDragon = m_pEnemySpawner->SpawnEnemy(m_pCurrentRoom, "BlueDragon", bossPos, m_pPlayerGameObject);
+
+        if (pDragon)
+        {
+            EnemyComponent* pDragonEnemy = pDragon->GetComponent<EnemyComponent>();
+            if (pDragonEnemy)
+            {
+                pDragonEnemy->StartBossIntro(5.0f);
+
+                CRoom* pRoom = m_pCurrentRoom;
+                pDragonEnemy->SetOnDeathCallback([this, pRoom](EnemyComponent* pDeadEnemy)
+                {
+                    if (pRoom)
+                        pRoom->OnEnemyDeath(pDeadEnemy);
+
+                    OutputDebugString(L"[Scene] Blue Dragon defeated - Kraken emerges! (Phase 2)\n");
+                    m_xmf3PendingKrakenPos = { 0.0f, 0.0f, 0.0f };
+                    if (pDeadEnemy && pDeadEnemy->GetOwner())
+                        m_xmf3PendingKrakenPos = pDeadEnemy->GetOwner()->GetTransform()->GetPosition();
+                    m_bPendingKrakenSpawn = true;
+                });
+            }
         }
 
         m_pCurrentRoom->SetState(RoomState::Active);

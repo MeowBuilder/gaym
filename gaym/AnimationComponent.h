@@ -31,6 +31,10 @@ public:
     void SetTimeOffset(float fOffset) { m_fTimeOffset = fOffset; }
     float GetTimeOffset() const { return m_fTimeOffset; }
 
+    // Debug: F3 = static bind pose (no skinning), F4 = no texture (see raw geometry)
+    static bool s_bDebugStaticPose;
+    bool m_bBoneLogDone = false;  // per-instance bone match log flag
+
     // Playback speed (1.0 = normal, 0.5 = half speed, 2.0 = double speed)
     void SetPlaybackSpeed(float fSpeed) { m_fPlaybackSpeed = fSpeed; }
     float GetPlaybackSpeed() const { return m_fPlaybackSpeed; }

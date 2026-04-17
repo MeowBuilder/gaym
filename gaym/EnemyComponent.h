@@ -176,6 +176,7 @@ public:
     // Boss intro cutscene
     void StartBossIntro(float fStartHeight = 30.0f);
     bool IsInIntro() const { return m_eIntroPhase != BossIntroPhase::None && m_eIntroPhase != BossIntroPhase::Done; }
+    BossIntroPhase GetIntroPhase() const { return m_eIntroPhase; }
 
     // Attack indicators
     void SetIndicatorConfig(const AttackIndicatorConfig& config) { m_IndicatorConfig = config; }

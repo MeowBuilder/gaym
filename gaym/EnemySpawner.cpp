@@ -496,6 +496,52 @@ void EnemySpawner::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pComma
 
     RegisterEnemyPreset("Demon", demon);
 
+    // Register Blue Dragon preset (Water boss Phase 1)
+    EnemySpawnData blueDragon;
+    blueDragon.m_strMeshPath      = "Assets/Enemies/Dragon_blue/Blue.bin";
+    blueDragon.m_strAnimationPath = "Assets/Enemies/Dragon_blue/Blue_Anim.bin";
+    blueDragon.m_strTexturePath   = "Assets/Enemies/Dragon_blue/Textures/BlueHP.png";
+    blueDragon.m_xmf3Scale = XMFLOAT3(3.0f, 3.0f, 3.0f);
+    blueDragon.m_xmf4Color = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
+
+    blueDragon.m_Stats.m_fMaxHP              = 800.0f;
+    blueDragon.m_Stats.m_fCurrentHP          = 800.0f;
+    blueDragon.m_Stats.m_fMoveSpeed          = 9.0f;
+    blueDragon.m_Stats.m_fAttackRange        = 35.0f;
+    blueDragon.m_Stats.m_fAttackCooldown     = 1.5f;
+    blueDragon.m_Stats.m_fLongRangeThreshold = 30.0f;
+    blueDragon.m_Stats.m_fMidRangeThreshold  = 15.0f;
+
+    blueDragon.m_bIsFlying = false;
+    blueDragon.m_fFlyHeight = 0.0f;
+    blueDragon.m_bIsBoss = true;
+    blueDragon.m_fSpecialAttackCooldown = 5.0f;
+    blueDragon.m_nSpecialAttackChance   = 40;
+    blueDragon.m_nFlyingAttackChance    = 45;
+
+    blueDragon.m_AnimConfig.m_strIdleClip    = "Idle";
+    blueDragon.m_AnimConfig.m_strChaseClip   = "Walk";
+    blueDragon.m_AnimConfig.m_strAttackClip  = "Basic Attack";
+    blueDragon.m_AnimConfig.m_strStaggerClip = "Get Hit";
+    blueDragon.m_AnimConfig.m_strDeathClip   = "Die";
+
+    blueDragon.m_IndicatorConfig.m_eType      = IndicatorType::Circle;
+    blueDragon.m_IndicatorConfig.m_fHitRadius = 14.0f;
+
+    blueDragon.m_fnCreateAttack = [pProjMgr]() {
+        return std::make_unique<BreathAttackBehavior>(pProjMgr, 28.0f, 35.0f, 4, 42.0f, 0.4f, 0.8f, 0.3f);
+    };
+
+    blueDragon.m_fnCreateSpecialAttack = []() -> std::unique_ptr<IAttackBehavior> {
+        int choice = rand() % 2;
+        if (choice == 0)
+            return std::make_unique<TailSweepAttackBehavior>(35.0f, 0.35f, 0.25f, 0.35f, 8.0f, 180.0f, true);
+        else
+            return std::make_unique<JumpSlamAttackBehavior>(45.0f, 10.0f, 0.45f, 7.0f, 0.25f, 0.4f, true);
+    };
+
+    RegisterEnemyPreset("BlueDragon", blueDragon);
+
     // Create shared meshes for attack indicators
     m_pRingMesh = new RingMesh(pDevice, pCommandList, 1.0f, 0.93f, 48);
     m_pRingMesh->AddRef();
