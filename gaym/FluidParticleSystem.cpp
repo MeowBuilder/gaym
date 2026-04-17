@@ -15,6 +15,8 @@ ComPtr<ID3D12RootSignature> FluidParticleSystem::s_pSPHRootSig;
 ComPtr<ID3D12PipelineState> FluidParticleSystem::s_pDensityPSO;
 ComPtr<ID3D12PipelineState> FluidParticleSystem::s_pForcesPSO;
 ComPtr<ID3D12PipelineState> FluidParticleSystem::s_pIntegratePSO;
+ComPtr<ID3D12PipelineState> FluidParticleSystem::s_pHashClearPSO;
+ComPtr<ID3D12PipelineState> FluidParticleSystem::s_pHashBuildPSO;
 
 // Internal pass CB layout (matches cbFluidPass in inline shader)
 struct FluidPassCB
@@ -369,6 +371,46 @@ void FluidParticleSystem::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList*
             else { m_pCPBuffer->Map(0, nullptr, (void**)&m_pMappedCPBuffer); }
         }
 
+        // m_pHashCountBuffer: DEFAULT, UAV (uint x GPU_HASH_TABLE_SIZE)
+        {
+            D3D12_RESOURCE_DESC desc = {};
+            desc.Dimension          = D3D12_RESOURCE_DIMENSION_BUFFER;
+            desc.Width              = sizeof(uint32_t) * GPU_HASH_TABLE_SIZE;
+            desc.Height             = 1;
+            desc.DepthOrArraySize   = 1;
+            desc.MipLevels          = 1;
+            desc.Format             = DXGI_FORMAT_UNKNOWN;
+            desc.SampleDesc.Count   = 1;
+            desc.Layout             = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+            desc.Flags              = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+
+            hr = pDevice->CreateCommittedResource(
+                &defaultHeapProps, D3D12_HEAP_FLAG_NONE,
+                &desc, D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+                nullptr, IID_PPV_ARGS(&m_pHashCountBuffer));
+            if (FAILED(hr)) { OutputDebugStringA("[FluidPS] Hash count buffer 생성 실패\n"); }
+        }
+
+        // m_pHashEntryBuffer: DEFAULT, UAV (uint x GPU_HASH_TABLE_SIZE * GPU_MAX_PER_CELL)
+        {
+            D3D12_RESOURCE_DESC desc = {};
+            desc.Dimension          = D3D12_RESOURCE_DIMENSION_BUFFER;
+            desc.Width              = sizeof(uint32_t) * GPU_HASH_TABLE_SIZE * GPU_MAX_PER_CELL;
+            desc.Height             = 1;
+            desc.DepthOrArraySize   = 1;
+            desc.MipLevels          = 1;
+            desc.Format             = DXGI_FORMAT_UNKNOWN;
+            desc.SampleDesc.Count   = 1;
+            desc.Layout             = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+            desc.Flags              = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+
+            hr = pDevice->CreateCommittedResource(
+                &defaultHeapProps, D3D12_HEAP_FLAG_NONE,
+                &desc, D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+                nullptr, IID_PPV_ARGS(&m_pHashEntryBuffer));
+            if (FAILED(hr)) { OutputDebugStringA("[FluidPS] Hash entry buffer 생성 실패\n"); }
+        }
+
         // SRV를 m_pGPURenderBuffer에 등록 (기존 m_pParticleBuffer SRV를 덮어씀)
         if (m_pGPURenderBuffer)
         {
@@ -548,7 +590,7 @@ void FluidParticleSystem::Spawn(const XMFLOAT3& center, const FluidParticleConfi
         XMFLOAT3 offset = RandInSphere(config.nucleusRadius);
         p.position = { center.x + offset.x, center.y + offset.y, center.z + offset.z };
         p.velocity = { 0.f, 0.f, 0.f };  // 처음부터 중앙에 정지 스폰
-        p.force = {}; p.density = config.restDensity; p.pressure = 0.f; p.mass = 1.f;
+        p.force = {}; p.density = config.restDensity; p.nearDensity = 0.f; p.mass = 1.f;
         p.active = true; p.cpGroup = 0;  // 핵 CP (master, gCPs[0])
     }
 
@@ -585,7 +627,7 @@ void FluidParticleSystem::Spawn(const XMFLOAT3& center, const FluidParticleConfi
                                 inwardVel.z + RandRange(-1.f, 1.f) };
             else
                 p.velocity = { RandRange(-1.f, 1.f), RandRange(-0.5f, 0.5f), RandRange(-1.f, 1.f) };
-            p.force = {}; p.density = config.restDensity; p.pressure = 0.f; p.mass = 1.f;
+            p.force = {}; p.density = config.restDensity; p.nearDensity = 0.f; p.mass = 1.f;
             p.active = true; p.cpGroup = assignedCpGroup;
         }
     }
@@ -597,7 +639,7 @@ void FluidParticleSystem::Spawn(const XMFLOAT3& center, const FluidParticleConfi
         XMFLOAT3 offset = RandInSphere(config.spawnRadius);
         p.position = { center.x + offset.x, center.y + offset.y, center.z + offset.z };
         p.velocity = { RandRange(-1.5f, 1.5f), RandRange(-0.5f, 0.5f), RandRange(-1.5f, 1.5f) };
-        p.force = {}; p.density = config.restDensity; p.pressure = 0.f; p.mass = 1.f;
+        p.force = {}; p.density = config.restDensity; p.nearDensity = 0.f; p.mass = 1.f;
         p.active = true; p.cpGroup = -1;  // 전체 CP 영향
     }
 
@@ -672,25 +714,8 @@ void FluidParticleSystem::ClearControlPoints()
 }
 
 // ============================================================================
-// SPH Kernel Functions
+// SPH Kernel Functions (Clavet 2005 / Sebastian Lague dual-density relaxation)
 // ============================================================================
-float FluidParticleSystem::Poly6(float r2, float h2) const
-{
-    if (r2 >= h2) return 0.0f;
-    float h = sqrtf(h2);
-    float h9 = h2 * h2 * h2 * h2 * h;  // h^9
-    float diff = h2 - r2;
-    return (315.0f / (64.0f * PI_F * h9)) * diff * diff * diff;
-}
-
-XMFLOAT3 FluidParticleSystem::SpikyGrad(const XMFLOAT3& r, float rLen, float h) const
-{
-    if (rLen >= h || rLen < 0.0001f) return { 0, 0, 0 };
-    float h6 = h * h * h * h * h * h;  // h^6
-    float coeff = -(45.0f / (PI_F * h6)) * (h - rLen) * (h - rLen) / rLen;
-    return { r.x * coeff, r.y * coeff, r.z * coeff };
-}
-
 float FluidParticleSystem::ViscLaplacian(float r, float h) const
 {
     if (r >= h) return 0.0f;
@@ -774,11 +799,18 @@ int FluidParticleSystem::GetNeighbors(int i, int* out, int maxOut) const
 }
 
 // ============================================================================
-// SPH Density / Pressure
+// SPH Density — Clavet 2005 이중 밀도 완화 (GPU와 동일한 SpikyPow2 + SpikyPow3)
 // ============================================================================
 void FluidParticleSystem::ComputeDensityPressure()
 {
-    float h2 = m_Config.smoothingRadius * m_Config.smoothingRadius;
+    float h  = m_Config.smoothingRadius;
+    float h2 = h * h;
+    float h5 = h2 * h2 * h;
+    float h6 = h5 * h;
+    // 커널 상수 (GPU DispatchSPH의 kSpikyPow2/kSpikyPow3와 동일)
+    float kPow2 = 15.0f / (2.0f * PI_F * h5);   // SpikyPow2 정규화
+    float kPow3 = 15.0f / (PI_F * h6);           // SpikyPow3 정규화
+
     int neighbors[MAX_NEIGHBOR_SEARCH];
     int n = (int)m_Particles.size();
 
@@ -786,8 +818,9 @@ void FluidParticleSystem::ComputeDensityPressure()
     {
         if (!m_Particles[i].active) continue;
 
-        // Self contribution
-        float density = m_Particles[i].mass * Poly6(0.0f, h2);
+        // 자기 기여: r=0 → SpikyPow2(0,h) = h² * kPow2 (GPU와 동일)
+        float density     = h2 * kPow2;
+        float nearDensity = 0.0f;
 
         int nCount = GetNeighbors(i, neighbors, MAX_NEIGHBOR_SEARCH);
         for (int k = 0; k < nCount; ++k)
@@ -797,21 +830,32 @@ void FluidParticleSystem::ComputeDensityPressure()
             float ry = m_Particles[i].position.y - m_Particles[j].position.y;
             float rz = m_Particles[i].position.z - m_Particles[j].position.z;
             float r2 = rx * rx + ry * ry + rz * rz;
+            if (r2 >= h2) continue;
 
-            density += m_Particles[j].mass * Poly6(r2, h2);
+            float r = sqrtf(r2);
+            float v = h - r;
+            density     += v * v * kPow2;       // SpikyPow2: K*(h-r)^2
+            nearDensity += v * v * v * kPow3;   // SpikyPow3: K*(h-r)^3
         }
 
-        m_Particles[i].density = (std::max)(density, 0.001f);
-        m_Particles[i].pressure = m_Config.stiffness * (m_Particles[i].density - m_Config.restDensity);
+        m_Particles[i].density     = (std::max)(density, 0.001f);
+        m_Particles[i].nearDensity = (std::max)(nearDensity, 0.0f);
     }
 }
 
 // ============================================================================
-// SPH Forces
+// SPH Forces — Clavet 2005 이중 밀도 완화 (GPU와 동일한 압력 공식)
 // ============================================================================
 void FluidParticleSystem::ComputeForces()
 {
-    float h = m_Config.smoothingRadius;
+    float h  = m_Config.smoothingRadius;
+    float h2 = h * h;
+    float h5 = h2 * h2 * h;
+    float h6 = h5 * h;
+    // DerivSpikyPow2: -2*K2*(h-r),  DerivSpikyPow3: -3*K3*(h-r)^2
+    float kPow2Grad = 30.0f / (2.0f * PI_F * h5);  // GPU kSpikyPow2Grad
+    float kPow3Grad = 45.0f / (PI_F * h6);          // GPU kSpikyPow3Grad
+
     int neighbors[MAX_NEIGHBOR_SEARCH];
     int n = (int)m_Particles.size();
 
@@ -821,6 +865,11 @@ void FluidParticleSystem::ComputeForces()
 
         float fx = 0.0f, fy = 0.0f, fz = 0.0f;
 
+        float densityI      = m_Particles[i].density;
+        float nearDensityI  = m_Particles[i].nearDensity;
+        float pressI        = m_Config.stiffness * (densityI - m_Config.restDensity);
+        float nearPressI    = m_Config.nearPressureMultiplier * nearDensityI;
+
         int nCount = GetNeighbors(i, neighbors, MAX_NEIGHBOR_SEARCH);
         for (int k = 0; k < nCount; ++k)
         {
@@ -829,23 +878,37 @@ void FluidParticleSystem::ComputeForces()
             float ry = m_Particles[i].position.y - m_Particles[j].position.y;
             float rz = m_Particles[i].position.z - m_Particles[j].position.z;
             float rLen = sqrtf(rx * rx + ry * ry + rz * rz);
+            if (rLen < 0.0001f || rLen >= h) continue;
 
-            if (rLen < 0.0001f) continue;
+            float densityJ      = (std::max)(m_Particles[j].density, 0.001f);
+            float nearDensityJ  = (std::max)(m_Particles[j].nearDensity, 0.001f);
+            float pressJ        = m_Config.stiffness * (densityJ - m_Config.restDensity);
+            float nearPressJ    = m_Config.nearPressureMultiplier * nearDensityJ;
 
-            // Pressure force
-            float pressAvg = (m_Particles[i].pressure + m_Particles[j].pressure) * 0.5f;
-            XMFLOAT3 rVec = { rx, ry, rz };
-            XMFLOAT3 gradP = SpikyGrad(rVec, rLen, h);
+            float sharedPress     = (pressI + pressJ) * 0.5f;
+            float sharedNearPress = (nearPressI + nearPressJ) * 0.5f;
 
-            float pScale = -m_Particles[j].mass * pressAvg / (std::max)(m_Particles[j].density, 0.001f);
-            fx += gradP.x * pScale;
-            fy += gradP.y * pScale;
-            fz += gradP.z * pScale;
+            // 방향: j → i (GPU와 동일: diff = pos_i - pos_j)
+            float dirX = rx / rLen;
+            float dirY = ry / rLen;
+            float dirZ = rz / rLen;
 
-            // Viscosity force
+            // 압력 구배 커널 도함수 (음수값)
+            float v = h - rLen;
+            float dPress     = -v * kPow2Grad;        // DerivSpikyPow2
+            float dNearPress = -v * v * kPow3Grad;    // DerivSpikyPow3
+
+            // GPU와 동일: f -= dir * (dW*P/rho + dWnear*Pnear/rho_near) * mass_j
+            float pForce = (dPress * sharedPress / densityJ
+                          + dNearPress * sharedNearPress / nearDensityJ)
+                          * m_Particles[j].mass;
+            fx -= dirX * pForce;
+            fy -= dirY * pForce;
+            fz -= dirZ * pForce;
+
+            // 점성 (기존 유지 - GPU와 동일)
             float viscLap = ViscLaplacian(rLen, h);
-            float vScale = m_Config.viscosity * m_Particles[j].mass / (std::max)(m_Particles[j].density, 0.001f) * viscLap;
-
+            float vScale = m_Config.viscosity * m_Particles[j].mass / densityJ * viscLap;
             fx += (m_Particles[j].velocity.x - m_Particles[i].velocity.x) * vScale;
             fy += (m_Particles[j].velocity.y - m_Particles[i].velocity.y) * vScale;
             fz += (m_Particles[j].velocity.z - m_Particles[i].velocity.z) * vScale;
@@ -1403,7 +1466,17 @@ void FluidParticleSystem::RenderDepth(
     cb.projA            = projA;
     cb.cameraUp         = cameraUp;
     cb.projB            = projB;
-    cb.smoothingRadius  = m_Config.smoothingRadius;
+    // 폭발 페이드 중에는 SSF 구체 반경을 fadeMult로 축소 → 파티클이 시각적으로 줄어듦
+    // 정상(m_explodeFade=2.0): 원래 반경 그대로
+    // 폭발(m_explodeFade=1.0→0.0): 반경이 1.0→0.0으로 선형 축소
+    {
+        float displayRadius = m_Config.smoothingRadius;
+        if (m_explodeFade < 1.5f) {
+            float fadeMult = (std::max)(0.0f, (std::min)(1.0f, m_explodeFade));
+            displayRadius *= fadeMult;
+        }
+        cb.smoothingRadius = displayRadius;
+    }
     cb._pad[0] = cb._pad[1] = cb._pad[2] = 0.f;
     memcpy(m_pMappedDepthPassCB, &cb, sizeof(cb));
 
@@ -1458,7 +1531,8 @@ void FluidParticleSystem::RenderThicknessOnly(
 // ============================================================================
 // GPU SPH: HLSL Compute Shader
 // ============================================================================
-static const char* g_SPHComputeShader = R"(
+// g_SPHComputeShader: 두 부분으로 나뉜 인접 raw 문자열 리터럴 (MSVC 크기 제한 우회)
+static const char* g_SPHComputeShader = R"_SPH_A_(
     static const float PI_H = 3.14159265f;
 
     struct GPUParticle {
@@ -1541,9 +1615,20 @@ static const char* g_SPHComputeShader = R"(
         float3 gWaveOscUpDir;   float _gWOPad1;
     };
 
-    RWStructuredBuffer<GPUParticle>           gParticles  : register(u0);
-    RWStructuredBuffer<FluidParticleRenderData> gRenderData : register(u1);
-    StructuredBuffer<GPUControlPoint>          gCPs        : register(t0);
+    RWStructuredBuffer<GPUParticle>             gParticles   : register(u0);
+    RWStructuredBuffer<FluidParticleRenderData> gRenderData  : register(u1);
+    StructuredBuffer<GPUControlPoint>           gCPs         : register(t0);
+    RWStructuredBuffer<uint>                    gHashCount   : register(u2);  // [GPU_HASH_TABLE_SIZE]
+    RWStructuredBuffer<uint>                    gHashEntries : register(u3);  // [GPU_HASH_TABLE_SIZE * GPU_MAX_PER_CELL]
+
+    // ---- 공간 해시 상수 ----
+    static const uint GPU_HASH_TABLE_SIZE = 8192u;
+    static const uint GPU_MAX_PER_CELL    = 32u;
+
+    uint CalcHashCell(int cx, int cy, int cz) {
+        return (((uint)cx * 73856093u) ^ ((uint)cy * 19349663u) ^ ((uint)cz * 83492791u))
+               & (GPU_HASH_TABLE_SIZE - 1u);
+    }
 
     // ---- 이중 밀도 완화용 SPH 커널 (Sebastian Lague / Clavet 2005) ----
     // DensityKernel = SpikyPow2: K_Spiky2 * (h-r)^2
@@ -1576,7 +1661,36 @@ static const char* g_SPHComputeShader = R"(
         return (45.0f/(PI_H*h*h*h*h*h*h)) * (h - r);
     }
 
-    // ---- CS_Density (이중 밀도 완화: SpikyPow2 + SpikyPow3) ----
+    // ---- CS_HashClear: 해시 카운트 버퍼 초기화 ----
+    [numthreads(64,1,1)]
+    void CS_HashClear(uint3 dtid : SV_DispatchThreadID)
+    {
+        uint idx = dtid.x;
+        if (idx < GPU_HASH_TABLE_SIZE)
+            gHashCount[idx] = 0u;
+    }
+
+    // ---- CS_HashBuild: 파티클 → 해시 셀 등록 ----
+    [numthreads(64,1,1)]
+    void CS_HashBuild(uint3 dtid : SV_DispatchThreadID)
+    {
+        uint i = dtid.x;
+        if ((int)i >= gParticleCount) return;
+        if (gParticles[i].active == 0) return;
+
+        float invH = 1.0f / gH;
+        int cx = (int)floor(gParticles[i].pos.x * invH);
+        int cy = (int)floor(gParticles[i].pos.y * invH);
+        int cz = (int)floor(gParticles[i].pos.z * invH);
+        uint h = CalcHashCell(cx, cy, cz);
+
+        uint slot;
+        InterlockedAdd(gHashCount[h], 1u, slot);
+        if (slot < GPU_MAX_PER_CELL)
+            gHashEntries[h * GPU_MAX_PER_CELL + slot] = i;
+    }
+
+    // ---- CS_Density (이중 밀도 완화: SpikyPow2 + SpikyPow3, 공간 해시 이웃 탐색) ----
     [numthreads(64,1,1)]
     void CS_Density(uint3 dtid : SV_DispatchThreadID)
     {
@@ -1586,27 +1700,40 @@ static const char* g_SPHComputeShader = R"(
 
         float h  = gH;
         float h2 = gH2;
+        float invH = 1.0f / h;
 
-        // 자기 기여: r=0 -> SpikyPow2(0,h) = h^2 * K
+        // 자기 기여: r=0 → SpikyPow2(0,h) = h^2 * K
         float density     = h * h * gKSpikyPow2;
         float nearDensity = 0.0f;
 
-        for (int j = 0; j < gParticleCount; ++j) {
-            if (j == (int)i) continue;
-            if (gParticles[j].active == 0) continue;
-            float3 diff = gParticles[i].pos - gParticles[j].pos;
-            float r2 = dot(diff, diff);
-            if (r2 >= h2) continue;
-            float r = sqrt(r2);
-            density     += SpikyPow2(r, h);
-            nearDensity += SpikyPow3(r, h);
-        }
+        int cx0 = (int)floor(gParticles[i].pos.x * invH);
+        int cy0 = (int)floor(gParticles[i].pos.y * invH);
+        int cz0 = (int)floor(gParticles[i].pos.z * invH);
+
+        for (int dx = -1; dx <= 1; dx++) {
+        for (int dy = -1; dy <= 1; dy++) {
+        for (int dz = -1; dz <= 1; dz++) {
+            uint hc  = CalcHashCell(cx0+dx, cy0+dy, cz0+dz);
+            uint cnt = min(gHashCount[hc], GPU_MAX_PER_CELL);
+            for (uint k = 0u; k < cnt; k++) {
+                uint j = gHashEntries[hc * GPU_MAX_PER_CELL + k];
+                if (j == i) continue;
+                if (gParticles[j].active == 0) continue;
+                float3 diff = gParticles[i].pos - gParticles[j].pos;
+                float r2 = dot(diff, diff);
+                if (r2 >= h2) continue;
+                float r = sqrt(r2);
+                density     += SpikyPow2(r, h);
+                nearDensity += SpikyPow3(r, h);
+            }
+        }}}
 
         gParticles[i].density     = max(density, 0.001f);
         gParticles[i].nearDensity = max(nearDensity, 0.0f);
     }
-
-    // ---- CS_Forces (이중 밀도 완화 압력) ----
+)_SPH_A_"
+R"_SPH_B_(
+    // ---- CS_Forces (이중 밀도 완화 압력, 공간 해시 이웃 탐색) ----
     [numthreads(64,1,1)]
     void CS_Forces(uint3 dtid : SV_DispatchThreadID)
     {
@@ -1616,41 +1743,51 @@ static const char* g_SPHComputeShader = R"(
 
         float3 f = float3(0,0,0);
 
-        // SPH 이중 밀도 압력 + 점성
-        for (int j = 0; j < gParticleCount; ++j) {
-            if (j == (int)i) continue;
-            if (gParticles[j].active == 0) continue;
-            float3 diff = gParticles[i].pos - gParticles[j].pos;
-            float rLen = length(diff);
-            if (rLen < 0.0001f || rLen >= gH) continue;
+        float densityI     = gParticles[i].density;
+        float nearDensityI = gParticles[i].nearDensity;
+        float pressI       = gStiffness * (densityI - gRestDensity);
+        float nearPressI   = gNearPressureMult * nearDensityI;
 
-            // 이중 밀도 완화 압력 (Sebastian Lague / Clavet 2005)
-            float densityI     = gParticles[i].density;
-            float densityJ     = max(gParticles[j].density, 0.001f);
-            float nearDensityI = gParticles[i].nearDensity;
-            float nearDensityJ = max(gParticles[j].nearDensity, 0.001f);
+        float invH = 1.0f / gH;
+        int cx0 = (int)floor(gParticles[i].pos.x * invH);
+        int cy0 = (int)floor(gParticles[i].pos.y * invH);
+        int cz0 = (int)floor(gParticles[i].pos.z * invH);
 
-            float pressI     = gStiffness * (densityI - gRestDensity);
-            float pressJ     = gStiffness * (densityJ - gRestDensity);
-            float nearPressI = gNearPressureMult * nearDensityI;
-            float nearPressJ = gNearPressureMult * nearDensityJ;
+        // SPH 이중 밀도 압력 + 점성 (공간 해시 이웃 탐색)
+        for (int dx = -1; dx <= 1; dx++) {
+        for (int dy = -1; dy <= 1; dy++) {
+        for (int dz = -1; dz <= 1; dz++) {
+            uint hc  = CalcHashCell(cx0+dx, cy0+dy, cz0+dz);
+            uint cnt = min(gHashCount[hc], GPU_MAX_PER_CELL);
+            for (uint k = 0u; k < cnt; k++) {
+                uint j = gHashEntries[hc * GPU_MAX_PER_CELL + k];
+                if (j == i) continue;
+                if (gParticles[j].active == 0) continue;
+                float3 diff = gParticles[i].pos - gParticles[j].pos;
+                float rLen = length(diff);
+                if (rLen < 0.0001f || rLen >= gH) continue;
 
-            float sharedPress     = (pressI + pressJ) * 0.5f;
-            float sharedNearPress = (nearPressI + nearPressJ) * 0.5f;
+                // 이중 밀도 완화 압력 (Sebastian Lague / Clavet 2005)
+                float densityJ     = max(gParticles[j].density, 0.001f);
+                float nearDensityJ = max(gParticles[j].nearDensity, 0.001f);
+                float pressJ       = gStiffness * (densityJ - gRestDensity);
+                float nearPressJ   = gNearPressureMult * nearDensityJ;
 
-            float3 dir = diff / rLen;  // 이웃 -> 자신 방향
-            // 압력 구배: SpikyPow2 도함수
-            float dPress     = DerivSpikyPow2(rLen, gH);
-            float dNearPress = DerivSpikyPow3(rLen, gH);
+                float sharedPress     = (pressI + pressJ) * 0.5f;
+                float sharedNearPress = (nearPressI + nearPressJ) * 0.5f;
 
-            // force = -dir * (dW/dr * P/rho + dW_near/dr * P_near/rho_near)
-            f -= dir * (dPress * sharedPress / densityJ + dNearPress * sharedNearPress / nearDensityJ) * gParticles[j].mass;
+                float3 dir = diff / rLen;  // j → i 방향
+                float dPress     = DerivSpikyPow2(rLen, gH);
+                float dNearPress = DerivSpikyPow3(rLen, gH);
 
-            // 점성 (기존 유지)
-            float viscLap = ViscLap(rLen, gH);
-            float vScale = gViscosity * gParticles[j].mass / densityJ * viscLap;
-            f += (gParticles[j].vel - gParticles[i].vel) * vScale;
-        }
+                f -= dir * (dPress * sharedPress / densityJ + dNearPress * sharedNearPress / nearDensityJ) * gParticles[j].mass;
+
+                // 점성
+                float viscLap = ViscLap(rLen, gH);
+                float vScale = gViscosity * gParticles[j].mass / densityJ * viscLap;
+                f += (gParticles[j].vel - gParticles[i].vel) * vScale;
+            }
+        }}}
 
         // Gravity 모드: 중력만
         if (gMotionMode == 1) {
@@ -1803,8 +1940,8 @@ static const char* g_SPHComputeShader = R"(
         float isExplodingF = 1.0f - step(1.5f, gExplodeFade);
         float fadeMult = saturate(gExplodeFade); // 2.0→1.0, 1.0→1.0, 0.0→0.0
 
-        // 폭발 모드: 밀도 무관하게 coreColor에 가깝게 (반투명 물방울 방지)
-        float tFinal = lerp(t, 0.92f, isExplodingF * 0.85f);
+        // 색상: 정상=밀도 기반, 폭발=원소 고유색 70% 유지 (92% 강제 → 과밝아짐 방지)
+        float tFinal = lerp(t, 0.7f, isExplodingF);
         float4 baseColor = lerp(gEdgeColor, gCoreColor, tFinal);
 
         // foam: density > threshold 일 때 coreColor 오버드라이브 (파도 거품)
@@ -1812,38 +1949,43 @@ static const char* g_SPHComputeShader = R"(
         float3 foamRGB = baseColor.rgb * (1.0f + foamT * 1.2f)
                        + float3(0.25f, 0.25f, 0.25f) * foamT;
 
-        // 속도 기반 brightness boost (빠른 파티클이 더 밝게)
-        float3 finalRGB = foamRGB * (1.0f + speedT * gVelocityColorBoost);
+        // 속도 기반 brightness boost: 폭발 모드에서는 비활성 (고속 + 빌보드 glow → 채도 포화/흰색 방지)
+        float3 finalRGB = foamRGB * (1.0f + speedT * gVelocityColorBoost * (1.0f - isExplodingF));
 
         // 알파: 정상=밀도 기반, 폭발=coreColor 알파로 고정 후 fadeMult로 소멸
         float normalAlpha = baseColor.a + foamT * (1.0f - baseColor.a) * 0.6f;
         float explodeAlpha = gCoreColor.a * fadeMult;
         float finalA = lerp(normalAlpha, explodeAlpha, isExplodingF);
 
-        // 속도에 따른 동적 크기 + 폭발 시 fadeMult로 점점 작아짐
+        // 속도에 따른 동적 크기
         float spd = length(gParticles[i].vel);
         float dynSize = lerp(0.42f, 0.25f, saturate(spd / max(gMaxSpeed * 0.6f, 0.001f)));
-        dynSize *= fadeMult;
+        // 폭발 모드: 0.65 기준 크기에서 시작 → 제곱으로 빠르게 소멸 (원본 스킬 크기감 유지)
+        // 일반 모드: fadeMult 선형 (소멸 시 일반 축소)
+        float explodeBase = lerp(dynSize, 0.65f, isExplodingF);
+        float sizeScale   = lerp(fadeMult, fadeMult * fadeMult * 0.8f, isExplodingF);
+        dynSize = explodeBase * sizeScale;
 
         gRenderData[i].position = gParticles[i].pos;
         gRenderData[i].size     = dynSize;
         gRenderData[i].color    = float4(finalRGB, finalA);
     }
-)";
+)_SPH_B_";
 
 // ============================================================================
 // BuildSPHPipeline (static) - GPU SPH 파이프라인 빌드
 // ============================================================================
 void FluidParticleSystem::BuildSPHPipeline(ID3D12Device* pDevice)
 {
-    if (s_pSPHRootSig && s_pDensityPSO && s_pForcesPSO && s_pIntegratePSO)
+    if (s_pSPHRootSig && s_pDensityPSO && s_pForcesPSO && s_pIntegratePSO
+        && s_pHashClearPSO && s_pHashBuildPSO)
         return; // 이미 빌드됨
 
     HRESULT hr;
     ComPtr<ID3DBlob> errBlob;
 
-    // Root Signature: [0] CBV b0, [1] UAV u0, [2] UAV u1, [3] SRV t0
-    D3D12_ROOT_PARAMETER rootParams[4] = {};
+    // Root Signature: [0] CBV b0, [1] UAV u0, [2] UAV u1, [3] SRV t0, [4] UAV u2, [5] UAV u3
+    D3D12_ROOT_PARAMETER rootParams[6] = {};
 
     // [0] CBV b0 (root descriptor)
     rootParams[0].ParameterType             = D3D12_ROOT_PARAMETER_TYPE_CBV;
@@ -1851,26 +1993,38 @@ void FluidParticleSystem::BuildSPHPipeline(ID3D12Device* pDevice)
     rootParams[0].Descriptor.RegisterSpace  = 0;
     rootParams[0].ShaderVisibility          = D3D12_SHADER_VISIBILITY_ALL;
 
-    // [1] UAV u0 (root descriptor)
+    // [1] UAV u0 - 파티클 상태 (root descriptor)
     rootParams[1].ParameterType             = D3D12_ROOT_PARAMETER_TYPE_UAV;
     rootParams[1].Descriptor.ShaderRegister = 0;
     rootParams[1].Descriptor.RegisterSpace  = 0;
     rootParams[1].ShaderVisibility          = D3D12_SHADER_VISIBILITY_ALL;
 
-    // [2] UAV u1 (root descriptor)
+    // [2] UAV u1 - 렌더 데이터 (root descriptor)
     rootParams[2].ParameterType             = D3D12_ROOT_PARAMETER_TYPE_UAV;
     rootParams[2].Descriptor.ShaderRegister = 1;
     rootParams[2].Descriptor.RegisterSpace  = 0;
     rootParams[2].ShaderVisibility          = D3D12_SHADER_VISIBILITY_ALL;
 
-    // [3] SRV t0 (root descriptor)
+    // [3] SRV t0 - 제어점 (root descriptor)
     rootParams[3].ParameterType             = D3D12_ROOT_PARAMETER_TYPE_SRV;
     rootParams[3].Descriptor.ShaderRegister = 0;
     rootParams[3].Descriptor.RegisterSpace  = 0;
     rootParams[3].ShaderVisibility          = D3D12_SHADER_VISIBILITY_ALL;
 
+    // [4] UAV u2 - 공간 해시 카운트 (root descriptor)
+    rootParams[4].ParameterType             = D3D12_ROOT_PARAMETER_TYPE_UAV;
+    rootParams[4].Descriptor.ShaderRegister = 2;
+    rootParams[4].Descriptor.RegisterSpace  = 0;
+    rootParams[4].ShaderVisibility          = D3D12_SHADER_VISIBILITY_ALL;
+
+    // [5] UAV u3 - 공간 해시 엔트리 (root descriptor)
+    rootParams[5].ParameterType             = D3D12_ROOT_PARAMETER_TYPE_UAV;
+    rootParams[5].Descriptor.ShaderRegister = 3;
+    rootParams[5].Descriptor.RegisterSpace  = 0;
+    rootParams[5].ShaderVisibility          = D3D12_SHADER_VISIBILITY_ALL;
+
     D3D12_ROOT_SIGNATURE_DESC rsDesc = {};
-    rsDesc.NumParameters     = 4;
+    rsDesc.NumParameters     = 6;
     rsDesc.pParameters       = rootParams;
     rsDesc.NumStaticSamplers = 0;
     rsDesc.Flags             = D3D12_ROOT_SIGNATURE_FLAG_NONE;
@@ -1923,11 +2077,13 @@ void FluidParticleSystem::BuildSPHPipeline(ID3D12Device* pDevice)
         return true;
     };
 
-    if (!CompileCS("CS_Density", s_pDensityPSO)) return;
-    if (!CompileCS("CS_Forces", s_pForcesPSO)) return;
+    if (!CompileCS("CS_HashClear", s_pHashClearPSO)) return;
+    if (!CompileCS("CS_HashBuild", s_pHashBuildPSO)) return;
+    if (!CompileCS("CS_Density",   s_pDensityPSO))   return;
+    if (!CompileCS("CS_Forces",    s_pForcesPSO))    return;
     if (!CompileCS("CS_Integrate", s_pIntegratePSO)) return;
 
-    OutputDebugStringA("[FluidPS] GPU SPH 파이프라인 빌드 완료\n");
+    OutputDebugStringA("[FluidPS] GPU SPH 파이프라인 빌드 완료 (공간 해싱 포함)\n");
 }
 
 // ============================================================================
@@ -1937,6 +2093,8 @@ void FluidParticleSystem::DispatchSPH(ID3D12GraphicsCommandList* pCmdList, float
 {
     if (!m_bGPUInited || m_Particles.empty()) return;
     if (!s_pSPHRootSig || !s_pDensityPSO || !s_pForcesPSO || !s_pIntegratePSO) return;
+    if (!s_pHashClearPSO || !s_pHashBuildPSO) return;
+    if (!m_pHashCountBuffer || !m_pHashEntryBuffer) return;
 
     // Beam 모드: CPU에서 처리 후 GPU 렌더 버퍼로 복사
     if (m_MotionMode == ParticleMotionMode::Beam)
@@ -2137,8 +2295,19 @@ void FluidParticleSystem::DispatchSPH(ID3D12GraphicsCommandList* pCmdList, float
     pCmdList->SetComputeRootSignature(s_pSPHRootSig.Get());
     pCmdList->SetComputeRootUnorderedAccessView(1, m_pGPUStateBuffer->GetGPUVirtualAddress());
     pCmdList->SetComputeRootUnorderedAccessView(2, m_pGPURenderBuffer->GetGPUVirtualAddress());
-    pCmdList->SetComputeRootShaderResourceView(3, m_pCPBuffer->GetGPUVirtualAddress());
+    pCmdList->SetComputeRootShaderResourceView(3,  m_pCPBuffer->GetGPUVirtualAddress());
+    pCmdList->SetComputeRootUnorderedAccessView(4, m_pHashCountBuffer->GetGPUVirtualAddress());
+    pCmdList->SetComputeRootUnorderedAccessView(5, m_pHashEntryBuffer->GetGPUVirtualAddress());
 
+    // 전역 UAV 배리어 (모든 UAV 쓰기 완료 대기)
+    auto GlobalUAVBarrier = [&]() {
+        D3D12_RESOURCE_BARRIER barrier = {};
+        barrier.Type          = D3D12_RESOURCE_BARRIER_TYPE_UAV;
+        barrier.UAV.pResource = nullptr;  // nullptr = 모든 UAV
+        pCmdList->ResourceBarrier(1, &barrier);
+    };
+
+    // 파티클 상태 버퍼 전용 UAV 배리어 (기존 이름 유지)
     auto DispatchUAVBarrier = [&]() {
         D3D12_RESOURCE_BARRIER barrier = {};
         barrier.Type          = D3D12_RESOURCE_BARRIER_TYPE_UAV;
@@ -2146,10 +2315,25 @@ void FluidParticleSystem::DispatchSPH(ID3D12GraphicsCommandList* pCmdList, float
         pCmdList->ResourceBarrier(1, &barrier);
     };
 
+    // 해시 클리어 dispatch 그룹 수
+    UINT hashClearGroups = (GPU_HASH_TABLE_SIZE + 63) / 64;
+
     for (int sub = 0; sub < 3; sub++)
     {
         pCmdList->SetComputeRootConstantBufferView(0, cbBase + cbStride * sub);
 
+        // ── 공간 해시 구축 ──────────────────────────────────────────
+        // 1. HashClear: 카운트 버퍼 초기화
+        pCmdList->SetPipelineState(s_pHashClearPSO.Get());
+        pCmdList->Dispatch(hashClearGroups, 1, 1);
+        GlobalUAVBarrier();  // HashCount 쓰기 완료 보장
+
+        // 2. HashBuild: 파티클 위치 → 해시 셀에 등록
+        pCmdList->SetPipelineState(s_pHashBuildPSO.Get());
+        pCmdList->Dispatch(numGroups, 1, 1);
+        GlobalUAVBarrier();  // HashCount + HashEntries 쓰기 완료 보장
+
+        // ── SPH 패스 (공간 해시 이웃 탐색) ─────────────────────────
         // Density pass
         pCmdList->SetPipelineState(s_pDensityPSO.Get());
         pCmdList->Dispatch(numGroups, 1, 1);

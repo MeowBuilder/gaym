@@ -21,7 +21,7 @@ struct FluidParticle
     XMFLOAT3 velocity   = { 0, 0, 0 };
     XMFLOAT3 force      = { 0, 0, 0 };
     float    density    = 0.0f;
-    float    pressure   = 0.0f;
+    float    nearDensity = 0.0f;
     float    mass       = 1.0f;
     bool     active     = true;
     int      cpGroup    = -1;  // 담당 CP 인덱스 (-1=전체, 0=핵, 1+=위성)

@@ -36,6 +36,13 @@ struct FluidVFXSlot {
     bool             isWaveMode  = false;
     float            waveDist    = 0.f;    // 현재 이동 거리
     bool             waveStopped = false;  // 충돌/최대거리로 멈춘 여부
+
+    // SSF bilateral blur 적용 여부 (VFXSequenceDef.useSSFBlur에서 설정)
+    bool             useBlur     = false;
+
+    // 플레이어 스킬 여부: SpawnSequenceEffect → true, SpawnEffect(적 투사체) → false
+    // false인 슬롯은 SSF 파이프라인에서 제외되고 빌보드로 별도 렌더
+    bool             isPlayerEffect = false;
 };
 
 class FluidSkillVFXManager
@@ -75,6 +82,11 @@ public:
     bool     IsWaveActive(int id) const;          // 파도가 아직 이동 중이면 true
     bool     IsPointInWave(int id, const XMFLOAT3& point) const; // 점이 VFX 파도 영역 안에 있으면 true
 
+    // Q 스킬 불꽃 자국 VFX: 지정 위치에 바닥 화염 파티클 스폰, ID 반환
+    // waveRight: 파도 진행 방향의 직교(좌우) 벡터 — 파티클을 파도 폭만큼 분산
+    int SpawnFireTrailEffect(const XMFLOAT3& pos, const XMFLOAT3& waveRight,
+                             float halfWidth, float lifetime = 3.0f);
+
     void Update(float deltaTime);
 
     // GPU SPH dispatch (Render 전에 호출, Beam 모드는 CPU update 후 GPU 복사)
@@ -84,24 +96,38 @@ public:
                 const XMFLOAT4X4& viewProj, const XMFLOAT3& camRight, const XMFLOAT3& camUp);
 
     // Screen-Space Fluid: 구체 깊이 렌더링
+    // blurOnly=false: blur 미사용 슬롯만, blurOnly=true: blur 슬롯만 렌더
     void RenderDepth(ID3D12GraphicsCommandList* pCmdList,
                      const XMFLOAT4X4& viewProjTransposed,
                      const XMFLOAT4X4& viewTransposed,
                      const XMFLOAT3& camRight,
                      const XMFLOAT3& camUp,
                      float projA, float projB,
-                     ScreenSpaceFluid* pSSF);
+                     ScreenSpaceFluid* pSSF,
+                     bool blurOnly = false);
 
     // Screen-Space Fluid: 두께 렌더링 (RenderDepth 이후 호출, 깊이 테스트 없음)
     void RenderThicknessOnly(ID3D12GraphicsCommandList* pCmdList,
-                              ScreenSpaceFluid* pSSF);
+                              ScreenSpaceFluid* pSSF,
+                              bool blurOnly = false);
+
+    // 현재 블러/비블러 활성 슬롯 존재 여부 (플레이어 슬롯만 집계)
+    bool HasActiveSlots(bool blurOnly) const;
+
+    // 적 전용 슬롯 빌보드 렌더 (SSF 파이프라인 완료 후 호출)
+    void RenderEnemyEffects(ID3D12GraphicsCommandList* pCommandList,
+                            const XMFLOAT4X4& viewProj,
+                            const XMFLOAT3& camRight,
+                            const XMFLOAT3& camUp);
 
     // 원소별 내장 VFX 정의 반환 (룬 combo에 따라 파라미터 조정)
     static FluidSkillVFXDef GetVFXDef(ElementType element, const RuneCombo& combo = {}, float chargeRatio = 0.0f);
 
     // 현재 활성 슬롯의 대표 유체 색상 (composite fluidColor용)
+    // blurOnly=true 시 useBlur 슬롯만 대상, false 시 비blur 슬롯 우선(전체 fallback)
     XMFLOAT4 GetDominantFluidColor() const;
     FluidElementColor GetDominantFluidColors() const;
+    FluidElementColor GetDominantFluidColors(bool blurOnly) const;
 
 private:
     void PushControlPoints(FluidVFXSlot& slot) const;

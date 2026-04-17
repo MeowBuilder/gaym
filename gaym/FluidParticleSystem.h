@@ -148,6 +148,9 @@ public:
     // 폭발 페이드: 2.0=정상, 1.0..0.0=폭발 후 소멸 (크기 축소 + 선명 고정)
     void SetExplodeFade(float ratio) { m_explodeFade = ratio; }
 
+    // 폭발 시 속도 상한 변경 (Spawn 이후 오버라이드용)
+    void SetMaxParticleSpeed(float speed) { m_Config.maxParticleSpeed = speed; }
+
     // 양방향 분산 힘: 중심점(originPoint) 기준으로 각 파티클이 axisDir의 양쪽으로 밀림
     void ApplyAxisSpreadForce(const XMFLOAT3& axisDir, const XMFLOAT3& originPoint, float impulse);
 
@@ -164,9 +167,7 @@ private:
     // Collect neighbors for particle at index i (writes into out, returns count)
     int  GetNeighbors(int i, int* out, int maxOut) const;
 
-    // SPH kernel helpers
-    float    Poly6(float r2, float h2) const;
-    XMFLOAT3 SpikyGrad(const XMFLOAT3& r, float rLen, float h) const;
+    // SPH kernel helpers (Clavet 2005 / Sebastian Lague dual-density relaxation)
     float    ViscLaplacian(float r, float h) const;
 
     // Hash helpers
@@ -232,6 +233,8 @@ private:
     static ComPtr<ID3D12PipelineState> s_pDensityPSO;
     static ComPtr<ID3D12PipelineState> s_pForcesPSO;
     static ComPtr<ID3D12PipelineState> s_pIntegratePSO;
+    static ComPtr<ID3D12PipelineState> s_pHashClearPSO;
+    static ComPtr<ID3D12PipelineState> s_pHashBuildPSO;
     static void BuildSPHPipeline(ID3D12Device* pDevice);
 
     // GPU 버퍼
@@ -243,6 +246,12 @@ private:
     ComPtr<ID3D12Resource> m_pCPBuffer;          // UPLOAD - Control Points
     GPUControlPoint*       m_pMappedCPBuffer = nullptr;
     static constexpr int   MAX_GPU_CPS = 16;
+
+    // 공간 해싱 GPU 버퍼
+    static constexpr int   GPU_HASH_TABLE_SIZE = 8192;  // power-of-2, 2^13
+    static constexpr int   GPU_MAX_PER_CELL    = 32;    // 셀당 최대 파티클 수
+    ComPtr<ID3D12Resource> m_pHashCountBuffer;  // DEFAULT, UAV - 해시 셀 카운트 [TABLE_SIZE]
+    ComPtr<ID3D12Resource> m_pHashEntryBuffer;  // DEFAULT, UAV - 해시 셀 엔트리 [TABLE_SIZE * MAX_PER_CELL]
 
     bool m_bGPUInited   = false;
     bool m_bNeedsUpload = false;

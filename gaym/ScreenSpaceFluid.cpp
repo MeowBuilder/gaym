@@ -294,7 +294,9 @@ static const char* g_CompositeShader = R"(
         float specular = pow(max(dot(normal, H), 0.0f), 128.0f);
         float3 specColor = gSpecularColor.rgb * specular * gSpecularColor.a;
 
-        float3 finalColor = sceneColor
+        // sceneColor 제거: 유체가 자신의 원색을 그대로 출력 (비눗방울 투명 효과 제거)
+        // (굴절/배경 비침 없이 불꽃/용암 등 원소 색상 유지)
+        float3 finalColor = fluidColor
                           + specColor * (fresnel + 0.3f)
                           + emission + foamHighlight;
 
@@ -302,7 +304,9 @@ static const char* g_CompositeShader = R"(
         float ndcZ = (gProjA * depth + gProjB) / depth;
 
         CompositeOut o;
-        o.color   = float4(finalColor, edgeAlpha);
+        // 외곽 alpha: edgeAlpha는 실루엣 discard용으로만 사용.
+        // 유체가 존재하는 픽셀은 원색 그대로 불투명하게 출력.
+        o.color   = float4(finalColor, 1.0f);
         o.svDepth = ndcZ;
         return o;
     }

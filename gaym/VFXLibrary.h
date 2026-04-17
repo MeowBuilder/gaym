@@ -68,6 +68,9 @@ struct VFXSequenceDef {
     float cardinalSpawnRadius  = 0.f;   // 집결 스폰 거리 (유닛)
     float cardinalInwardSpeed  = 12.f;  // 파티클 초기 내향 속도 (m/s)
 
+    // SSF bilateral blur 활성화 (파도처럼 덩어리로 보여야 하는 스킬에만 true)
+    bool  useSSFBlur   = false;
+
     // Wave 모드 (isWave=true면 phases 무시, 처음부터 일정 폭으로 전진)
     bool  isWave       = false;
     float waveSpeed    = 20.f;  // ConfinementBox 전진 속도 (units/s)

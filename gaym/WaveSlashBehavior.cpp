@@ -176,10 +176,19 @@ void WaveSlashBehavior::DropFireTrail()
     XMStoreFloat3(&frontPos, frontV);
     frontPos.y = 0.f;
 
+    // 파도 진행 방향의 직교(좌우) 벡터 계산
+    XMVECTOR fwdV    = XMVector3Normalize(XMLoadFloat3(&waveDir));
+    XMVECTOR worldUp = XMVectorSet(0.f, 1.f, 0.f, 0.f);
+    XMVECTOR rightV  = XMVector3Normalize(XMVector3Cross(worldUp, fwdV));
+    XMFLOAT3 waveRight;
+    XMStoreFloat3(&waveRight, rightV);
+
     FireZone zone;
-    zone.center    = frontPos;
-    zone.lifetime  = TRAIL_LIFETIME;
-    zone.tickTimer = 0.f;
+    zone.center     = frontPos;
+    zone.lifetime   = TRAIL_LIFETIME;
+    zone.tickTimer  = 0.f;
+    zone.trailVfxId = m_pVFXManager->SpawnFireTrailEffect(
+        frontPos, waveRight, WAVE_HALF_W, TRAIL_LIFETIME);
     m_fireTrail.push_back(zone);
 }
 
@@ -221,7 +230,15 @@ void WaveSlashBehavior::UpdateFireTrail(float deltaTime)
         }
     }
 
-    // 만료된 존 제거
+    // 만료된 존: VFX 정지 후 제거 (VFX는 타이머로 자동 소멸하지만 명시적 정리)
+    for (auto& zone : m_fireTrail)
+    {
+        if (zone.lifetime <= 0.f && zone.trailVfxId >= 0)
+        {
+            m_pVFXManager->StopEffect(zone.trailVfxId);
+            zone.trailVfxId = -1;
+        }
+    }
     m_fireTrail.erase(
         std::remove_if(m_fireTrail.begin(), m_fireTrail.end(),
             [](const FireZone& z) { return z.lifetime <= 0.f; }),
@@ -235,6 +252,14 @@ bool WaveSlashBehavior::IsFinished() const
 
 void WaveSlashBehavior::Reset()
 {
+    if (m_pVFXManager)
+    {
+        for (auto& zone : m_fireTrail)
+        {
+            if (zone.trailVfxId >= 0)
+                m_pVFXManager->StopEffect(zone.trailVfxId);
+        }
+    }
     m_bIsFinished = true;
     m_bWaveActive = false;
     m_vfxId       = -1;

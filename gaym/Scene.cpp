@@ -1186,66 +1186,97 @@ void Scene::Render(ID3D12GraphicsCommandList* pCommandList, D3D12_GPU_DESCRIPTOR
         if (m_pFluidParticleSystem && m_pFluidParticleSystem->IsActive())
             m_pFluidParticleSystem->DispatchSPH(pCommandList, m_fLastDeltaTime);
 
-        // 장면 캡처: 유체 렌더 전 메인 RT를 복사 (굴절 배경용)
-        if (pMainRTBuffer)
-        {
-            m_pSSF->CaptureSceneColor(pCommandList, pMainRTBuffer);
-        }
-
-        // Pass 1a: Sphere depth (깊이 테스트 있음 - 가장 가까운 구체 표면 Z 캡처)
-        m_pSSF->BeginDepthPass(pCommandList);
-
-        if (m_pFluidParticleSystem && m_pFluidParticleSystem->IsActive())
-            m_pFluidParticleSystem->RenderDepth(pCommandList, viewProjT, viewT, camRight, camUp, projA, projB, m_pSSF.get());
-
-        if (m_pFluidVFXManager)
-            m_pFluidVFXManager->RenderDepth(pCommandList, viewProjT, viewT, camRight, camUp, projA, projB, m_pSSF.get());
-
-        // Pass 1b: Thickness (깊이 테스트 없음 - 모든 파티클이 두께에 기여)
-        // 카메라 각도에 무관하게 좌우 대칭 두께 보장
-        m_pSSF->BeginThicknessPass(pCommandList);
-
-        if (m_pFluidParticleSystem && m_pFluidParticleSystem->IsActive())
-            m_pFluidParticleSystem->RenderThicknessOnly(pCommandList, m_pSSF.get());
-
-        if (m_pFluidVFXManager)
-            m_pFluidVFXManager->RenderThicknessOnly(pCommandList, m_pSSF.get());
-
-        m_pSSF->EndDepthPass(pCommandList);
-
-        // Pass 2+3: Smooth + Composite (메인 RT에 합성)
-        // 조명 방향을 뷰 공간으로 변환
+        // 조명 방향 (공통)
         XMFLOAT3 lightDirWorld = { -0.5f, -0.8f, -0.3f };
         XMVECTOR lightV = XMVector3TransformNormal(XMLoadFloat3(&lightDirWorld), mView);
         XMFLOAT3 lightDirVS;
         XMStoreFloat3(&lightDirVS, XMVector3Normalize(lightV));
 
-        // 태양 이펙트 색상: outer=코로나(붉은 주황), inner=코어(밝은 노란-흰색)
-        XMFLOAT4 fluidColorOuter = { 0.95f, 0.15f, 0.0f,  0.9f };  // 기본: 진한 붉은 주황
-        XMFLOAT4 fluidColorInner = { 1.0f,  0.88f, 0.25f, 1.0f };  // 기본: 밝은 노란-흰색
+        auto GetFluidColors = [&](bool blurOnly) -> std::pair<XMFLOAT4, XMFLOAT4>
+        {
+            XMFLOAT4 outer = { 0.95f, 0.15f, 0.0f, 0.9f };
+            XMFLOAT4 inner = { 1.0f,  0.88f, 0.25f, 1.0f };
+            if (m_pFluidVFXManager)
+            {
+                FluidElementColor colors = m_pFluidVFXManager->GetDominantFluidColors(blurOnly);
+                if (colors.coreColor.w > 0.01f)  // 해당 패스에 유효한 색상이 있을 때만 덮어씀
+                {
+                    outer   = colors.edgeColor;
+                    outer.w = (std::max)(outer.w, 0.6f);
+                    inner   = colors.coreColor;
+                }
+            }
+            return { outer, inner };
+        };
+
+        // ── 패스 A: blur 없는 이펙트 (파이어 트레일, E빔, R메테오, 적 투사체 등) ──
+        bool bHasNonBlur = (m_pFluidParticleSystem && m_pFluidParticleSystem->IsActive())
+                         || (m_pFluidVFXManager && m_pFluidVFXManager->HasActiveSlots(false));
+        if (bHasNonBlur)
+        {
+            m_pSSF->BeginDepthPass(pCommandList);
+
+            if (m_pFluidParticleSystem && m_pFluidParticleSystem->IsActive())
+                m_pFluidParticleSystem->RenderDepth(pCommandList, viewProjT, viewT, camRight, camUp, projA, projB, m_pSSF.get());
+            if (m_pFluidVFXManager)
+                m_pFluidVFXManager->RenderDepth(pCommandList, viewProjT, viewT, camRight, camUp, projA, projB, m_pSSF.get(), false);
+
+            m_pSSF->BeginThicknessPass(pCommandList);
+
+            if (m_pFluidParticleSystem && m_pFluidParticleSystem->IsActive())
+                m_pFluidParticleSystem->RenderThicknessOnly(pCommandList, m_pSSF.get());
+            if (m_pFluidVFXManager)
+                m_pFluidVFXManager->RenderThicknessOnly(pCommandList, m_pSSF.get(), false);
+
+            m_pSSF->EndDepthPass(pCommandList);
+            m_pSSF->SetBlurEnabled(false);
+
+            auto [outerA, innerA] = GetFluidColors(false);
+
+            if (auto* pApp = Dx12App::GetInstance())
+            {
+                D3D12_VIEWPORT vp = { 0, 0, (FLOAT)pApp->GetWindowWidth(), (FLOAT)pApp->GetWindowHeight(), 0.0f, 1.0f };
+                pCommandList->RSSetViewports(1, &vp);
+                D3D12_RECT sr = { 0, 0, (LONG)pApp->GetWindowWidth(), (LONG)pApp->GetWindowHeight() };
+                pCommandList->RSSetScissorRects(1, &sr);
+            }
+            m_pSSF->SmoothAndComposite(pCommandList, mainRTV, mainDSV, projRaw, lightDirVS, outerA, innerA);
+
+            pCommandList->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
+            pCommandList->OMSetRenderTargets(1, &mainRTV, FALSE, &mainDSV);
+        }
+
+        // ── 패스 B: blur 이펙트 (Q 파도 등) ──
+        bool bHasBlur = m_pFluidVFXManager && m_pFluidVFXManager->HasActiveSlots(true);
+        if (bHasBlur)
+        {
+            m_pSSF->BeginDepthPass(pCommandList);
+            m_pFluidVFXManager->RenderDepth(pCommandList, viewProjT, viewT, camRight, camUp, projA, projB, m_pSSF.get(), true);
+
+            m_pSSF->BeginThicknessPass(pCommandList);
+            m_pFluidVFXManager->RenderThicknessOnly(pCommandList, m_pSSF.get(), true);
+
+            m_pSSF->EndDepthPass(pCommandList);
+            m_pSSF->SetBlurEnabled(true);
+
+            auto [outerB, innerB] = GetFluidColors(true);
+
+            if (auto* pApp = Dx12App::GetInstance())
+            {
+                D3D12_VIEWPORT vp = { 0, 0, (FLOAT)pApp->GetWindowWidth(), (FLOAT)pApp->GetWindowHeight(), 0.0f, 1.0f };
+                pCommandList->RSSetViewports(1, &vp);
+                D3D12_RECT sr = { 0, 0, (LONG)pApp->GetWindowWidth(), (LONG)pApp->GetWindowHeight() };
+                pCommandList->RSSetScissorRects(1, &sr);
+            }
+            m_pSSF->SmoothAndComposite(pCommandList, mainRTV, mainDSV, projRaw, lightDirVS, outerB, innerB);
+
+            pCommandList->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
+            pCommandList->OMSetRenderTargets(1, &mainRTV, FALSE, &mainDSV);
+        }
+
+        // ── 적 투사체 빌보드 렌더 (SSF 완료 후, 색상 오염 없이 별도 렌더) ──
         if (m_pFluidVFXManager)
-        {
-            FluidElementColor colors = m_pFluidVFXManager->GetDominantFluidColors();
-            // outer = 얇은 외곽 (edgeColor), inner = 두꺼운 코어 (coreColor)
-            fluidColorOuter = colors.edgeColor;
-            fluidColorOuter.w = (std::max)(fluidColorOuter.w, 0.6f);  // emit strength 최소 보장
-            fluidColorInner = colors.coreColor;
-        }
-
-        // 뷰포트/시저렉트를 메인 크기로 복원
-        if (auto* pApp = Dx12App::GetInstance())
-        {
-            D3D12_VIEWPORT vp = { 0, 0, (FLOAT)pApp->GetWindowWidth(), (FLOAT)pApp->GetWindowHeight(), 0.0f, 1.0f };
-            pCommandList->RSSetViewports(1, &vp);
-            D3D12_RECT sr = { 0, 0, (LONG)pApp->GetWindowWidth(), (LONG)pApp->GetWindowHeight() };
-            pCommandList->RSSetScissorRects(1, &sr);
-        }
-
-        m_pSSF->SmoothAndComposite(pCommandList, mainRTV, mainDSV, projRaw, lightDirVS, fluidColorOuter, fluidColorInner);
-
-        // SSF 후 메인 RT 복원 (디스크립터 힙도 Scene의 마스터 힙으로 복원)
-        pCommandList->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
-        pCommandList->OMSetRenderTargets(1, &mainRTV, FALSE, &mainDSV);
+            m_pFluidVFXManager->RenderEnemyEffects(pCommandList, viewProjT, camRight, camUp);
     }
     else
     {

@@ -57,7 +57,7 @@ private:
 
     UINT m_Width = 0, m_Height = 0;
     bool m_bInitialized = false;
-    bool m_bEnableBlur  = false;  // 기본값: 블러 끔 (개별 입자 마법 느낌)
+    bool m_bEnableBlur  = false;  // 기본 꺼짐; Q 파도 패스에서 SetBlurEnabled(true) 호출
 
     // 렌더 타겟 텍스처
     ComPtr<ID3D12Resource> m_pFluidDepthRT;    // R32_FLOAT: 구체 깊이 (선형 뷰 공간 Z)

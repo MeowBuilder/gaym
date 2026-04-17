@@ -43,6 +43,7 @@ private:
         DirectX::XMFLOAT3 center;
         float lifetime;
         float tickTimer;
+        int   trailVfxId = -1;  // 불꽃 자국 VFX 슬롯 ID
     };
 
     SkillData  m_SkillData;

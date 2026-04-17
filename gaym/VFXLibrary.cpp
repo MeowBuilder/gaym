@@ -37,6 +37,9 @@ void VFXLibrary::Initialize() {
         // maxParticleSpeed: 높게 설정해 SPH 초기 블래스트가 앞으로 빠르게 퍼지도록
         def.maxParticleSpeed = 20.f;
 
+        // SSF 블러: 파도가 하나의 유체 덩어리로 보이도록 bilateral blur 활성화
+        def.useSSFBlur = true;
+
         // SPH: stiffness 높여 초기 압력으로 파티클을 앞방향으로 강하게 분출
         def.overridePhysics     = true;
         def.sphStiffness        = 20.f;
@@ -111,14 +114,16 @@ void VFXLibrary::Initialize() {
         p0.motionMode = ParticleMotionMode::OrbitalCP;
         def.phases.push_back(p0);
 
-        // Phase 1: 충돌 후 폭발 (Gravity)
+        // Phase 1: 충돌 후 폭발 (Gravity) — 엄청난 방사형 폭발 + 즉시 페이드
         VFXPhase p1;
         p1.startTime  = 3.f;
-        p1.duration   = 1.2f;
+        p1.duration   = 0.7f;   // 짧고 강렬하게 (1.2s → 0.7s)
         p1.motionMode = ParticleMotionMode::Gravity;
-        p1.gravityDesc.gravity       = { 0.f, -15.f, 0.f };
-        p1.gravityDesc.initialSpeedMin = 8.f;
-        p1.gravityDesc.initialSpeedMax = 20.f;
+        p1.gravityDesc.gravity         = { 0.f, -25.f, 0.f };  // 강한 중력으로 빠른 낙하
+        p1.gravityDesc.initialSpeedMin = 45.f;  // 강력한 방사 (8 → 45)
+        p1.gravityDesc.initialSpeedMax = 90.f;  // 최대 방사 속도 (20 → 90)
+        p1.phaseMaxSpeed               = 90.f;  // 속도 상한 확장 (orbital 35 → 90)
+        p1.triggerExplodeFadeOnEnter   = true;  // 폭발 즉시 파티클 축소+소멸
         def.phases.push_back(p1);
 
         // 원자 궤도 위성 CP: 3개 평면(수평/+60°/-60°) × 4개 전자 = 12개
@@ -180,34 +185,36 @@ void VFXLibrary::Initialize() {
         def.element          = ElementType::Fire;
         def.particleCount    = 420;
         def.spawnRadius      = 0.8f;   // 중심 스폰은 최소화 (cardinalSpawnRadius가 메인)
-        def.maxParticleSpeed = 45.0f;  // 빠른 수렴 + 꼬리 추적
+        def.maxParticleSpeed = 6.0f;   // 낮은 최대속도로 오버슈트 방지 (45→6)
 
-        // 사방 집결 스폰: ±fwd/±right/±up 6방향에서 7유닛 거리에 파티클 스폰
-        def.cardinalSpawnRadius = 7.0f;
-        def.cardinalInwardSpeed = 15.0f;  // 내향 초기 속도
+        // 사방 집결 스폰: ±fwd/±right/±up 6방향에서 4유닛 거리에 파티클 스폰
+        def.cardinalSpawnRadius = 4.0f;
+        def.cardinalInwardSpeed = 0.0f;  // 초기 내향 속도 제거: CP 인력으로만 수렴 (15→0)
 
-        // 색상: 핵은 밝은 흰-노랑, 꼬리/집결은 불꽃 주황-빨강
+        // GPU SPH 물리 오버라이드: 높은 점성으로 수렴 시 속도 감쇄 강화
+        def.overridePhysics     = true;
+        def.sphStiffness        = 30.0f;
+        def.sphNearPressureMult = 0.5f;
+        def.sphRestDensity      = 5.0f;
+        def.sphViscosity        = 1.5f;  // 기본값(0.25)의 6배 — 진동 억제 핵심
+        def.sphSmoothingRadius  = 1.3f;
+
+        // 색상: 핵은 밝은 흰-노랑, 집결은 불꽃 주황-빨강
         def.overrideColors    = true;
         def.overrideCoreColor = { 1.0f, 0.95f, 0.60f, 1.0f };  // 흰-노랑 (핵)
-        def.overrideEdgeColor = { 1.0f, 0.28f, 0.0f,  0.55f };  // 불꽃 주황 (꼬리)
+        def.overrideEdgeColor = { 1.0f, 0.28f, 0.0f,  0.55f };  // 불꽃 주황
 
-        // sequenceDef.cpDescs: 매 프레임 투사체 origin 기준으로 갱신
-        // CP A - 핵: 강한 인력으로 파티클이 이동하면서 자연스럽게 수렴
+        // CP A - 핵: 낮은 attractionStrength로 GPU 진동력(±strength*4) 억제
+        // sphereRadius를 작게 설정해 경계력(450*overshoot)이 스폰 거리에서 작동
+        // 경계: sphereRadius*2.5 = 3.0 < cardinalSpawnRadius 4.0 → 스폰 시점부터 수렴력 발생
         {
             FluidCPDesc cpHead;
-            cpHead.forwardBias        = 1.5f;
-            cpHead.attractionStrength = 90.f;
-            cpHead.sphereRadius       = 8.0f;   // 7유닛 밖 파티클도 끌어당김
+            cpHead.forwardBias        = 0.0f;  // 투사체 중심에 위치 (비대칭 수렴 방지)
+            cpHead.attractionStrength = 8.0f;  // GPU oscForce = ±32 (기존 ±360 → 억제됨)
+            cpHead.sphereRadius       = 1.2f;  // 목표 구체 반경, boundary at 3.0 유닛
             def.cpDescs.push_back(cpHead);
         }
-        // CP B - 꼬리 앵커: 뒤처진 파티클이 멈추지 않고 계속 전진
-        {
-            FluidCPDesc cpTail;
-            cpTail.forwardBias        = -1.5f;  // 투사체 뒤쪽
-            cpTail.attractionStrength = 25.f;
-            cpTail.sphereRadius       = 12.0f;  // 넓어서 멀리 떨어진 파티클도 유지
-            def.cpDescs.push_back(cpTail);
-        }
+        // CP B(꼬리 앵커) 제거: 음수 oscForce가 반대 방향으로 파티클을 방출하는 주범
 
         // 단일 페이즈: offsetParticlesWithOrigin=true → 파티클이 투사체와 함께
         // 전진하면서 동시에 CP 인력으로 수렴 ("날아가며 뭉치는" 효과)

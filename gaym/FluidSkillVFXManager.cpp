@@ -24,14 +24,15 @@ int FluidSkillVFXManager::SpawnEffect(const XMFLOAT3& origin, const XMFLOAT3& di
         if (!m_Slots[i].isActive)
         {
             FluidVFXSlot& slot = m_Slots[i];
-            slot.isActive    = true;
-            slot.isFadingOut = false;
-            slot.elapsed     = 0.0f;
-            slot.origin      = origin;
-            slot.prevOrigin  = origin;
-            slot.direction   = direction;
-            slot.def         = def;
-            slot.useSequence = false; // 기존 모드
+            slot.isActive       = true;
+            slot.isFadingOut    = false;
+            slot.elapsed        = 0.0f;
+            slot.origin         = origin;
+            slot.prevOrigin     = origin;
+            slot.direction      = direction;
+            slot.def            = def;
+            slot.useSequence    = false; // 기존 모드
+            slot.isPlayerEffect = false; // 적 투사체 — SSF 파이프라인 제외
 
             FluidParticleConfig cfg;
             cfg.element           = def.element;
@@ -73,6 +74,8 @@ int FluidSkillVFXManager::SpawnSequenceEffect(const XMFLOAT3& origin, const XMFL
             slot.direction        = direction;
             slot.useSequence      = true;
             slot.sequenceDef      = seqDef;
+            slot.useBlur          = seqDef.useSSFBlur;  // SSF 블러 플래그 전달
+            slot.isPlayerEffect   = true;               // 플레이어 스킬 — SSF 파이프라인 포함
             slot.currentPhaseIndex = -1; // 아직 페이즈 시작 전 (UpdatePhase에서 0으로 전환)
 
             // 메테오용 마스터 CP 초기 위치: origin 그대로 사용
@@ -279,6 +282,51 @@ void FluidSkillVFXManager::StopEffect(int id)
     m_Slots[id].pSystem->Clear();
 }
 
+int FluidSkillVFXManager::SpawnFireTrailEffect(const XMFLOAT3& pos,
+                                                const XMFLOAT3& waveRight,
+                                                float halfWidth,
+                                                float lifetime)
+{
+    // 바닥 위치에 화염 파티클 스폰.
+    // direction = (0,1,0) → fwd=up, forwardBias로 CP가 spawn 위 2m에 위치.
+    // spawnRadius = halfWidth * 0.9f → 파도 폭만큼 넓은 구형 분산.
+    // 파티클은 위 CP로 끌려 올라가며 불꽃 기둥 형상 유지.
+    (void)waveRight;  // 현재 구형 스폰 방식에서는 방향 불필요 (추후 확장용 유지)
+
+    VFXSequenceDef def;
+    def.name          = "Q_FireTrail";
+    def.element       = ElementType::Fire;
+    def.particleCount = 80;
+    def.spawnRadius   = halfWidth * 0.9f;  // 파도 폭에 맞게 넓은 구형 스폰
+    def.maxParticleSpeed = 6.f;
+
+    def.overridePhysics     = true;
+    def.sphStiffness        = 20.f;
+    def.sphNearPressureMult = 0.8f;
+    def.sphRestDensity      = 3.f;
+    def.sphViscosity        = 0.3f;
+    def.sphSmoothingRadius  = 1.3f;
+
+    VFXPhase p;
+    p.startTime  = 0.f;
+    p.duration   = lifetime;
+    p.motionMode = ParticleMotionMode::ControlPoint;
+    p.offsetParticlesWithOrigin = false;
+
+    // CP: 중심 위 2m — 파도 폭 전체를 커버하도록 sphereRadius 넉넉히 설정
+    FluidCPDesc cp;
+    cp.orbitRadius        = 0.f;
+    cp.orbitSpeed         = 0.f;
+    cp.forwardBias        = 2.0f;              // direction=(0,1,0) → 2m 위
+    cp.attractionStrength = 4.f;
+    cp.sphereRadius       = halfWidth + 3.0f;  // 파도 전폭 + 여유
+    p.cpDescs.push_back(cp);
+    def.phases.push_back(p);
+
+    XMFLOAT3 up = { 0.f, 1.f, 0.f };
+    return SpawnSequenceEffect(pos, up, def);
+}
+
 void FluidSkillVFXManager::ImpactEffect(int id, const XMFLOAT3& impactPos)
 {
     if (id < 0 || id >= MAX_EFFECTS || !m_Slots[id].isActive) return;
@@ -311,17 +359,23 @@ void FluidSkillVFXManager::ExplodeEffect(int id, const XMFLOAT3& impactPos)
     // CP 완전 제거 — 인력 없이 파티클이 자유롭게 날아가도록
     slot.pSystem->SetControlPoints({});
 
-    // Gravity 모드로 전환 (약한 중력 + 방사형 폭발)
+    // SSF 모드 유지 (isPlayerEffect 변경 없음)
+    // RenderDepth에서 smoothingRadius를 fadeMult로 줄여 SSF 구체 자체가 시각적으로 축소됨
+
+    // 폭발 시 속도 상한을 높여 빠른 방사 허용 (수렴용 낮은 maxSpeed 덮어쓰기)
+    slot.pSystem->SetMaxParticleSpeed(55.f);
+
+    // Gravity 모드로 전환 (강한 중력으로 빠른 낙하)
     slot.pSystem->SetMotionMode(ParticleMotionMode::Gravity);
     GravityDesc gd;
-    gd.gravity        = { 0.f, -4.f, 0.f };  // 약한 하향 중력 (자연스러운 폭발 포물선)
+    gd.gravity        = { 0.f, -20.f, 0.f };  // 강한 하향 중력 (팍 터지고 빠르게 낙하)
     gd.initialSpeedMin = 0.f;  // ApplyRadialBurst로 별도 부여
     gd.initialSpeedMax = 0.f;
     slot.pSystem->SetGravityDesc(gd);
     slot.pSystem->SetGlobalGravity(0.f);
 
-    // 충돌 지점에서 방사형 폭발 속도 부여
-    slot.pSystem->ApplyRadialBurst(impactPos, 8.f, 22.f);
+    // 충돌 지점에서 방사형 폭발 속도 부여 (빠르게 팍 퍼지도록 속도 대폭 증가)
+    slot.pSystem->ApplyRadialBurst(impactPos, 30.f, 55.f);
 
     // 시퀀스/박스 모드 해제
     slot.useSequence = false;
@@ -329,11 +383,11 @@ void FluidSkillVFXManager::ExplodeEffect(int id, const XMFLOAT3& impactPos)
     emptyBox.active = false;
     slot.pSystem->SetConfinementBox(emptyBox);
 
-    // ImpactEffect보다 긴 표시 시간 (폭발이 자연스럽게 퍼진 뒤 소멸)
+    // 빠르게 소멸 (1.5s → 0.4s)
     slot.isFadingOut      = true;
-    slot.fadeTimer        = 1.5f;
+    slot.fadeTimer        = 0.4f;
     slot.isExplodeMode    = true;
-    slot.explodeTotalTime = 1.5f;
+    slot.explodeTotalTime = 0.4f;
     slot.pSystem->SetExplodeFade(1.0f);  // 즉시 폭발 모드: coreColor 강제 + 크기 축소 준비
 }
 
@@ -477,17 +531,33 @@ void FluidSkillVFXManager::Render(ID3D12GraphicsCommandList* pCommandList,
     }
 }
 
+void FluidSkillVFXManager::RenderEnemyEffects(ID3D12GraphicsCommandList* pCommandList,
+                                               const XMFLOAT4X4& viewProj,
+                                               const XMFLOAT3& camRight,
+                                               const XMFLOAT3& camUp)
+{
+    for (auto& slot : m_Slots)
+    {
+        if (!slot.isActive || !slot.pSystem->IsActive()) continue;
+        if (slot.isPlayerEffect) continue;  // 플레이어 슬롯 건너뜀
+        slot.pSystem->Render(pCommandList, viewProj, camRight, camUp);
+    }
+}
+
 void FluidSkillVFXManager::RenderDepth(ID3D12GraphicsCommandList* pCmdList,
                                         const XMFLOAT4X4& viewProjTransposed,
                                         const XMFLOAT4X4& viewTransposed,
                                         const XMFLOAT3& camRight,
                                         const XMFLOAT3& camUp,
                                         float projA, float projB,
-                                        ScreenSpaceFluid* pSSF)
+                                        ScreenSpaceFluid* pSSF,
+                                        bool blurOnly)
 {
     for (auto& slot : m_Slots)
     {
         if (!slot.isActive || !slot.pSystem->IsActive()) continue;
+        if (!slot.isPlayerEffect) continue;       // 적 투사체는 SSF 제외 → RenderEnemyEffects에서 처리
+        if (slot.useBlur != blurOnly) continue;  // blur 패스 필터
         slot.pSystem->RenderDepth(pCmdList, viewProjTransposed, viewTransposed,
                                    camRight, camUp, projA, projB, pSSF);
     }
@@ -495,13 +565,28 @@ void FluidSkillVFXManager::RenderDepth(ID3D12GraphicsCommandList* pCmdList,
 
 void FluidSkillVFXManager::RenderThicknessOnly(
     ID3D12GraphicsCommandList* pCmdList,
-    ScreenSpaceFluid* pSSF)
+    ScreenSpaceFluid* pSSF,
+    bool blurOnly)
 {
     for (auto& slot : m_Slots)
     {
         if (!slot.isActive || !slot.pSystem->IsActive()) continue;
+        if (!slot.isPlayerEffect) continue;       // 적 투사체 제외
+        if (slot.useBlur != blurOnly) continue;  // blur 패스 필터
         slot.pSystem->RenderThicknessOnly(pCmdList, pSSF);
     }
+}
+
+bool FluidSkillVFXManager::HasActiveSlots(bool blurOnly) const
+{
+    for (const auto& slot : m_Slots)
+    {
+        if (slot.isActive && slot.pSystem->IsActive()
+            && slot.isPlayerEffect               // 플레이어 슬롯만 집계
+            && slot.useBlur == blurOnly)
+            return true;
+    }
+    return false;
 }
 
 void FluidSkillVFXManager::PushControlPoints(FluidVFXSlot& slot) const
@@ -589,11 +674,25 @@ void FluidSkillVFXManager::UpdatePhase(FluidVFXSlot& slot, float dt)
         }
 
         if (phase.motionMode == ParticleMotionMode::Gravity) {
-            // 메테오 폭발: 방사형 초기 velocity 부여
+            // 폭발 페이즈: 속도 상한 오버라이드 (방사 속도보다 낮으면 클램프됨)
+            if (phase.phaseMaxSpeed > 0.f)
+                slot.pSystem->SetMaxParticleSpeed(phase.phaseMaxSpeed);
+
             slot.pSystem->SetGravityDesc(phase.gravityDesc);
             slot.pSystem->ApplyRadialBurst(slot.origin,
                 phase.gravityDesc.initialSpeedMin,
                 phase.gravityDesc.initialSpeedMax);
+
+            // 폭발 페이드 트리거: 파티클이 즉시 작아지며 사라짐
+            // SSF 모드 유지 — RenderDepth에서 smoothingRadius*fadeMult로 SSF 구체 자체를 축소
+            if (phase.triggerExplodeFadeOnEnter) {
+                slot.pSystem->SetExplodeFade(1.0f);
+                slot.isFadingOut      = true;
+                slot.isExplodeMode    = true;
+                slot.fadeTimer        = phase.duration;
+                slot.explodeTotalTime = phase.duration;
+                slot.useSequence      = false; // isFadingOut 블록이 이후를 처리
+            }
         }
 
         // ControlPoint 모드: 페이즈 cpDescs가 있으면 CP 설정
@@ -1110,9 +1209,27 @@ XMFLOAT4 FluidSkillVFXManager::GetDominantFluidColor() const
 
 FluidElementColor FluidSkillVFXManager::GetDominantFluidColors() const
 {
+    // 시퀀스 모드(플레이어 스킬) 슬롯 우선 반환 — 적 투사체(SpawnEffect)가 색상 덮지 않도록
+    for (const auto& slot : m_Slots)
+    {
+        if (!slot.isActive || !slot.useSequence) continue;
+        return FluidElementColors::Get(slot.sequenceDef.element);
+    }
+    // 플레이어 스킬 없으면 모든 활성 슬롯에서 첫 번째
     for (const auto& slot : m_Slots)
     {
         if (!slot.isActive) continue;
+        ElementType elem = slot.useSequence ? slot.sequenceDef.element : slot.def.element;
+        return FluidElementColors::Get(elem);
+    }
+    return FluidElementColors::Get(ElementType::None);
+}
+
+FluidElementColor FluidSkillVFXManager::GetDominantFluidColors(bool blurOnly) const
+{
+    for (const auto& slot : m_Slots)
+    {
+        if (!slot.isActive || !slot.isPlayerEffect || slot.useBlur != blurOnly) continue;
         ElementType elem = slot.useSequence ? slot.sequenceDef.element : slot.def.element;
         return FluidElementColors::Get(elem);
     }

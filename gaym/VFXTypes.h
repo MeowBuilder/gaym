@@ -104,6 +104,14 @@ struct VFXPhase {
     // true(기본): 파티클이 origin과 함께 이동 (뭉쳐서 이동)
     // false: CP만 이동, 파티클은 물리로 따라감 → 혜성 꼬리 효과
     bool offsetParticlesWithOrigin = true;
+
+    // Phase 진입 시 maxParticleSpeed 오버라이드 (0=변경 없음)
+    // 폭발 페이즈에서 속도 상한을 높여 빠른 방사 허용
+    float phaseMaxSpeed = 0.f;
+
+    // Phase 진입 시 ExplodeFade 모드 시작 (파티클이 작아지며 사라짐)
+    // true이면 phase.duration 동안 fadeRatio 1→0으로 감소 후 슬롯 소멸
+    bool triggerExplodeFadeOnEnter = false;
 };
 
 // VFX 룬 수식자

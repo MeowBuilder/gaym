@@ -96,26 +96,13 @@ void MeteorBehavior::Update(float deltaTime)
     // ── 낙하 단계 (0 ~ FALL_DURATION) ──────────────────────────────
     if (m_elapsed < FALL_DURATION) return;
 
-    // ── 폭발 단계 진입 ─────────────────────────────────────────────
+    // ── 폭발 단계: 1회 히트 후 즉시 종료 ─────────────────────────
     if (!m_bExploded) {
-        m_bExploded = true;
-        m_hitTimer  = 0.f;
-        // 초기 큰 폭발 AoE: 경직 허용
-        ApplyExplosionDamage(m_SkillData.damage * m_damageMult, EXPLODE_RADIUS, true);
-        OutputDebugStringA("[Meteor] Explosion hit!\n");
-    }
-
-    // 폭발 지속 중 다단 히트 (FALL_DURATION ~ FALL_DURATION + EXPLODE_DURATION)
-    if (m_elapsed < FALL_DURATION + EXPLODE_DURATION) {
-        m_hitTimer += deltaTime;
-        if (m_hitTimer >= MULTI_HIT_INTERVAL) {
-            m_hitTimer -= MULTI_HIT_INTERVAL;
-            float tickDmg = m_SkillData.damage * m_damageMult * 0.25f;
-            ApplyExplosionDamage(tickDmg, MULTI_HIT_RADIUS, false); // 여진: 경직 없음
-        }
-    } else {
-        // 폭발 단계 종료
+        m_bExploded   = true;
         m_bIsFinished = true;
+        // 단일 폭발 AoE: 경직 허용
+        ApplyExplosionDamage(m_SkillData.damage * m_damageMult, EXPLODE_RADIUS, true);
+        OutputDebugStringA("[Meteor] Explosion hit! (single)\n");
     }
 }
 
