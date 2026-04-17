@@ -1,5 +1,6 @@
 #pragma once
 #include "IAttackBehavior.h"
+#include "SkillTypes.h"
 #include <DirectXMath.h>
 
 using namespace DirectX;
@@ -17,13 +18,17 @@ public:
                          float fSpreadAngle = 30.0f,
                          float fWindupTime = 0.8f,
                          float fBreathDuration = 1.0f,
-                         float fRecoveryTime = 0.5f);
+                         float fRecoveryTime = 0.5f,
+                         float fProjectileRadius = 0.8f,
+                         float fProjectileScale = 1.5f,
+                         ElementType eElement = ElementType::Fire);
     virtual ~BreathAttackBehavior() = default;
 
     virtual void Execute(EnemyComponent* pEnemy) override;
     virtual void Update(float dt, EnemyComponent* pEnemy) override;
     virtual bool IsFinished() const override;
     virtual void Reset() override;
+    virtual const char* GetAnimClipName() const override { return "Fireball Shoot"; }
 
 private:
     void FireBreathProjectile(EnemyComponent* pEnemy, float angleOffset);
@@ -40,6 +45,9 @@ private:
     float m_fWindupTime = 0.8f;
     float m_fBreathDuration = 1.0f;
     float m_fRecoveryTime = 0.5f;
+    float m_fProjectileRadius = 0.8f;
+    float m_fProjectileScale = 1.5f;
+    ElementType m_eElement = ElementType::Fire;
 
     // Runtime state
     enum class Phase { Windup, Breath, Recovery };

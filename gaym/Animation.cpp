@@ -134,6 +134,18 @@ bool AnimationSet::LoadAnimationFromFile(const char* pstrFileName)
         m_mapClips[pClip->m_strName] = pClip;
     }
 
+    // 로드된 클립 이름 목록 출력 (클립명 확인용)
+    {
+        char buf[128];
+        sprintf_s(buf, "[AnimSet] Loaded %s (%zu clips):\n", pstrFileName, m_vClips.size());
+        OutputDebugStringA(buf);
+        for (auto& clip : m_vClips)
+        {
+            sprintf_s(buf, "  - \"%s\" (%.2fs)\n", clip->m_strName.c_str(), clip->m_fDuration);
+            OutputDebugStringA(buf);
+        }
+    }
+
     fclose(pInFile);
     return true;
 }

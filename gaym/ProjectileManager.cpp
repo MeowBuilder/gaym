@@ -99,6 +99,24 @@ void ProjectileManager::SpawnProjectile(const Projectile& projectile)
                 proj.element, proj.runeCombo, proj.chargeRatio);
             vfxDef.particleCount = static_cast<int>(vfxDef.particleCount * 0.3f);
             if (vfxDef.particleCount < 100) vfxDef.particleCount = 100;
+
+            // proj.scale을 VFX 크기에 반영 (기본 scale=1.5 기준 배율)
+            if (proj.scale > 1.5f)
+            {
+                float s = proj.scale / 1.5f;
+                for (auto& cpd : vfxDef.cpDescs)
+                {
+                    cpd.orbitRadius        *= s;
+                    cpd.sphereRadius       *= s;
+                    cpd.attractionStrength /= sqrtf(s);  // 너무 약해지면 구형이 됨
+                }
+                vfxDef.spawnRadius    *= s;
+                vfxDef.smoothingRadius = 1.2f * s;        // 물리 덩어리 크기 핵심
+                vfxDef.restDensity     = 7.0f / s;        // 낮을수록 파티클이 퍼짐
+                // particleSize는 고정 — 개별 파티클은 작게 유지해야 유체처럼 보임
+                vfxDef.particleCount   = static_cast<int>(vfxDef.particleCount * min(s, 6.0f));
+            }
+
             proj.fluidVFXId = m_pFluidVFXManager->SpawnEffect(
                 proj.position, proj.direction, vfxDef);
         }
@@ -396,8 +414,9 @@ void ProjectileManager::Render(ID3D12GraphicsCommandList* pCommandList)
     for (const auto& projectile : m_Projectiles)
     {
         if (!projectile.isActive) continue;
-        if (projectile.isPlayerProjectile) continue;  // Uses fluid VFX only
         if (renderIndex >= MAX_RENDERED_PROJECTILES) break;
+        // 플레이어/적 모두 fluid VFX로 표현 — 큐브 메시는 렌더하지 않음
+        continue;
 
         // Update constant buffer for this projectile
         ProjectileConstants* pCB = reinterpret_cast<ProjectileConstants*>(pMappedBytes + renderIndex * nSingleCBSize);

@@ -18,4 +18,7 @@ public:
 
     // Reset the attack state for reuse
     virtual void Reset() = 0;
+
+    // 이 공격에 맞는 애니메이션 클립 이름. 빈 문자열이면 m_strAttackClip 기본값 사용
+    virtual const char* GetAnimClipName() const { return ""; }
 };

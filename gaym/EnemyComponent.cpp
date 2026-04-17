@@ -162,8 +162,17 @@ void EnemyComponent::ChangeState(EnemyState newState)
             m_pAnimationComp->CrossFade(m_AnimConfig.m_strChaseClip, 0.2f, m_AnimConfig.m_bLoopChase);
             break;
         case EnemyState::Attack:
-            m_pAnimationComp->CrossFade(m_AnimConfig.m_strAttackClip, 0.15f, m_AnimConfig.m_bLoopAttack);
+        {
+            // 행동별 전용 클립이 있으면 그걸 우선 사용
+            IAttackBehavior* pActiveBehavior = m_bUsingFlyingAttack  ? m_pFlyingAttackBehavior.get()
+                                             : m_bUsingSpecialAttack ? m_pSpecialAttackBehavior.get()
+                                             :                         m_pAttackBehavior.get();
+            const char* pClip = (pActiveBehavior && pActiveBehavior->GetAnimClipName()[0] != '\0')
+                               ? pActiveBehavior->GetAnimClipName()
+                               : m_AnimConfig.m_strAttackClip.c_str();
+            m_pAnimationComp->CrossFade(pClip, 0.15f, m_AnimConfig.m_bLoopAttack);
             break;
+        }
         case EnemyState::Stagger:
             m_pAnimationComp->CrossFade(m_AnimConfig.m_strStaggerClip, 0.1f, m_AnimConfig.m_bLoopStagger);
             break;
@@ -480,8 +489,10 @@ void EnemyComponent::UpdateChase(float dt)
                 }
             }
 
-            // 비행 불가 시 브레스 공격 (기본 공격이 브레스면 바로 사용)
-            OutputDebugString(L"[Boss] Long range - Using BREATH attack!\n");
+            // 비행 불가 시 기본 공격 (팩토리 있으면 새로 생성)
+            if (m_fnAttackFactory) m_pAttackBehavior = m_fnAttackFactory();
+            else if (m_pAttackBehavior) m_pAttackBehavior->Reset();
+            OutputDebugString(L"[Boss] Long range - Using PRIMARY attack!\n");
             ChangeState(EnemyState::Attack);
             return;
         }
@@ -529,15 +540,28 @@ void EnemyComponent::UpdateChase(float dt)
                     {
                         m_pSpecialAttackBehavior = phase.m_fnSpecialAttack();
                         m_bUsingSpecialAttack = true;
-                        OutputDebugString(L"[Boss] Mid range - Using SPECIAL attack!\n");
+                        OutputDebugString(L"[Boss] Mid range - Using SPECIAL attack (phase)!\n");
                         ChangeState(EnemyState::Attack);
                         return;
                     }
                 }
+                else if ((m_fnSpecialAttackFactory || m_pSpecialAttackBehavior) && (rand() % 100) < m_nSpecialAttackChance)
+                {
+                    if (m_fnSpecialAttackFactory)
+                        m_pSpecialAttackBehavior = m_fnSpecialAttackFactory();
+                    else
+                        m_pSpecialAttackBehavior->Reset();
+                    m_bUsingSpecialAttack = true;
+                    OutputDebugString(L"[Boss] Mid range - Using SPECIAL attack!\n");
+                    ChangeState(EnemyState::Attack);
+                    return;
+                }
             }
 
-            // 그 외엔 브레스 공격
-            OutputDebugString(L"[Boss] Mid range - Using BREATH attack!\n");
+            // 그 외엔 기본 공격 (팩토리 있으면 새로 생성)
+            if (m_fnAttackFactory) m_pAttackBehavior = m_fnAttackFactory();
+            else if (m_pAttackBehavior) m_pAttackBehavior->Reset();
+            OutputDebugString(L"[Boss] Mid range - Using PRIMARY attack!\n");
             ChangeState(EnemyState::Attack);
             return;
         }
@@ -584,14 +608,27 @@ void EnemyComponent::UpdateChase(float dt)
                     {
                         m_pSpecialAttackBehavior = phase.m_fnSpecialAttack();
                         m_bUsingSpecialAttack = true;
-                        OutputDebugString(L"[Boss] Close range - Using SPECIAL attack!\n");
+                        OutputDebugString(L"[Boss] Close range - Using SPECIAL attack (phase)!\n");
                         ChangeState(EnemyState::Attack);
                         return;
                     }
                 }
+                else if ((m_fnSpecialAttackFactory || m_pSpecialAttackBehavior) && (rand() % 100) < m_nSpecialAttackChance)
+                {
+                    if (m_fnSpecialAttackFactory)
+                        m_pSpecialAttackBehavior = m_fnSpecialAttackFactory();
+                    else
+                        m_pSpecialAttackBehavior->Reset();
+                    m_bUsingSpecialAttack = true;
+                    OutputDebugString(L"[Boss] Close range - Using SPECIAL attack!\n");
+                    ChangeState(EnemyState::Attack);
+                    return;
+                }
             }
 
-            // 기본 공격 (브레스 또는 콤보)
+            // 기본 공격 (팩토리 있으면 새로 생성해 패턴 변화)
+            if (m_fnAttackFactory) m_pAttackBehavior = m_fnAttackFactory();
+            else if (m_pAttackBehavior) m_pAttackBehavior->Reset();
             OutputDebugString(L"[Boss] Close range - Using PRIMARY attack!\n");
             ChangeState(EnemyState::Attack);
             return;

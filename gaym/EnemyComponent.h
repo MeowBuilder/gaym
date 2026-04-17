@@ -121,6 +121,10 @@ public:
     IAttackBehavior* GetSpecialAttackBehavior() const { return m_pSpecialAttackBehavior.get(); }
     bool IsUsingSpecialAttack() const { return m_bUsingSpecialAttack; }
 
+    // Factories: recreate behaviors each use so random selection actually varies
+    void SetAttackFactory(std::function<std::unique_ptr<IAttackBehavior>()> fn) { m_fnAttackFactory = std::move(fn); }
+    void SetSpecialAttackFactory(std::function<std::unique_ptr<IAttackBehavior>()> fn) { m_fnSpecialAttackFactory = std::move(fn); }
+
     // Flying attack behavior (for bosses with flight capability)
     void SetFlyingAttackBehavior(std::unique_ptr<IAttackBehavior> pBehavior);
     IAttackBehavior* GetFlyingAttackBehavior() const { return m_pFlyingAttackBehavior.get(); }
@@ -206,6 +210,8 @@ private:
     std::unique_ptr<IAttackBehavior> m_pAttackBehavior;
     std::unique_ptr<IAttackBehavior> m_pSpecialAttackBehavior;  // Special pattern for bosses
     std::unique_ptr<IAttackBehavior> m_pFlyingAttackBehavior;   // Flying pattern for bosses
+    std::function<std::unique_ptr<IAttackBehavior>()> m_fnAttackFactory;
+    std::function<std::unique_ptr<IAttackBehavior>()> m_fnSpecialAttackFactory;
     GameObject* m_pTarget = nullptr;
     CRoom* m_pRoom = nullptr;
 

@@ -503,41 +503,60 @@ void EnemySpawner::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pComma
     blueDragon.m_strTexturePath   = "Assets/Enemies/Dragon_blue/Textures/BlueHP.png";
     blueDragon.m_xmf3Scale = XMFLOAT3(3.0f, 3.0f, 3.0f);
     blueDragon.m_xmf4Color = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
+    blueDragon.m_fColliderXZMultiplier = 0.65f;  // 뚱뚱한 몸집에 맞게 피격 판정 확대
 
     blueDragon.m_Stats.m_fMaxHP              = 800.0f;
     blueDragon.m_Stats.m_fCurrentHP          = 800.0f;
     blueDragon.m_Stats.m_fMoveSpeed          = 9.0f;
     blueDragon.m_Stats.m_fAttackRange        = 35.0f;
-    blueDragon.m_Stats.m_fAttackCooldown     = 1.5f;
+    blueDragon.m_Stats.m_fAttackCooldown     = 2.2f;  // 기본 공격 텀 넉넉하게
     blueDragon.m_Stats.m_fLongRangeThreshold = 30.0f;
     blueDragon.m_Stats.m_fMidRangeThreshold  = 15.0f;
 
     blueDragon.m_bIsFlying = false;
     blueDragon.m_fFlyHeight = 0.0f;
     blueDragon.m_bIsBoss = true;
-    blueDragon.m_fSpecialAttackCooldown = 5.0f;
-    blueDragon.m_nSpecialAttackChance   = 40;
-    blueDragon.m_nFlyingAttackChance    = 45;
+    blueDragon.m_fSpecialAttackCooldown = 3.0f;   // 특수기 자주 나오게
+    blueDragon.m_nSpecialAttackChance   = 60;     // 쿨다운 끝나면 60% 확률로 특수기
+    blueDragon.m_nFlyingAttackChance    = 0;       // 페이즈 컨트롤러 없으면 작동 안 함
 
     blueDragon.m_AnimConfig.m_strIdleClip    = "Idle";
     blueDragon.m_AnimConfig.m_strChaseClip   = "Walk";
     blueDragon.m_AnimConfig.m_strAttackClip  = "Basic Attack";
     blueDragon.m_AnimConfig.m_strStaggerClip = "Get Hit";
     blueDragon.m_AnimConfig.m_strDeathClip   = "Die";
+    blueDragon.m_AnimConfig.m_bLoopAttack    = true;  // 행동 지속 시간 동안 공격 포즈 유지
 
     blueDragon.m_IndicatorConfig.m_eType      = IndicatorType::Circle;
     blueDragon.m_IndicatorConfig.m_fHitRadius = 14.0f;
 
-    blueDragon.m_fnCreateAttack = [pProjMgr]() {
-        return std::make_unique<BreathAttackBehavior>(pProjMgr, 28.0f, 35.0f, 4, 42.0f, 0.4f, 0.8f, 0.3f);
+    // 기본 공격: 파란 물덩어리 브레스
+    blueDragon.m_fnCreateAttack = [pProjMgr]() -> std::unique_ptr<IAttackBehavior> {
+        if (rand() % 2 == 0)
+            // 퍼지는 브레스 3발 — scale 8
+            return std::make_unique<BreathAttackBehavior>(pProjMgr, 28.0f, 14.0f, 3, 40.0f, 0.65f, 1.1f, 0.55f, 3.0f, 8.0f, ElementType::Water);
+        else
+            // 집중 브레스 2발 — scale 11
+            return std::make_unique<BreathAttackBehavior>(pProjMgr, 35.0f, 16.0f, 2, 18.0f, 0.55f, 0.85f, 0.45f, 4.0f, 11.0f, ElementType::Water);
     };
 
+    // 특수 공격: 뚱뚱한 몸집에 맞는 묵직하고 느린 패턴들
     blueDragon.m_fnCreateSpecialAttack = []() -> std::unique_ptr<IAttackBehavior> {
-        int choice = rand() % 2;
-        if (choice == 0)
-            return std::make_unique<TailSweepAttackBehavior>(35.0f, 0.35f, 0.25f, 0.35f, 8.0f, 180.0f, true);
-        else
-            return std::make_unique<JumpSlamAttackBehavior>(45.0f, 10.0f, 0.45f, 7.0f, 0.25f, 0.4f, true);
+        int choice = rand() % 4;
+        switch (choice) {
+        case 0:
+            // 꼬리 휩쓸기 - 크고 느린 호, 긴 선딜
+            return std::make_unique<TailSweepAttackBehavior>(32.0f, 0.65f, 0.45f, 0.6f, 10.0f, 200.0f, true);
+        case 1:
+            // 점프 슬램 - 낮고 느린 점프, 무거운 착지. 도약 높이 줄이고 착지 후딜 길게
+            return std::make_unique<JumpSlamAttackBehavior>(42.0f, 6.0f, 0.7f, 8.0f, 0.5f, 0.7f, true);
+        case 2:
+            // 3연타 - 묵직하고 간격 넓게 (LightCombo 파라미터 오버라이드 불가하므로 HeavyCombo 사용)
+            return std::unique_ptr<IAttackBehavior>(ComboAttackBehavior::CreateHeavyCombo());
+        default:
+            // 느릿한 돌진 - 짧은 거리, 낮은 속도
+            return std::make_unique<RushFrontAttackBehavior>(40.0f, 10.0f, 1.0f, 0.35f, 0.35f, 0.5f, 6.0f, 60.0f);
+        }
     };
 
     RegisterEnemyPreset("BlueDragon", blueDragon);
@@ -692,10 +711,11 @@ void EnemySpawner::SetupEnemyComponents(GameObject* pEnemy, const EnemySpawnData
         pEnemyComp->SetFlying(true, data.m_fFlyHeight);
     }
 
-    // Create attack behavior
+    // Create attack behavior (+ store factory for per-use recreation)
     if (data.m_fnCreateAttack)
     {
         pEnemyComp->SetAttackBehavior(data.m_fnCreateAttack());
+        pEnemyComp->SetAttackFactory(data.m_fnCreateAttack);
     }
     else
     {
@@ -712,10 +732,11 @@ void EnemySpawner::SetupEnemyComponents(GameObject* pEnemy, const EnemySpawnData
         pEnemyComp->SetFlyingAttackCooldown(data.m_fFlyingAttackCooldown);
         pEnemyComp->SetFlyingAttackChance(data.m_nFlyingAttackChance);
 
-        // Create special attack behavior if provided
+        // Create special attack behavior + store factory for per-use recreation
         if (data.m_fnCreateSpecialAttack)
         {
             pEnemyComp->SetSpecialAttackBehavior(data.m_fnCreateSpecialAttack());
+            pEnemyComp->SetSpecialAttackFactory(data.m_fnCreateSpecialAttack);
             OutputDebugString(L"[EnemySpawner] Boss special attack behavior set\n");
         }
 
@@ -827,7 +848,8 @@ GameObject* EnemySpawner::CreateMeshEnemy(CRoom* pRoom, const XMFLOAT3& position
     float colliderScale = data.m_xmf3Scale.x;
     if (data.m_xmf3Scale.y > colliderScale) colliderScale = data.m_xmf3Scale.y;
     if (data.m_xmf3Scale.z > colliderScale) colliderScale = data.m_xmf3Scale.z;
-    pCollider->SetExtents(colliderScale * 0.3f, colliderScale * 1.0f, colliderScale * 0.3f);  // Narrower XZ
+    float xzMult = (data.m_fColliderXZMultiplier > 0.0f) ? data.m_fColliderXZMultiplier : 0.3f;
+    pCollider->SetExtents(colliderScale * xzMult, colliderScale * 1.0f, colliderScale * xzMult);
     pCollider->SetCenter(0.0f, colliderScale * 1.0f, 0.0f);
     pCollider->SetLayer(CollisionLayer::Enemy);
     pCollider->SetCollisionMask(CollisionMask::Enemy);

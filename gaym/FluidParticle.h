@@ -104,7 +104,7 @@ namespace FluidElementColors
         case ElementType::Fire:
             return { {1.0f, 0.45f, 0.05f, 0.95f}, {1.0f, 0.1f, 0.0f, 0.25f} };
         case ElementType::Water:
-            return { {0.15f, 0.55f, 1.0f, 0.90f}, {0.0f, 0.25f, 0.75f, 0.25f} };
+            return { {0.15f, 0.88f, 0.98f, 0.95f}, {0.0f, 0.18f, 0.72f, 0.30f} };
         case ElementType::Wind:
             return { {0.75f, 1.0f, 0.75f, 0.75f}, {0.35f, 0.85f, 0.35f, 0.20f} };
         case ElementType::Earth:
@@ -134,4 +134,7 @@ struct FluidSkillVFXDef {
     int         particleCount = 80;
     float       spawnRadius   = 0.8f;
     ElementType element       = ElementType::Fire;
+    float       particleSize    = 0.0f;   // 0이면 기본값(0.35f) 사용
+    float       smoothingRadius = 0.0f;   // 0이면 기본값(1.2f) 사용 — 클수록 덩어리 자체가 커짐
+    float       restDensity     = 0.0f;   // 0이면 기본값(7.0f) 사용 — 작을수록 파티클이 퍼짐
 };

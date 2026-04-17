@@ -16,6 +16,7 @@ public:
     virtual void Update(float dt, EnemyComponent* pEnemy) override;
     virtual bool IsFinished() const override;
     virtual void Reset() override;
+    virtual const char* GetAnimClipName() const override { return "Run"; }
 
 private:
     enum class Phase { Rush, Windup, Hit, Recovery };

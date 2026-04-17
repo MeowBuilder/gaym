@@ -36,6 +36,9 @@ struct EnemySpawnData
     bool m_bIsFlying = false;
     float m_fFlyHeight = 15.0f;
 
+    // Collider override (0이면 scale 기반 자동 계산)
+    float m_fColliderXZMultiplier = 0.0f;
+
     // Boss settings
     bool m_bIsBoss = false;
     float m_fSpecialAttackCooldown = 10.0f;

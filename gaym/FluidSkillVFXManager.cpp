@@ -37,12 +37,12 @@ int FluidSkillVFXManager::SpawnEffect(const XMFLOAT3& origin, const XMFLOAT3& di
             cfg.element           = def.element;
             cfg.particleCount     = def.particleCount;
             cfg.spawnRadius       = def.spawnRadius;
-            cfg.smoothingRadius   = 1.2f;
-            cfg.restDensity       = 7.0f;
+            cfg.smoothingRadius   = (def.smoothingRadius > 0.0f) ? def.smoothingRadius : 1.2f;
+            cfg.restDensity       = (def.restDensity     > 0.0f) ? def.restDensity     : 7.0f;
             cfg.stiffness         = 50.0f;
             cfg.viscosity         = 0.25f;
             cfg.boundaryStiffness = 150.0f;
-            cfg.particleSize      = 0.35f;
+            cfg.particleSize      = (def.particleSize    > 0.0f) ? def.particleSize    : 0.03f;
 
             slot.pSystem->Spawn(origin, cfg);
             PushControlPoints(slot);
@@ -939,14 +939,59 @@ FluidSkillVFXDef FluidSkillVFXManager::GetVFXDef(ElementType element, const Rune
     }
     case ElementType::Water:
     {
-        // 3개 CP, 삼각형 궤도 - 유선형 구체
-        for (int i = 0; i < 3; ++i)
+        // 핵(nucleus) + 3개 비대칭 궤도 CP — 회전하며 찌그러지는 물 덩어리
+        def.particleCount = 200;
+        def.spawnRadius   = 1.0f;
+
+        // 핵: 중심에 고정, 밀집된 코어 형성
+        {
+            FluidCPDesc nuc;
+            nuc.orbitRadius        = 0.0f;
+            nuc.orbitSpeed         = 0.0f;
+            nuc.orbitPhase         = 0.0f;
+            nuc.forwardBias        = 0.0f;
+            nuc.orbitTilt          = 0.0f;
+            nuc.attractionStrength = 28.0f;
+            nuc.sphereRadius       = 1.1f;
+            def.cpDescs.push_back(nuc);
+        }
+
+        // 앞쪽 돌출 CP: forwardBias로 투사체 진행 방향 elongation
         {
             FluidCPDesc cp;
-            cp.orbitRadius = 0.7f; cp.orbitSpeed = 9.0f;
-            cp.orbitPhase  = (float)i * (2.0f * XM_PI / 3.0f);
-            cp.forwardBias = 0.0f;
-            cp.attractionStrength = 20.0f; cp.sphereRadius = 2.0f;
+            cp.orbitRadius        = 1.1f;
+            cp.orbitSpeed         = 7.0f;
+            cp.orbitPhase         = 0.0f;
+            cp.forwardBias        = 1.8f;
+            cp.orbitTilt          = XM_PI / 4.0f;   // 45° 앞으로 기울어진 궤도
+            cp.attractionStrength = 22.0f;
+            cp.sphereRadius       = 1.3f;
+            def.cpDescs.push_back(cp);
+        }
+
+        // 넓은 궤도 CP: 빠른 회전으로 옆면 파동 생성
+        {
+            FluidCPDesc cp;
+            cp.orbitRadius        = 1.7f;
+            cp.orbitSpeed         = 12.0f;
+            cp.orbitPhase         = XM_2PI / 3.0f;
+            cp.forwardBias        = 0.4f;
+            cp.orbitTilt          = -XM_PI / 5.0f;  // 뒤로 기울어진 궤도
+            cp.attractionStrength = 18.0f;
+            cp.sphereRadius       = 1.5f;
+            def.cpDescs.push_back(cp);
+        }
+
+        // 뒤쪽 느린 CP: 꼬리 효과
+        {
+            FluidCPDesc cp;
+            cp.orbitRadius        = 1.3f;
+            cp.orbitSpeed         = 5.5f;
+            cp.orbitPhase         = XM_2PI * 2.0f / 3.0f;
+            cp.forwardBias        = -1.0f;
+            cp.orbitTilt          = XM_PI / 3.0f;   // 60° 앞으로 기울어진 궤도
+            cp.attractionStrength = 20.0f;
+            cp.sphereRadius       = 1.4f;
             def.cpDescs.push_back(cp);
         }
         break;

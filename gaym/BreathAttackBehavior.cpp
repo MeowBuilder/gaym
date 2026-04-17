@@ -13,7 +13,10 @@ BreathAttackBehavior::BreathAttackBehavior(ProjectileManager* pProjectileManager
                                            float fSpreadAngle,
                                            float fWindupTime,
                                            float fBreathDuration,
-                                           float fRecoveryTime)
+                                           float fRecoveryTime,
+                                           float fProjectileRadius,
+                                           float fProjectileScale,
+                                           ElementType eElement)
     : m_pProjectileManager(pProjectileManager)
     , m_fDamagePerHit(fDamagePerHit)
     , m_fProjectileSpeed(fProjectileSpeed)
@@ -22,6 +25,9 @@ BreathAttackBehavior::BreathAttackBehavior(ProjectileManager* pProjectileManager
     , m_fWindupTime(fWindupTime)
     , m_fBreathDuration(fBreathDuration)
     , m_fRecoveryTime(fRecoveryTime)
+    , m_fProjectileRadius(fProjectileRadius)
+    , m_fProjectileScale(fProjectileScale)
+    , m_eElement(eElement)
 {
 }
 
@@ -169,11 +175,11 @@ void BreathAttackBehavior::FireBreathProjectile(EnemyComponent* pEnemy, float an
         fireTarget,
         m_fDamagePerHit,
         m_fProjectileSpeed,
-        0.8f,           // larger radius for breath
-        0.0f,           // no explosion
-        ElementType::Fire,
+        m_fProjectileRadius,
+        0.0f,
+        m_eElement,
         pOwner,
-        false,          // isPlayerProjectile = false (enemy projectile)
-        1.5f            // larger scale for dragon breath
+        false,
+        m_fProjectileScale
     );
 }
