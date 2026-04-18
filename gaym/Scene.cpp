@@ -548,11 +548,27 @@ void Scene::Update(float deltaTime, InputSystem* pInputSystem)
         m_eKrakenStage = KrakenCutsceneStage::Rumble;
         m_fKrakenEmergeTimer = 0.0f;
 
+        // 수면 시각 범위를 낙하 안전존과 동일하게 축소 — "보이는 물 = 걸을 수 있는 영역"
+        // 낙하존이 rb.Extents × 1.6 이므로 수면 plane 전체 너비 = 2 × 1.6 × extent
+        if (m_pWaterPlane && m_pCurrentRoom)
+        {
+            const BoundingBox& rb = m_pCurrentRoom->GetBoundingBox();
+            constexpr float kSafeMul = 1.6f;
+            float scaleX = rb.Extents.x * kSafeMul * 2.0f;
+            float scaleZ = rb.Extents.z * kSafeMul * 2.0f;
+            m_pWaterPlane->GetTransform()->SetScale(scaleX, 1.0f, scaleZ);
+            // 수면 중심을 방 중심(XZ)에 정렬 — Y는 기존값(차오름 단계에서 갱신) 유지
+            XMFLOAT3 wp = m_pWaterPlane->GetTransform()->GetPosition();
+            wp.x = rb.Center.x;
+            wp.z = rb.Center.z;
+            m_pWaterPlane->GetTransform()->SetPosition(wp);
+        }
+
         // Lock camera on emergence point + rumble shake
         XMFLOAT3 camFocus = m_xmf3PendingKrakenPos;
         camFocus.y = 0.0f;
         m_pCamera->StartCinematic(camFocus, 45.0f, 25.0f, m_pCamera->IsFreeCam() ? 45.0f : 200.0f);
-        m_pCamera->StartShake(0.6f, KRAKEN_T_RUMBLE);  // 초반 "쾅" 톤다운 (1.5 → 0.6)
+        // 초반 "땅 치는" 쉐이크 제거 — 물에서 치는 임팩트(Burst/Slam)만 남김
 
         OutputDebugString(L"[Scene] Kraken cutscene: RUMBLE\n");
     }
@@ -587,7 +603,7 @@ void Scene::Update(float deltaTime, InputSystem* pInputSystem)
                 // Zoom in closer for the rise
                 XMFLOAT3 camFocus = m_xmf3PendingKrakenPos; camFocus.y = 1.0f;
                 m_pCamera->StartCinematic(camFocus, 30.0f, 20.0f, 210.0f);
-                m_pCamera->StartShake(0.4f, KRAKEN_T_RISE - KRAKEN_T_RUMBLE);
+                // 지면 진동 쉐이크 제거 — Burst/Slam의 수면 임팩트만 카메라 쉐이크 유지
                 OutputDebugString(L"[Scene] Kraken cutscene: RISE\n");
             }
         }
@@ -666,12 +682,23 @@ void Scene::Update(float deltaTime, InputSystem* pInputSystem)
                     auto* pAnim = pKrakenObj->GetComponent<AnimationComponent>();
                     if (pAnim) pAnim->CrossFade("Unreal Take", 0.15f, false);
                 }
+                m_bKrakenRoarFadedToIdle = false;
                 OutputDebugString(L"[Scene] Kraken cutscene: ROAR\n");
             }
         }
         // ── Stage: Roar (KRAKEN_T_REVEAL ~ KRAKEN_T_ROAR) ────────────────────
         else if (m_eKrakenStage == KrakenCutsceneStage::Roar)
         {
+            // Unreal Take 클립 길이 2.0s — 끝난 뒤 Idle 루프로 부드럽게 전환해 정지 방지
+            const float kUnrealTakeDuration = 2.0f;
+            float stageT = T - KRAKEN_T_REVEAL;
+            if (!m_bKrakenRoarFadedToIdle && stageT >= kUnrealTakeDuration && pKrakenObj)
+            {
+                auto* pAnim = pKrakenObj->GetComponent<AnimationComponent>();
+                if (pAnim) pAnim->CrossFade("Idle", 0.25f, true);
+                m_bKrakenRoarFadedToIdle = true;
+            }
+
             if (T >= KRAKEN_T_ROAR)
             {
                 m_eKrakenStage = KrakenCutsceneStage::Jump;
@@ -693,14 +720,14 @@ void Scene::Update(float deltaTime, InputSystem* pInputSystem)
                 };
                 m_pCamera->StartCinematic(camFocus, 80.0f, 30.0f, 200.0f);
 
-                // 점프 애니메이션 (Jump 없으면 Walk 폴백 가능하지만 일단 Jump 시도)
+                // 점프/도약 클립 — 촉수를 크게 휘두르는 3단 콤보 전반부로 역동성 부여
                 if (pKrakenObj)
                 {
                     auto* pAnim = pKrakenObj->GetComponent<AnimationComponent>();
-                    if (pAnim) pAnim->CrossFade("Jump", 0.15f, false);
+                    if (pAnim) pAnim->CrossFade("Sweep_Smash_Attack_3_HIt_Combo", 0.1f, false);
                 }
 
-                // 착지 방향으로 yaw 정렬 (모델 forward가 -Z 축인 것 보정 → 180° 플립)
+                // 착지 방향으로 yaw 정렬 — 모델 forward가 +Z 축이라 180° 플립 불필요
                 if (pKrakenObj)
                 {
                     XMFLOAT3 d = {
@@ -709,7 +736,7 @@ void Scene::Update(float deltaTime, InputSystem* pInputSystem)
                     };
                     if (d.x*d.x + d.z*d.z > 0.001f)
                     {
-                        float yawDeg = atan2f(d.x, d.z) * (180.0f / XM_PI) + 180.0f;
+                        float yawDeg = atan2f(d.x, d.z) * (180.0f / XM_PI);
                         XMFLOAT3 rot = pKrakenObj->GetTransform()->GetRotation();
                         rot.y = yawDeg;
                         pKrakenObj->GetTransform()->SetRotation(rot);
@@ -726,13 +753,44 @@ void Scene::Update(float deltaTime, InputSystem* pInputSystem)
 
             if (pKrakenObj)
             {
-                float e = easeInOutQuad(t);
+                // Phase split:
+                //   0.00 ~ 0.18 : Anticipation — 잠깐 주저앉음 (무게감 연출)
+                //   0.18 ~ 1.00 : Launch       — 포물선 비행 + 전방 피치(내리찍는 모션)
+                const float kAnticip = 0.18f;
+
                 XMFLOAT3 pos;
-                pos.x = lerp(m_xmf3KrakenJumpStart.x, m_xmf3KrakenJumpEnd.x, e);
-                pos.z = lerp(m_xmf3KrakenJumpStart.z, m_xmf3KrakenJumpEnd.z, e);
-                float yBase = lerp(m_xmf3KrakenJumpStart.y, m_xmf3KrakenJumpEnd.y, t);
-                pos.y = yBase + KRAKEN_JUMP_PEAK_DY * sinf(XM_PI * t);
+                float pitchDeg = 0.0f;
+
+                if (t < kAnticip)
+                {
+                    float a = t / kAnticip;
+                    float crouch = sinf(XM_PI * a) * 2.0f;  // 0→2→0 아래로 움푹
+                    pos.x = m_xmf3KrakenJumpStart.x;
+                    pos.z = m_xmf3KrakenJumpStart.z;
+                    pos.y = m_xmf3KrakenJumpStart.y - crouch;
+                    pitchDeg = 8.0f * a;  // 살짝 앞으로 기울며 웅크림
+                }
+                else
+                {
+                    float u = (t - kAnticip) / (1.0f - kAnticip);
+                    pos.x = lerp(m_xmf3KrakenJumpStart.x, m_xmf3KrakenJumpEnd.x, u);
+                    pos.z = lerp(m_xmf3KrakenJumpStart.z, m_xmf3KrakenJumpEnd.z, u);
+                    float yBase = lerp(m_xmf3KrakenJumpStart.y, m_xmf3KrakenJumpEnd.y, u);
+                    // 상승 ease-out / 하강 ease-in → 정점에서 살짝 멈춘 듯한 무게감
+                    float arc;
+                    if (u < 0.5f) { float r = u * 2.0f; arc = 1.0f - (1.0f - r) * (1.0f - r); }
+                    else          { float r = (u - 0.5f) * 2.0f; arc = 1.0f - r * r; }
+                    pos.y = yBase + KRAKEN_JUMP_PEAK_DY * arc;
+                    // 공중 피치: 상승 중 뒤로 젖힘(-) → 하강 중 앞으로 내리찍음(+)
+                    pitchDeg = (u < 0.5f) ? -12.0f * (u * 2.0f)
+                                          :  28.0f * ((u - 0.5f) * 2.0f);
+                }
                 pKrakenObj->GetTransform()->SetPosition(pos);
+
+                // pitch 적용 (yaw는 Roar→Jump 전이 시 고정됨)
+                XMFLOAT3 rot = pKrakenObj->GetTransform()->GetRotation();
+                rot.x = pitchDeg;
+                pKrakenObj->GetTransform()->SetRotation(rot);
             }
 
             if (T >= KRAKEN_T_JUMP)
@@ -740,16 +798,24 @@ void Scene::Update(float deltaTime, InputSystem* pInputSystem)
                 m_eKrakenStage = KrakenCutsceneStage::Slam;
                 m_bSlamShakeTriggered = false;
 
+                // 착지 직후 pitch 원상복구
+                if (pKrakenObj)
+                {
+                    XMFLOAT3 rot = pKrakenObj->GetTransform()->GetRotation();
+                    rot.x = 0.0f;
+                    pKrakenObj->GetTransform()->SetRotation(rot);
+                }
+
                 // 슬램 임팩트용 카메라 (착지 지점 클로즈업)
                 XMFLOAT3 camFocus = m_xmf3KrakenJumpEnd;
                 camFocus.y = 2.0f;
                 m_pCamera->StartCinematic(camFocus, 50.0f, 30.0f, 200.0f);
 
-                // 슬램 애니메이션
+                // 슬램 애니메이션 — 전방 공격 (2s)
                 if (pKrakenObj)
                 {
                     auto* pAnim = pKrakenObj->GetComponent<AnimationComponent>();
-                    if (pAnim) pAnim->CrossFade("Attack_Forward", 0.1f, false);
+                    if (pAnim) pAnim->CrossFade("Attack_Forward", 0.08f, false);
                 }
                 OutputDebugString(L"[Scene] Kraken cutscene: SLAM\n");
             }
@@ -781,7 +847,11 @@ void Scene::Update(float deltaTime, InputSystem* pInputSystem)
                     auto* pPC = m_pPlayerGameObject->GetComponent<PlayerComponent>();
                     const BoundingBox& rb = m_pCurrentRoom->GetBoundingBox();
                     if (pPC)
-                        pPC->EnableFallZone(rb.Center, rb.Extents);
+                    {
+                        // 수면 시각 범위 대비 안전존을 넉넉히 — 방 extents × 1.6배
+                        XMFLOAT3 safeExt = { rb.Extents.x * 1.6f, rb.Extents.y, rb.Extents.z * 1.6f };
+                        pPC->EnableFallZone(rb.Center, safeExt);
+                    }
                 }
 
                 OutputDebugString(L"[Scene] Kraken cutscene: WATER RISE (control returned)\n");
@@ -2202,7 +2272,6 @@ void Scene::TransitionToBossRoom()
         RoomSpawnConfig emptyConfig;
         m_pCurrentRoom->SetSpawnConfig(emptyConfig);
 
-        // 드래곤 스폰
         OutputDebugString(L"[Scene] Spawning Dragon boss\n");
         XMFLOAT3 dragonPos = XMFLOAT3(0.0f, 0.0f, 20.0f);
         if (m_pPlayerGameObject)

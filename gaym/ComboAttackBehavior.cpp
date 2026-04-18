@@ -106,11 +106,13 @@ void ComboAttackBehavior::Update(float dt, EnemyComponent* pEnemy)
                     pEnemy->FaceTarget();
                 }
 
-                // Play next animation
+                // Play next animation — 직전 타와 동일 클립이면 재시작하지 않음 (연속 애니 유지)
                 if (pEnemy)
                 {
+                    const ComboHit& prevHit = m_vHits[m_nCurrentHit - 1];
+                    bool bSameClip = (nextHit.strAnimation == prevHit.strAnimation);
                     AnimationComponent* pAnimComp = pEnemy->GetAnimationComponent();
-                    if (pAnimComp)
+                    if (pAnimComp && !bSameClip)
                     {
                         pAnimComp->CrossFade(nextHit.strAnimation, 0.08f, false);
                     }
@@ -146,6 +148,23 @@ void ComboAttackBehavior::DealConeDamage(EnemyComponent* pEnemy, const ComboHit&
     GameObject* pOwner = pEnemy->GetOwner();
     GameObject* pTarget = pEnemy->GetTarget();
     if (!pOwner || !pTarget) return;
+
+    // 전방 사각형 판정 모드 — 설정되면 cone 체크 대신 사각형
+    if (hit.fRectWidthHalf > 0.0f && hit.fRectLength > 0.0f)
+    {
+        if (!pEnemy->IsTargetInForwardRect(hit.fRectWidthHalf, hit.fRectLength))
+        {
+            OutputDebugString(L"[Combo] Missed - target outside forward rect\n");
+            return;
+        }
+        PlayerComponent* pPlayer = pTarget->GetComponent<PlayerComponent>();
+        if (pPlayer)
+        {
+            pPlayer->TakeDamage(hit.fDamage);
+            OutputDebugString(L"[Combo] Rect HIT\n");
+        }
+        return;
+    }
 
     // Check distance
     float distance = pEnemy->GetDistanceToTarget();

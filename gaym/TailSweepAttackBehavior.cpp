@@ -13,7 +13,10 @@ TailSweepAttackBehavior::TailSweepAttackBehavior(float fDamage,
                                                  float fRecoveryTime,
                                                  float fHitRange,
                                                  float fSweepArc,
-                                                 bool bHitBehind)
+                                                 bool bHitBehind,
+                                                 const char* pClipOverride,
+                                                 float fRectWidthHalf,
+                                                 float fRectLength)
     : m_fDamage(fDamage)
     , m_fWindupTime(fWindupTime)
     , m_fSweepTime(fSweepTime)
@@ -21,7 +24,11 @@ TailSweepAttackBehavior::TailSweepAttackBehavior(float fDamage,
     , m_fHitRange(fHitRange)
     , m_fSweepArc(fSweepArc)
     , m_bHitBehind(bHitBehind)
+    , m_fRectWidthHalf(fRectWidthHalf)
+    , m_fRectLength(fRectLength)
 {
+    if (pClipOverride && pClipOverride[0] != '\0')
+        m_strClipName = pClipOverride;
 }
 
 void TailSweepAttackBehavior::Execute(EnemyComponent* pEnemy)
@@ -40,7 +47,7 @@ void TailSweepAttackBehavior::Execute(EnemyComponent* pEnemy)
         AnimationComponent* pAnimComp = pEnemy->GetAnimationComponent();
         if (pAnimComp)
         {
-            pAnimComp->CrossFade("Claw Attack", 0.1f, false);
+            pAnimComp->CrossFade(m_strClipName, 0.1f, false);
         }
     }
 
@@ -67,8 +74,9 @@ void TailSweepAttackBehavior::Update(float dt, EnemyComponent* pEnemy)
 
     case Phase::Sweep:
         {
-            // Rotate boss during sweep for visual effect
-            if (pEnemy)
+            // 사각형 모드에선 보스 몸을 돌리지 않음 (애니메이션이 촉수 휘두름을 표현 — 몸통 스핀은 어색함)
+            bool bRectMode = (m_fRectWidthHalf > 0.0f && m_fRectLength > 0.0f);
+            if (!bRectMode && pEnemy)
             {
                 GameObject* pOwner = pEnemy->GetOwner();
                 if (pOwner && pOwner->GetTransform())
@@ -86,8 +94,9 @@ void TailSweepAttackBehavior::Update(float dt, EnemyComponent* pEnemy)
                 }
             }
 
-            // Deal damage at the middle of sweep
-            if (!m_bHitDealt && m_fTimer >= m_fSweepTime * 0.5f)
+            // 텔레그래프 fill 완료 타이밍(windup 끝 = sweep 시작)에 데미지 판정
+            // → 사각형 방향이 초기 보스 yaw 기준이라 인디케이터와 정확히 일치
+            if (!m_bHitDealt)
             {
                 DealSweepDamage(pEnemy);
                 m_bHitDealt = true;
@@ -138,20 +147,41 @@ void TailSweepAttackBehavior::DealSweepDamage(EnemyComponent* pEnemy)
     TransformComponent* pTargetTransform = pTarget->GetTransform();
     if (!pMyTransform || !pTargetTransform) return;
 
-    // Check distance
-    float distance = pEnemy->GetDistanceToTarget();
+    // 전방 사각형 판정 모드 — 설정되어 있으면 원형 호 대신 사각형으로 체크
+    if (m_fRectWidthHalf > 0.0f && m_fRectLength > 0.0f)
+    {
+        if (!pEnemy->IsTargetInForwardRect(m_fRectWidthHalf, m_fRectLength))
+        {
+            OutputDebugString(L"[TailSweep] Missed - target outside forward rect\n");
+            return;
+        }
+        // 사각형 내면 통과 → 바로 데미지 적용 (아래 원형 체크 스킵)
+        PlayerComponent* pPlayer = pTarget->GetComponent<PlayerComponent>();
+        if (pPlayer)
+        {
+            pPlayer->TakeDamage(m_fDamage);
+            OutputDebugString(L"[TailSweep] Rect HIT\n");
+        }
+        return;
+    }
+
+    // 공격 원점 기준 거리 체크 (보스 앞쪽 촉수 위치)
+    XMFLOAT3 origin = pEnemy->GetAttackOrigin();
+    XMFLOAT3 targetPos = pTargetTransform->GetPosition();
+    float odx = targetPos.x - origin.x;
+    float odz = targetPos.z - origin.z;
+    float distance = sqrtf(odx * odx + odz * odz);
     if (distance > m_fHitRange)
     {
-        OutputDebugString(L"[TailSweep] Missed - target out of range\n");
+        OutputDebugString(L"[TailSweep] Missed - target out of range (from attack origin)\n");
         return;
     }
 
     // Check angle - tail sweep hits in a wide arc
     XMFLOAT3 myPos = pMyTransform->GetPosition();
-    XMFLOAT3 targetPos = pTargetTransform->GetPosition();
     XMFLOAT3 myRot = pMyTransform->GetRotation();
 
-    // Direction to target
+    // Direction to target (각도는 보스 중심에서 계산 — 방향성은 그대로)
     float dx = targetPos.x - myPos.x;
     float dz = targetPos.z - myPos.z;
     float angleToTarget = XMConvertToDegrees(atan2f(dx, dz));

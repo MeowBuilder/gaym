@@ -16,7 +16,9 @@ BreathAttackBehavior::BreathAttackBehavior(ProjectileManager* pProjectileManager
                                            float fRecoveryTime,
                                            float fProjectileRadius,
                                            float fProjectileScale,
-                                           ElementType eElement)
+                                           ElementType eElement,
+                                           const char* pClipOverride,
+                                           bool bVariedProjectiles)
     : m_pProjectileManager(pProjectileManager)
     , m_fDamagePerHit(fDamagePerHit)
     , m_fProjectileSpeed(fProjectileSpeed)
@@ -28,6 +30,8 @@ BreathAttackBehavior::BreathAttackBehavior(ProjectileManager* pProjectileManager
     , m_fProjectileRadius(fProjectileRadius)
     , m_fProjectileScale(fProjectileScale)
     , m_eElement(eElement)
+    , m_strClipOverride((pClipOverride && pClipOverride[0] != '\0') ? pClipOverride : nullptr)
+    , m_bVariedProjectiles(bVariedProjectiles)
 {
 }
 
@@ -142,10 +146,49 @@ void BreathAttackBehavior::FireBreathProjectile(EnemyComponent* pEnemy, float an
     XMFLOAT3 targetPos = pTargetTransform->GetPosition();
     targetPos.y += 1.0f;  // Aim at player center
 
+    // ── Varied projectiles: 시작점·발사각·크기·속도·데미지를 랜덤화 ───────────────
+    // rand() 는 [0, RAND_MAX] — [-1, 1] 로 정규화
+    auto frand = []() { return (float)rand() / (float)RAND_MAX; };
+    auto frandBi = [&frand]() { return frand() * 2.0f - 1.0f; };
+
+    float angleJitter      = 0.0f;
+    float pitchJitter      = 0.0f;
+    float scaleMult        = 1.0f;
+    float speedMult        = 1.0f;
+    float damageMult       = 1.0f;
+    float radiusMult       = 1.0f;
+    float startPosJitterXZ = 0.0f;
+    float startPosJitterY  = 0.0f;
+
+    if (m_bVariedProjectiles)
+    {
+        // 크기는 bimodal 분포로 혼란스럽게 — 30% 확률로 "거대 덩어리", 나머지는 작은~중간 크기 랜덤
+        if (frand() < 0.3f)
+            scaleMult = 1.8f + frand() * 1.4f;      // 1.8 ~ 3.2 (거대)
+        else
+            scaleMult = 0.35f + frand() * 1.1f;     // 0.35 ~ 1.45 (작음~중간)
+
+        angleJitter      = frandBi() * 15.0f;       // ±15° (8 → 15 더 산만)
+        pitchJitter      = frandBi() * 0.25f;
+        speedMult        = 0.45f + frand() * 1.6f;  // 0.45 ~ 2.05 (느림↔빠름 대비)
+        damageMult       = 0.5f  + frand() * 1.0f;  // 0.5 ~ 1.5
+        radiusMult       = 0.6f  + frand() * 0.8f;
+        startPosJitterXZ = frandBi() * 2.2f;
+        startPosJitterY  = frandBi() * 1.3f;
+    }
+
+    // 시작 위치 변위 (yaw 기준 측면 방향)
+    if (startPosJitterXZ != 0.0f)
+    {
+        startPos.x += cosf(yawRad) * startPosJitterXZ;  // 옆으로
+        startPos.z -= sinf(yawRad) * startPosJitterXZ;
+    }
+    startPos.y += startPosJitterY;
+
     // Calculate direction and apply angle offset
     XMFLOAT3 dir;
     dir.x = targetPos.x - startPos.x;
-    dir.y = targetPos.y - startPos.y;
+    dir.y = targetPos.y - startPos.y + pitchJitter;
     dir.z = targetPos.z - startPos.z;
 
     // Normalize direction
@@ -157,8 +200,8 @@ void BreathAttackBehavior::FireBreathProjectile(EnemyComponent* pEnemy, float an
         dir.z /= len;
     }
 
-    // Apply horizontal angle offset
-    float offsetRad = XMConvertToRadians(angleOffset);
+    // Apply horizontal angle offset (+ jitter)
+    float offsetRad = XMConvertToRadians(angleOffset + angleJitter);
     float newX = dir.x * cosf(offsetRad) - dir.z * sinf(offsetRad);
     float newZ = dir.x * sinf(offsetRad) + dir.z * cosf(offsetRad);
     dir.x = newX;
@@ -173,13 +216,13 @@ void BreathAttackBehavior::FireBreathProjectile(EnemyComponent* pEnemy, float an
     m_pProjectileManager->SpawnProjectile(
         startPos,
         fireTarget,
-        m_fDamagePerHit,
-        m_fProjectileSpeed,
-        m_fProjectileRadius,
+        m_fDamagePerHit * damageMult,
+        m_fProjectileSpeed * speedMult,
+        m_fProjectileRadius * radiusMult,
         0.0f,
         m_eElement,
         pOwner,
         false,
-        m_fProjectileScale
+        m_fProjectileScale * scaleMult
     );
 }

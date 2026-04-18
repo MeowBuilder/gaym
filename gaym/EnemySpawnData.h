@@ -39,6 +39,9 @@ struct EnemySpawnData
     // Collider override (0이면 scale 기반 자동 계산)
     float m_fColliderXZMultiplier = 0.0f;
 
+    // 공격 원점 forward 오프셋 (크라켄처럼 몸 앞쪽 촉수가 실제 공격 원점인 경우)
+    float m_fAttackOriginForwardOffset = 0.0f;
+
     // Boss settings
     bool m_bIsBoss = false;
     float m_fSpecialAttackCooldown = 10.0f;

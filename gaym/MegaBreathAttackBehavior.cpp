@@ -14,9 +14,9 @@
 #include "MathUtils.h"
 #include "Dx12App.h"
 #include "Camera.h"
+#include "MapLoader.h"
 #include "FluidSkillVFXManager.h"
 #include "VFXLibrary.h"
-#include "MapLoader.h"
 
 MegaBreathAttackBehavior::MegaBreathAttackBehavior(
     float fDamagePerTick,
@@ -197,17 +197,6 @@ void MegaBreathAttackBehavior::Update(float dt, EnemyComponent* pEnemy)
         m_ePhase = Phase::Windup;
         m_fTimer = 0.0f;
 
-        // 브레스 원점 설정 (현재 보스 위치)
-        if (GameObject* pOwner = pEnemy->GetOwner())
-        {
-            if (TransformComponent* pTransform = pOwner->GetTransform())
-            {
-                m_xmf3BreathOrigin = pTransform->GetPosition();
-                // 브레스 원점을 약간 앞으로 (보스 입에서 발사하는 느낌)
-                m_xmf3BreathOrigin.y += 3.0f;
-            }
-        }
-
         OutputDebugString(L"[MegaBreath] Windup phase - preparing breath\n");
         break;
 
@@ -244,80 +233,30 @@ void MegaBreathAttackBehavior::Update(float dt, EnemyComponent* pEnemy)
                 m_bBreathAnimStarted = true;
             }
 
-            // 카메라 쉐이킹 시작
+            // 카메라 쉐이킹 시작 + Fire Wave 스폰
             if (Scene* pScene = m_pRoom->GetScene())
             {
                 if (CCamera* pCamera = pScene->GetCamera())
                 {
-                    pCamera->StartShake(1.5f, m_fBreathDuration);
-                }
-
-                // 입에서 불 내뿜는 유체 VFX 생성
-                m_pFluidVFXManager = pScene->GetFluidVFXManager();
-                if (m_pFluidVFXManager)
-                {
-                    // VFXLibrary에서 Boss Mega Breath 정의 가져오기 (키 999 사용)
-                    VFXSequenceDef bossDef = VFXLibrary::Get().GetDef((SkillSlot)0, 999, ElementType::Fire);
-                    
-                    GameObject* pOwner = pEnemy->GetOwner();
-                    TransformComponent* pTransform = pOwner->GetTransform();
-                    XMFLOAT3 pos = pTransform->GetPosition();
-                    XMFLOAT3 rot = pTransform->GetRotation();
-                    float yawRad = XMConvertToRadians(rot.y);
-
-                    // 입 위치: 지면에 더 가깝게 (1.0f)
-                    XMFLOAT3 mouthPos;
-                    mouthPos.x = pos.x + sinf(yawRad) * 12.0f;
-                    mouthPos.y = pos.y + 1.0f;
-                    mouthPos.z = pos.z + cosf(yawRad) * 12.0f;
-
-                    // 전방 방향: 지면을 향해 더 깊게 (-0.4f) 꺾음
-                    XMVECTOR fwdV = XMVectorSet(sinf(yawRad), -0.4f, cosf(yawRad), 0.0f);
-                    XMFLOAT3 fwd;
-                    XMStoreFloat3(&fwd, XMVector3Normalize(fwdV));
-
-                    m_nFluidVFXId = m_pFluidVFXManager->SpawnSequenceEffect(mouthPos, fwd, bossDef);
-                    OutputDebugString(L"[MegaBreath] Fluid MegaBreath VFX started!\n");
+                    pCamera->StartShake(2.5f, m_fBreathDuration);  // 거대 파도 강렬한 진동
                 }
             }
+            SpawnFireWave(pEnemy);
 
-            OutputDebugString(L"[MegaBreath] Breath phase - FIRING!\n");
+            OutputDebugString(L"[MegaBreath] Breath phase - FIRE WAVE LAUNCHED!\n");
         }
         break;
 
     case Phase::Breath:
+        // Fire Wave 진행 업데이트 (위치 전진 + ember 파티클 에미터 추적)
+        UpdateFireWave(dt, pEnemy);
+
+        // 데미지 틱: 파도 AABB 안에 있으면 맞음 (엄폐물이 파도 전면↔플레이어 사이 차단하면 세이프)
         m_fDamageTickTimer += dt;
         if (m_fDamageTickTimer >= m_fTickInterval)
         {
             ApplyBreathDamage(pEnemy);
             m_fDamageTickTimer = 0.0f;
-        }
-
-        // 유체 VFX 위치/방향 업데이트 (보스 고개 방향 추적)
-        if (m_pFluidVFXManager && m_nFluidVFXId >= 0)
-        {
-            GameObject* pOwner = pEnemy->GetOwner();
-            if (pOwner)
-            {
-                TransformComponent* pTransform = pOwner->GetTransform();
-                if (pTransform)
-                {
-                    XMFLOAT3 pos = pTransform->GetPosition();
-                    XMFLOAT3 rot = pTransform->GetRotation();
-                    float yawRad = XMConvertToRadians(rot.y);
-
-                    // 입 위치
-                    XMFLOAT3 mouthPos;
-                    mouthPos.x = pos.x + sinf(yawRad) * 8.0f;
-                    mouthPos.y = pos.y + 4.0f;
-                    mouthPos.z = pos.z + cosf(yawRad) * 8.0f;
-
-                    // 전방 방향
-                    XMFLOAT3 fwd = { sinf(yawRad), 0.0f, cosf(yawRad) };
-
-                    m_pFluidVFXManager->TrackEffect(m_nFluidVFXId, mouthPos, fwd);
-                }
-            }
         }
 
         if (m_fTimer >= m_fBreathDuration)
@@ -341,13 +280,8 @@ void MegaBreathAttackBehavior::Update(float dt, EnemyComponent* pEnemy)
                 }
             }
 
-            // 브레스 유체 VFX 중지
-            if (m_pFluidVFXManager && m_nFluidVFXId >= 0)
-            {
-                m_pFluidVFXManager->StopEffect(m_nFluidVFXId);
-                m_nFluidVFXId = -1;
-                OutputDebugString(L"[MegaBreath] Fluid MegaBreath VFX stopped\n");
-            }
+            // Fire Wave 정리 (벽 mesh 숨김 + ember 에미터 정지)
+            DestroyFireWave();
 
             m_bBreathAnimStarted = false;
         }
@@ -380,17 +314,11 @@ void MegaBreathAttackBehavior::Reset()
     m_bFinished = false;
     m_xmf3WallPosition = { 0.0f, 0.0f, 0.0f };
     m_xmf3StartPosition = { 0.0f, 0.0f, 0.0f };
-    m_xmf3BreathOrigin = { 0.0f, 0.0f, 0.0f };
     m_nWallDirection = 0;
     m_bBreathAnimStarted = false;
 
-    // 유체 VFX 정리
-    if (m_pFluidVFXManager && m_nFluidVFXId >= 0)
-    {
-        m_pFluidVFXManager->StopEffect(m_nFluidVFXId);
-        m_nFluidVFXId = -1;
-    }
-    m_pFluidVFXManager = nullptr;
+    // Fire Wave 정리
+    DestroyFireWave();
 
     // 남아있는 엄폐물이 있으면 정리
     DestroyCoverObjects();
@@ -725,25 +653,142 @@ void MegaBreathAttackBehavior::ApplyBreathDamage(EnemyComponent* pEnemy)
     if (!pTargetTransform) return;
 
     XMFLOAT3 playerPos = pTargetTransform->GetPosition();
-    playerPos.y += 1.0f;  // 플레이어 중심 높이 보정
+    playerPos.y += 1.0f;
 
-    // 엄폐 판정
-    if (IsPlayerBehindCover(m_xmf3BreathOrigin, playerPos))
+    // ── Beam cone 판정: 입 원점에서 스프레드가 선형 확장되는 cone ──────────
+    if (m_fBeamLength <= 0.0f) return;
+
+    float rx = playerPos.x - m_xmf3BeamOrigin.x;
+    float rz = playerPos.z - m_xmf3BeamOrigin.z;
+    float alongDir = rx * m_xmf3BeamDirection.x + rz * m_xmf3BeamDirection.z;  // 입 기준 전방 거리
+    if (alongDir < 0.0f || alongDir > m_fBeamLength) return;  // 빔 바깥
+
+    // 수직 수평 거리 계산
+    float perpX = rx - m_xmf3BeamDirection.x * alongDir;
+    float perpZ = rz - m_xmf3BeamDirection.z * alongDir;
+    float horizDist = sqrtf(perpX * perpX + perpZ * perpZ);
+    float vertDist  = fabsf(playerPos.y - m_xmf3BeamOrigin.y);
+
+    // cone 반경 at alongDir (0 → endRadius 선형 확장, swirlExpand=true)
+    float tCone = alongDir / m_fBeamLength;
+    float coneR = m_fBeamEndRadius * tCone;
+    if (horizDist > coneR) return;
+    // 수직은 verticalScale=0.5 → 반폭 절반
+    if (vertDist > coneR * 0.5f + 2.0f) return;  // 2u 지면 여유
+
+    // 엄폐 판정 — 입에서 플레이어 방향 ray 가 장애물에 막히면 safe
+    XMFLOAT3 mouthForRay = m_xmf3BeamOrigin;
+    if (IsPlayerBehindCover(mouthForRay, playerPos))
     {
-        // 엄폐 성공 - 데미지 없음
-        OutputDebugString(L"[MegaBreath] Player behind cover - SAFE\n");
+        OutputDebugString(L"[MegaBreath] Player behind cover from beam - SAFE\n");
         return;
     }
 
-    // 노출됨 - 데미지 적용
+    // ── 3. 데미지 적용 ───────────────────────────────────────────────
     PlayerComponent* pPlayer = pTarget->GetComponent<PlayerComponent>();
     if (pPlayer)
     {
         pPlayer->TakeDamage(m_fDamagePerTick);
-
         wchar_t buf[128];
-        swprintf_s(buf, L"[MegaBreath] Player HIT! Dealt %.1f damage (HP: %.1f/%.1f)\n",
+        swprintf_s(buf, L"[MegaBreath] FireWave HIT! %.1f dmg (HP: %.1f/%.1f)\n",
                    m_fDamagePerTick, pPlayer->GetCurrentHP(), pPlayer->GetMaxHP());
         OutputDebugString(buf);
     }
+}
+
+// ─── Fire Wave (SPH 플루이드) ──────────────────────────────────────────────
+void MegaBreathAttackBehavior::SpawnFireWave(EnemyComponent* pEnemy)
+{
+    if (!pEnemy || !m_pRoom) return;
+
+    Scene* pScene = m_pRoom->GetScene();
+    if (!pScene) return;
+
+    m_pFluidVFXManager = pScene->GetFluidVFXManager();
+    if (!m_pFluidVFXManager) return;
+
+    // 방 바운드 + 벽 방향 기반 파도 경로 계산
+    const BoundingBox& rb = m_pRoom->GetBoundingBox();
+    // (방 AABB 는 m_pRoom->GetBoundingBox() 로 필요 시 참조)
+
+    // 보스 실제 위치 + 방향 (Windup 단계에서 보스는 방 중앙을 향해 회전되어 있음)
+    GameObject* pOwner = pEnemy->GetOwner();
+    if (!pOwner) return;
+    auto* pT = pOwner->GetTransform();
+    if (!pT) return;
+
+    XMFLOAT3 bossPos = pT->GetPosition();
+    XMFLOAT3 bossRot = pT->GetRotation();
+    float yawRad = XMConvertToRadians(bossRot.y);
+
+    // 보스 입 위치 (전방 8u, 머리 높이 5u)
+    m_xmf3BeamOrigin.x = bossPos.x + sinf(yawRad) * 8.0f;
+    m_xmf3BeamOrigin.y = bossPos.y + 5.0f;
+    m_xmf3BeamOrigin.z = bossPos.z + cosf(yawRad) * 8.0f;
+
+    m_xmf3BeamDirection = { sinf(yawRad), 0.0f, cosf(yawRad) };
+
+    // 빔 길이: 보스 입 → 방 반대편 경계까지
+    //   방 AABB 내 정확한 경계 거리 계산 (2D slab method 생략 — 간단히 대각선 전체 거리 상한 사용)
+    float diagX = rb.Extents.x * 2.0f;
+    float diagZ = rb.Extents.z * 2.0f;
+    m_fBeamLength   = sqrtf(diagX * diagX + diagZ * diagZ) * 0.9f;
+    // cone 끝 반경 — 맵 perpendicular 의 절반 가까이 (파도처럼 넓게 덮음)
+    float perpExtent = (fabsf(m_xmf3BeamDirection.x) > 0.5f) ? rb.Extents.z : rb.Extents.x;
+    m_fBeamEndRadius = perpExtent * 0.9f;
+
+    // ── Beam 모드 VFXSequenceDef — 입에서 끝까지 연속 분사 ─────────────────
+    // 이름 "Dragon_MegaBreath" 매칭 시 enableFlow 자동 + 120m 하드코딩이었으나
+    // swirlFadeEnd 를 빔 길이로 쓰도록 수정 완료 — 어떤 이름이든 맵 전체 커버 가능
+    VFXSequenceDef def;
+    def.name          = "Dragon_MegaBreath";      // 기존 보스 브레스 시스템 호환 (enableFlow)
+    def.element       = ElementType::Fire;
+    def.particleCount = 3500;                     // 넓은 cone 꽉 채우기
+    def.spawnRadius   = 3.0f;                     // 입쪽 생성 영역
+    def.particleSize  = 1.4f;                     // 큰 불덩이 입자
+
+    VFXPhase p;
+    p.startTime             = 0.f;
+    p.duration              = m_fBreathDuration + 0.5f;
+    p.motionMode            = ParticleMotionMode::Beam;
+    // 흐름 속도 — 전체 거리를 duration 50~70% 안에 도달 (자연스러운 채움)
+    p.beamDesc.speedMin     = m_fBeamLength / (m_fBreathDuration * 0.7f);
+    p.beamDesc.speedMax     = p.beamDesc.speedMin * 1.4f;
+    p.beamDesc.spreadRadius = m_fBeamEndRadius;   // cone 최대 반경
+    p.beamDesc.swirlExpand  = true;               // 입에서 좁게 → 끝에서 넓게
+    p.beamDesc.swirlSpeed   = 0.8f;               // 살짝 회전 (불길 꼬임)
+    p.beamDesc.swirlFadeEnd = m_fBeamLength;      // ★ 빔 길이로 사용됨 (수정된 매니저 로직)
+    p.beamDesc.enableFlow   = true;               // 입에서 계속 새 파티클 분출
+    p.beamDesc.verticalScale = 0.5f;              // 좌우 위주 cone (위아래 덜 퍼짐)
+    def.phases.push_back(p);
+
+    // 불 색상 오버라이드 — 입 쪽 흰-노랑 핵 / 끝 주황
+    def.overrideColors    = true;
+    def.overrideCoreColor = { 1.0f, 0.95f, 0.6f, 1.0f };
+    def.overrideEdgeColor = { 1.0f, 0.4f,  0.08f, 0.95f };
+
+    def.maxParticleSpeed = p.beamDesc.speedMax * 1.2f;
+    def.useSSFBlur       = true;
+
+    m_nFluidVFXId = m_pFluidVFXManager->SpawnSequenceEffect(
+        m_xmf3BeamOrigin, m_xmf3BeamDirection, def);
+
+    OutputDebugString(L"[MegaBreath] SPH Fire Beam spawned from mouth\n");
+}
+
+void MegaBreathAttackBehavior::UpdateFireWave(float dt, EnemyComponent* pEnemy)
+{
+    // SPH wave 는 자체 waveSpeed + wavePushForce 로 자율 전진 —
+    // 여기서는 데미지 판정용 Wave 진행 위치만 FluidSkillVFXManager 로부터 조회
+    // (ApplyBreathDamage 는 IsPointInWave API 사용)
+}
+
+void MegaBreathAttackBehavior::DestroyFireWave()
+{
+    if (m_pFluidVFXManager && m_nFluidVFXId >= 0)
+    {
+        m_pFluidVFXManager->StopEffect(m_nFluidVFXId);
+        m_nFluidVFXId = -1;
+    }
+    m_pFluidVFXManager = nullptr;
 }

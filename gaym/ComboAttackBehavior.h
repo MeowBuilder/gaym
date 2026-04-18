@@ -20,6 +20,10 @@ public:
         float fConeAngle = 90.0f;
         std::string strAnimation = "Attack 1";
         bool bTrackTarget = true;  // Re-face target before this hit
+
+        // 전방 사각형 판정 모드 — 둘 다 >0 이면 cone 대신 사각형 사용
+        float fRectWidthHalf = 0.0f;
+        float fRectLength    = 0.0f;
     };
 
     ComboAttackBehavior(const std::vector<ComboHit>& hits);
@@ -29,6 +33,14 @@ public:
     virtual void Update(float dt, EnemyComponent* pEnemy) override;
     virtual bool IsFinished() const override;
     virtual void Reset() override;
+    // 첫 hit의 애니메이션을 반환 — EnemyComponent state 머신이 Attack 진입 시 올바른 클립 재생
+    virtual const char* GetAnimClipName() const override {
+        return m_vHits.empty() ? "" : m_vHits[0].strAnimation.c_str();
+    }
+    // 첫 hit의 windup 시간을 fill 기준으로 (이후 hit는 같은 애니 연속 재생이라 동일 텔레그래프 사용)
+    virtual float GetTimeToHit() const override {
+        return m_vHits.empty() ? 0.0f : m_vHits[0].fWindupTime;
+    }
 
     // Builder helper for creating combos
     static ComboAttackBehavior* CreateLightCombo();   // Fast 3-hit combo

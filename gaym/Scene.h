@@ -250,18 +250,19 @@ private:
     KrakenCutsceneStage m_eKrakenStage = KrakenCutsceneStage::None;
     float m_fKrakenEmergeTimer = 0.0f;
     bool  m_bSlamShakeTriggered = false;
+    bool  m_bKrakenRoarFadedToIdle = false;   // Roar 중 Unreal Take 종료 후 Idle 루프 전환 플래그
     XMFLOAT3 m_xmf3KrakenJumpStart = {}; // Roar 종료 시 크라켄 위치 (점프 시작점)
     XMFLOAT3 m_xmf3KrakenJumpEnd   = {}; // 점프 착지점 (맵 바깥 수면 위 슬램 지점)
     static constexpr float KRAKEN_SCALE = 2.0f;
-    // Stage durations (cumulative)
-    static constexpr float KRAKEN_T_RUMBLE     = 0.8f;
-    static constexpr float KRAKEN_T_RISE       = 1.7f;
-    static constexpr float KRAKEN_T_BURST      = 3.0f;
-    static constexpr float KRAKEN_T_REVEAL     = 4.5f;
-    static constexpr float KRAKEN_T_ROAR       = 6.5f;   // Reveal + 2.0s
-    static constexpr float KRAKEN_T_JUMP       = 8.3f;   // Roar + 1.8s (빠른 점프 arc)
-    static constexpr float KRAKEN_T_SLAM       = 9.3f;   // Jump + 1.0s (임팩트)
-    static constexpr float KRAKEN_T_WATER_RISE = 17.3f;  // Slam + 8s (서서히 차오름)
+    // Stage durations (cumulative) — 연출 텀 확보를 위해 일부 단계 확장
+    static constexpr float KRAKEN_T_RUMBLE     = 1.2f;   // +0.4s (진동 예고)
+    static constexpr float KRAKEN_T_RISE       = 2.4f;   // Rumble + 1.2s
+    static constexpr float KRAKEN_T_BURST      = 4.0f;   // Rise + 1.6s
+    static constexpr float KRAKEN_T_REVEAL     = 6.0f;   // Burst + 2.0s (몸 드러내는 여운)
+    static constexpr float KRAKEN_T_ROAR       = 9.5f;   // Reveal + 3.5s (포효 fully 재생)
+    static constexpr float KRAKEN_T_JUMP       = 11.9f;  // Roar + 2.4s (점프 arc 여유)
+    static constexpr float KRAKEN_T_SLAM       = 14.4f;  // Jump + 2.5s (임팩트 여운)
+    static constexpr float KRAKEN_T_WATER_RISE = 24.4f;  // Slam + 10s (물 차오름, 상승 폭 커져서 길어짐)
 
     // 슬램/점프 착지점 (맵 바깥 수면 위)
     static constexpr float KRAKEN_SLAM_OFFSET_X = 0.0f;
@@ -271,7 +272,7 @@ private:
 
     // 물 상승: 기존 맵 타일(Y=0)보다 훨씬 위로 → "더 높은 곳에서 전투" 연출
     static constexpr float KRAKEN_WATER_Y_START = -4.0f;
-    static constexpr float KRAKEN_WATER_Y_END   = 15.0f;
+    static constexpr float KRAKEN_WATER_Y_END   = 28.0f;   // 15 → 28: 확실한 고지대 상승
 
     // Drop interaction
     DropInteractionState m_eDropState = DropInteractionState::None;

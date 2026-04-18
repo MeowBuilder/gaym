@@ -94,13 +94,20 @@ private:
     std::vector<GameObject*> m_vCoverObjects;
     std::vector<BoundingBox> m_vObstacles;
 
-    // 브레스 원점 (보스 위치)
-    XMFLOAT3 m_xmf3BreathOrigin = { 0.0f, 0.0f, 0.0f };
-
     // 애니메이션 플래그
     bool m_bBreathAnimStarted = false;
 
-    // 파티클 이펙트 (GPU 유체 기반)
-    class FluidSkillVFXManager* m_pFluidVFXManager = nullptr;
-    int m_nFluidVFXId = -1;  // 브레스 유체 VFX ID
+    // ── Fire Wave 이펙트 ────────────────────────────────────────────────────
+    // 거대 파도형 화염 벽 — 보스 벽 위치에서 반대편 벽까지 스윕
+    void SpawnFireWave(EnemyComponent* pEnemy);
+    void UpdateFireWave(float dt, EnemyComponent* pEnemy);
+    void DestroyFireWave();
+
+    // SPH Beam 기반 거대 화염 분사 — 입에서 끝까지 연속 분사 (cone)
+    class FluidSkillVFXManager* m_pFluidVFXManager   = nullptr;
+    int                         m_nFluidVFXId        = -1;
+    XMFLOAT3                    m_xmf3BeamOrigin     = { 0.0f, 0.0f, 0.0f };  // 보스 입
+    XMFLOAT3                    m_xmf3BeamDirection  = { 0.0f, 0.0f, 1.0f };
+    float                       m_fBeamLength        = 0.0f;  // 입 → 맵 반대편
+    float                       m_fBeamEndRadius     = 0.0f;  // 끝 부분 반경 (cone 확장)
 };

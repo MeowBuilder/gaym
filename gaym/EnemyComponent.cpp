@@ -213,6 +213,7 @@ void EnemyComponent::ChangeState(EnemyState newState)
             {
                 pBehavior->Execute(this);
             }
+            m_fIndicatorTimer = 0.0f;
             ShowIndicators();
         }
         break;
@@ -677,6 +678,10 @@ void EnemyComponent::UpdateAttack(float dt)
     {
         pCurrentBehavior->Update(dt, this);
 
+        // 공격 중 인디케이터 매 프레임 재배치 (보스 위치/타겟 수면 Y 추적 + 그로우인 펄스)
+        m_fIndicatorTimer += dt;
+        ShowIndicators();
+
         if (pCurrentBehavior->IsFinished())
         {
             // Reset cooldowns
@@ -775,6 +780,11 @@ void EnemyComponent::UpdateDead(float dt)
                 pScene->MarkForDeletion(m_pHitZoneIndicator);
                 m_pHitZoneIndicator = nullptr;
             }
+            if (m_pHitZoneFillIndicator)
+            {
+                pScene->MarkForDeletion(m_pHitZoneFillIndicator);
+                m_pHitZoneFillIndicator = nullptr;
+            }
 
             // Mark self for deletion (will also clean up child hierarchy)
             if (m_pOwner)
@@ -806,15 +816,148 @@ void EnemyComponent::ShowIndicators()
 
     if (m_IndicatorConfig.m_eType == IndicatorType::Circle)
     {
-        // Circle around enemy at current position
+        // 활성 behavior 조회
+        IAttackBehavior* pActive = m_bUsingFlyingAttack  ? m_pFlyingAttackBehavior.get()
+                                 : m_bUsingSpecialAttack ? m_pSpecialAttackBehavior.get()
+                                 :                          m_pAttackBehavior.get();
+
+        // 발사형(Breath 등)은 지면 인디케이터 억제 — 오해 방지
+        if (pActive && !pActive->ShouldShowHitZone())
+        {
+            HideIndicators();
+            return;
+        }
+
+        // 공격 원점 기준 — 크라켄은 몸이 아니라 촉수 앞에서 공격이 나감
+        XMFLOAT3 attackOrigin = GetAttackOrigin();
+
+        float fTimeToHit = pActive ? pActive->GetTimeToHit() : 0.0f;
+        if (fTimeToHit <= 0.0f) fTimeToHit = 0.8f;  // 기본값
+        float fillProgress = (std::min)(m_fIndicatorTimer / fTimeToHit, 1.0f);
+
+        float baseY = (std::max)(attackOrigin.y, targetPos.y);
+        float indY  = baseY + 1.2f;
+        float fullR = m_IndicatorConfig.m_fHitRadius;
+
+        // ─── 테두리 링: 공격 내내 고정 (fill 이 꽉 차도 유지) ───────────────
         if (m_pHitZoneIndicator)
         {
             TransformComponent* pT = m_pHitZoneIndicator->GetTransform();
             if (pT)
             {
-                pT->SetPosition(myPos.x, myPos.y + 0.15f, myPos.z);
-                float r = m_IndicatorConfig.m_fHitRadius;
+                pT->SetPosition(attackOrigin.x, indY + 0.05f, attackOrigin.z);
+                pT->SetScale(fullR, 1.0f, fullR);
+
+                MATERIAL mat;
+                mat.m_cAmbient  = XMFLOAT4(0.5f, 0.02f, 0.02f, 1.0f);
+                mat.m_cDiffuse  = XMFLOAT4(1.0f, 0.15f, 0.1f,  1.0f);
+                mat.m_cSpecular = XMFLOAT4(0.0f, 0.0f,  0.0f,  1.0f);
+                mat.m_cEmissive = XMFLOAT4(2.0f, 0.25f, 0.1f,  1.0f);
+                m_pHitZoneIndicator->SetMaterial(mat);
+            }
+        }
+
+        // ─── 내부 Fill: windup 진행도에 따라 0 → fullR 로 차오름 ───────────
+        if (m_pHitZoneFillIndicator)
+        {
+            TransformComponent* pT = m_pHitZoneFillIndicator->GetTransform();
+            if (pT)
+            {
+                // 테두리보다 약간 낮게 (겹침 방지)
+                pT->SetPosition(attackOrigin.x, indY, attackOrigin.z);
+                float r = fullR * fillProgress;
+                if (r < 0.01f) r = 0.01f;  // 0 스케일 방지
                 pT->SetScale(r, 1.0f, r);
+
+                // fill 이 찰수록 색이 붉음 → 노랑 으로 가열되는 느낌 (0=어두운 붉음, 1=밝은 노랑)
+                MATERIAL mat;
+                mat.m_cAmbient  = XMFLOAT4(0.3f, 0.02f, 0.0f, 1.0f);
+                mat.m_cDiffuse  = XMFLOAT4(1.0f, 0.2f + 0.5f * fillProgress, 0.05f, 1.0f);
+                mat.m_cSpecular = XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f);
+                mat.m_cEmissive = XMFLOAT4(
+                    0.8f + 1.0f * fillProgress,   // R: 0.8 → 1.8 밝아짐
+                    0.1f + 0.9f * fillProgress,   // G: 0.1 → 1.0 노랑
+                    0.05f,
+                    1.0f);
+                m_pHitZoneFillIndicator->SetMaterial(mat);
+            }
+        }
+    }
+    else if (m_IndicatorConfig.m_eType == IndicatorType::ForwardBox)
+    {
+        // 활성 behavior 조회
+        IAttackBehavior* pActive = m_bUsingFlyingAttack  ? m_pFlyingAttackBehavior.get()
+                                 : m_bUsingSpecialAttack ? m_pSpecialAttackBehavior.get()
+                                 :                          m_pAttackBehavior.get();
+        if (pActive && !pActive->ShouldShowHitZone())
+        {
+            HideIndicators();
+            return;
+        }
+
+        float fTimeToHit = pActive ? pActive->GetTimeToHit() : 0.0f;
+        if (fTimeToHit <= 0.0f) fTimeToHit = 0.8f;
+        float fillProgress = (std::min)(m_fIndicatorTimer / fTimeToHit, 1.0f);
+
+        // 보스의 실제 yaw 기준 forward (타겟 방향 dir 이 아님 — 보스가 회전 중일 때 정확)
+        float bossYawRad = XMConvertToRadians(pMyTransform->GetRotation().y);
+        float fwdX = sinf(bossYawRad);
+        float fwdZ = cosf(bossYawRad);
+        float bossYawDeg = pMyTransform->GetRotation().y;
+
+        XMFLOAT3 bossPos = myPos;
+        float fLen   = m_IndicatorConfig.m_fHitLength;
+        float fHalfW = m_IndicatorConfig.m_fHitRadius;  // half-width
+        float centerX = bossPos.x + fwdX * (fLen * 0.5f);
+        float centerZ = bossPos.z + fwdZ * (fLen * 0.5f);
+
+        float baseY = (std::max)(bossPos.y, targetPos.y);
+        float indY  = baseY + 1.2f;
+
+        // 외곽 box — 공격 내내 고정 테두리
+        if (m_pHitZoneIndicator)
+        {
+            TransformComponent* pT = m_pHitZoneIndicator->GetTransform();
+            if (pT)
+            {
+                pT->SetPosition(centerX, indY + 0.02f, centerZ);
+                pT->SetRotation(0.0f, bossYawDeg, 0.0f);
+                pT->SetScale(fHalfW * 2.0f * 1.06f, 1.0f, fLen * 1.06f);
+                MATERIAL mat;
+                mat.m_cAmbient  = XMFLOAT4(0.5f, 0.02f, 0.02f, 1.0f);
+                mat.m_cDiffuse  = XMFLOAT4(1.0f, 0.15f, 0.1f,  1.0f);
+                mat.m_cSpecular = XMFLOAT4(0.0f, 0.0f,  0.0f,  1.0f);
+                mat.m_cEmissive = XMFLOAT4(2.0f, 0.25f, 0.1f,  1.0f);
+                m_pHitZoneIndicator->SetMaterial(mat);
+            }
+        }
+
+        // 내부 fill — 보스 쪽부터 전방으로 뻗어나가며 차오름
+        if (m_pHitZoneFillIndicator)
+        {
+            TransformComponent* pT = m_pHitZoneFillIndicator->GetTransform();
+            if (pT)
+            {
+                float curLen = fLen * fillProgress;
+                if (curLen < 0.01f) curLen = 0.01f;
+                // 보스 기준 0 → curLen. fill 중심 = curLen/2 위치
+                float fillCenterX = bossPos.x + fwdX * (curLen * 0.5f);
+                float fillCenterZ = bossPos.z + fwdZ * (curLen * 0.5f);
+
+                pT->SetPosition(fillCenterX, indY, fillCenterZ);
+                pT->SetRotation(0.0f, bossYawDeg, 0.0f);
+                pT->SetScale(fHalfW * 2.0f, 1.0f, curLen);
+
+                MATERIAL mat;
+                mat.m_cAmbient  = XMFLOAT4(0.3f, 0.02f, 0.0f, 1.0f);
+                mat.m_cDiffuse  = XMFLOAT4(1.0f, 0.2f + 0.5f * fillProgress, 0.05f, 1.0f);
+                mat.m_cSpecular = XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f);
+                mat.m_cEmissive = XMFLOAT4(
+                    0.8f + 1.0f * fillProgress,
+                    0.1f + 0.9f * fillProgress,
+                    0.05f,
+                    1.0f);
+                m_pHitZoneFillIndicator->SetMaterial(mat);
             }
         }
     }
@@ -862,14 +1005,70 @@ void EnemyComponent::HideIndicators()
     {
         TransformComponent* pT = m_pRushLineIndicator->GetTransform();
         if (pT)
+        {
             pT->SetPosition(0.0f, -1000.0f, 0.0f);
+            pT->SetScale(0.0f, 0.0f, 0.0f);
+        }
     }
     if (m_pHitZoneIndicator)
     {
         TransformComponent* pT = m_pHitZoneIndicator->GetTransform();
         if (pT)
+        {
             pT->SetPosition(0.0f, -1000.0f, 0.0f);
+            pT->SetScale(0.0f, 0.0f, 0.0f);  // overlay PSO 로 그려도 투영 안 되도록 퇴화
+        }
     }
+    if (m_pHitZoneFillIndicator)
+    {
+        TransformComponent* pT = m_pHitZoneFillIndicator->GetTransform();
+        if (pT)
+        {
+            pT->SetPosition(0.0f, -1000.0f, 0.0f);
+            pT->SetScale(0.0f, 0.0f, 0.0f);
+        }
+    }
+}
+
+XMFLOAT3 EnemyComponent::GetAttackOrigin() const
+{
+    if (!m_pOwner) return XMFLOAT3(0.0f, 0.0f, 0.0f);
+    auto* pT = m_pOwner->GetTransform();
+    if (!pT) return XMFLOAT3(0.0f, 0.0f, 0.0f);
+    XMFLOAT3 pos = pT->GetPosition();
+    if (m_fAttackOriginForwardOffset == 0.0f) return pos;
+
+    float yawRad = XMConvertToRadians(pT->GetRotation().y);
+    float fwdX = sinf(yawRad);
+    float fwdZ = cosf(yawRad);
+    pos.x += fwdX * m_fAttackOriginForwardOffset;
+    pos.z += fwdZ * m_fAttackOriginForwardOffset;
+    return pos;
+}
+
+bool EnemyComponent::IsTargetInForwardRect(float fWidthHalf, float fLength) const
+{
+    if (!m_pOwner || !m_pTarget) return false;
+    auto* pMyT = m_pOwner->GetTransform();
+    auto* pTgT = m_pTarget->GetTransform();
+    if (!pMyT || !pTgT) return false;
+
+    // 공격 원점 (forward offset 적용된 위치) 기준으로 로컬 좌표 계산
+    XMFLOAT3 origin = GetAttackOrigin();
+    XMFLOAT3 tp = pTgT->GetPosition();
+    float dx = tp.x - origin.x;
+    float dz = tp.z - origin.z;
+
+    // 보스 yaw 로 역회전 → 로컬 좌표
+    float yawRad = XMConvertToRadians(pMyT->GetRotation().y);
+    float c = cosf(yawRad);
+    float s = sinf(yawRad);
+    // world → local : (x,z) * R^(-1) where R = yaw (sin,cos / cos,sin 방향 주의)
+    // 보스 forward = (sin(yaw), cos(yaw)) → local z = 전방 성분
+    float localZ =  dx * s + dz * c;   // 전방
+    float localX =  dx * c - dz * s;   // 측면
+
+    return (localZ >= 0.0f && localZ <= fLength && fabsf(localX) <= fWidthHalf);
 }
 
 void EnemyComponent::Die()
@@ -878,8 +1077,9 @@ void EnemyComponent::Die()
 
     // Hide and release indicators
     HideIndicators();
-    m_pRushLineIndicator = nullptr;
-    m_pHitZoneIndicator = nullptr;
+    m_pRushLineIndicator     = nullptr;
+    m_pHitZoneIndicator      = nullptr;
+    m_pHitZoneFillIndicator  = nullptr;
 
     // Notify room/callback
     if (m_OnDeathCallback)

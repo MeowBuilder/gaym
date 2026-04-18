@@ -36,11 +36,11 @@ void Shader::Render(ID3D12GraphicsCommandList* pCommandList, D3D12_GPU_VIRTUAL_A
     // Set the shadow map SRV for root parameter 3
     pCommandList->SetGraphicsRootDescriptorTable(3, shadowSrvHandle);
 
-    // 1. Render opaque objects first
+    // 1. Render opaque objects first (인디케이터/투명 제외)
     pCommandList->SetPipelineState(m_pd3dPipelineState.Get());
     for (auto& pRenderComp : m_vRenderComponents)
     {
-        if (!pRenderComp->IsTransparent())
+        if (!pRenderComp->IsTransparent() && !pRenderComp->IsOverlay())
             pRenderComp->Render(pCommandList);
     }
 
@@ -60,6 +60,15 @@ void Shader::Render(ID3D12GraphicsCommandList* pCommandList, D3D12_GPU_VIRTUAL_A
     for (auto& pRenderComp : m_vRenderComponents)
     {
         if (pRenderComp->IsTransparent())
+            pRenderComp->Render(pCommandList);
+    }
+
+    // 3. Render overlay objects (공격 인디케이터) — depth=ALWAYS, depth 미기록
+    //    물/벽 뒤에 있어도 항상 맨 위에 그려져 UI 처럼 느낌
+    pCommandList->SetPipelineState(m_pd3dIndicatorPSO.Get());
+    for (auto& pRenderComp : m_vRenderComponents)
+    {
+        if (pRenderComp->IsOverlay())
             pRenderComp->Render(pCommandList);
     }
 }
@@ -362,4 +371,11 @@ void Shader::Build(ID3D12Device* pDevice)
     waterPsoDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;  // Don't write to depth for transparent
 
     CHECK_HR(pDevice->CreateGraphicsPipelineState(&waterPsoDesc, __uuidof(ID3D12PipelineState), (void**)&m_pd3dWaterPSO));
+
+    // Indicator PSO — water 위에 그리되 보스/벽은 정상 occlude (depth=LESS 유지)
+    // DepthWriteMask=ZERO 로 depth 기록만 생략 → 뒤에 그려지는 다른 게 인디케이터 때문에 가려지지 않음
+    D3D12_GRAPHICS_PIPELINE_STATE_DESC indicatorPsoDesc = psoDesc;
+    indicatorPsoDesc.DepthStencilState.DepthFunc      = D3D12_COMPARISON_FUNC_LESS;
+    indicatorPsoDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
+    CHECK_HR(pDevice->CreateGraphicsPipelineState(&indicatorPsoDesc, __uuidof(ID3D12PipelineState), (void**)&m_pd3dIndicatorPSO));
 }

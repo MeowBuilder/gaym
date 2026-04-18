@@ -24,11 +24,16 @@ public:
     void SetTransparent(bool bTransparent) { m_bTransparent = bTransparent; }
     bool IsTransparent() const { return m_bTransparent; }
 
+    // UI/오버레이처럼 depth test 무시하고 항상 맨 위에 그리기 (공격 인디케이터 등)
+    void SetOverlay(bool bOverlay) { m_bOverlay = bOverlay; }
+    bool IsOverlay() const { return m_bOverlay; }
+
     void SetOwnerShader(Shader* pShader) { m_pOwnerShader = pShader; }
 
 private:
     Mesh* m_pMesh = nullptr;
     bool m_bCastsShadow = false;
     bool m_bTransparent = false;
+    bool m_bOverlay = false;
     Shader* m_pOwnerShader = nullptr;
 };

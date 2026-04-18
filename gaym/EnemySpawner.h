@@ -73,7 +73,9 @@ private:
     Shader* m_pShader = nullptr;
 
     // Shared meshes for indicators
-    RingMesh* m_pRingMesh = nullptr;
+    RingMesh* m_pRingMesh = nullptr;   // 테두리 링 (공격 범위 윤곽)
+    RingMesh* m_pDiscMesh = nullptr;   // 꽉 찬 원판 (공격 차오름 fill)
     LineMesh* m_pLineMesh = nullptr;
-    FanMesh* m_pFanMesh = nullptr;
+    FanMesh*  m_pFanMesh  = nullptr;
+    Mesh*     m_pBoxMesh  = nullptr;   // 평평한 사각형 (ForwardBox 전방 직사각형)
 };

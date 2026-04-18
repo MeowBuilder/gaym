@@ -11,6 +11,7 @@ public:
     virtual void Update(float dt, EnemyComponent* pEnemy) override;
     virtual bool IsFinished() const override;
     virtual void Reset() override;
+    virtual float GetTimeToHit() const override { return m_fWindupTime; }
 
     // Configuration
     void SetDamage(float fDamage) { m_fDamage = fDamage; }

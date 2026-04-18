@@ -16,6 +16,19 @@
 #include <sstream>
 #include <iomanip>
 
+// UTF-8(std::string) → UTF-16(std::wstring) 변환.
+// 기존 std::wstring(s.begin(), s.end())은 UTF-8 바이트를 그대로 wchar_t에 복사해서
+// 한글/이모지 등 멀티바이트 문자는 깨진 글리프가 되어 SpriteFont::MeasureString이 throw.
+static std::wstring Utf8ToWide(const std::string& s)
+{
+    if (s.empty()) return std::wstring();
+    int wlen = ::MultiByteToWideChar(CP_UTF8, 0, s.data(), (int)s.size(), nullptr, 0);
+    if (wlen <= 0) return std::wstring();
+    std::wstring w(wlen, L'\0');
+    ::MultiByteToWideChar(CP_UTF8, 0, s.data(), (int)s.size(), &w[0], wlen);
+    return w;
+}
+
 Dx12App* Dx12App::s_pInstance = nullptr;
 
 Dx12App::Dx12App()
@@ -774,6 +787,9 @@ void Dx12App::InitializeText()
         m_fontDescriptorHeap->GetCpuHandle(0),
         m_fontDescriptorHeap->GetGpuHandle(0)
     );
+    // 폰트에 없는 문자(한글/이모지 등)가 들어와도 throw 안 하고 '?'로 대체해 렌더.
+    // 없으면 MeasureString/DrawString이 std::runtime_error("Character not in font")를 던짐.
+    m_spriteFont->SetDefaultCharacter(L'?');
 
     // 업로드 완료 대기
     auto uploadFinished = resourceUpload.End(m_pd3dCommandQueue.Get());
@@ -873,8 +889,8 @@ void Dx12App::RenderText()
                             EquippedRune er = pDropComp->GetRuneOption(i);
                             const RuneDef* def = RuneRegistry::Get().Find(er.runeId);
                             std::wstring wname = def
-                                ? std::wstring(def->name.begin(), def->name.end())
-                                : std::wstring(er.runeId.begin(), er.runeId.end());
+                                ? Utf8ToWide(def->name)
+                                : Utf8ToWide(er.runeId);
 
                             std::wstringstream optionText;
                             optionText << L"> " << wname;
@@ -917,8 +933,8 @@ void Dx12App::RenderText()
             const std::string& selId = m_pScene->GetSelectedRune();
             const RuneDef* selDef = RuneRegistry::Get().Find(selId);
             std::wstring wselName = selDef
-                ? std::wstring(selDef->name.begin(), selDef->name.end())
-                : std::wstring(selId.begin(), selId.end());
+                ? Utf8ToWide(selDef->name)
+                : Utf8ToWide(selId);
             std::wstringstream selectedText;
             selectedText << L"Selected Rune: " << wselName;
             XMVECTOR selectedSize = m_spriteFont->MeasureString(selectedText.str().c_str());
@@ -957,8 +973,8 @@ void Dx12App::RenderText()
                         : EquippedRune{};
                     const RuneDef* rDef = RuneRegistry::Get().Find(er.runeId);
                     std::wstring wRuneName = er.IsEmpty() ? L"[Empty]"
-                        : (rDef ? std::wstring(rDef->name.begin(), rDef->name.end())
-                                : std::wstring(er.runeId.begin(), er.runeId.end()));
+                        : (rDef ? Utf8ToWide(rDef->name)
+                                : Utf8ToWide(er.runeId));
 
                     bool isHovered = (mousePos.x >= runeX && mousePos.x <= runeX + runeWidth &&
                                       mousePos.y >= slotY && mousePos.y <= slotY + runeHeight);

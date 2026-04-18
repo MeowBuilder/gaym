@@ -33,17 +33,19 @@ struct EnemyAnimationConfig
 enum class IndicatorType
 {
     None,
-    Circle,      // Melee: circle around enemy
-    RushCircle,  // Rush + 360 AoE: line + circle at destination
-    RushCone     // Rush + cone: line + fan at destination
+    Circle,       // Melee: circle around enemy
+    RushCircle,   // Rush + 360 AoE: line + circle at destination
+    RushCone,     // Rush + cone: line + fan at destination
+    ForwardBox    // 보스 앞으로 뻗어나가는 직사각형 영역 (촉수 휩쓸기 등)
 };
 
 struct AttackIndicatorConfig
 {
     IndicatorType m_eType = IndicatorType::None;
     float m_fRushDistance = 0.0f;    // Length of rush path (speed * duration)
-    float m_fHitRadius = 0.0f;      // Radius for circle/AoE hit zone
+    float m_fHitRadius = 0.0f;      // Radius for circle AoE, or half-width for ForwardBox
     float m_fConeAngle = 0.0f;      // Cone angle in degrees (for RushCone)
+    float m_fHitLength = 0.0f;      // ForwardBox 전방 길이 (boss → 전방 N 유닛)
 };
 
 enum class EnemyState
@@ -186,6 +188,16 @@ public:
     void SetIndicatorConfig(const AttackIndicatorConfig& config) { m_IndicatorConfig = config; }
     void SetRushLineIndicator(GameObject* pIndicator) { m_pRushLineIndicator = pIndicator; }
     void SetHitZoneIndicator(GameObject* pIndicator) { m_pHitZoneIndicator = pIndicator; }
+    // fill 오브젝트 (Circle 텔레그래프용 — 테두리는 m_pHitZoneIndicator, 내부 차오름은 이쪽)
+    void SetHitZoneFillIndicator(GameObject* pIndicator) { m_pHitZoneFillIndicator = pIndicator; }
+
+    // 공격 원점 forward offset (크라켄처럼 몸 앞쪽 촉수에서 공격이 나가는 경우 사용)
+    // 보스 위치에서 forward 방향으로 N 유닛 앞을 "공격 중심"으로 취급
+    void  SetAttackOriginForwardOffset(float f) { m_fAttackOriginForwardOffset = f; }
+    float GetAttackOriginForwardOffset() const  { return m_fAttackOriginForwardOffset; }
+    XMFLOAT3 GetAttackOrigin() const;   // 보스 yaw 기준 forward offset 적용된 XZ 위치 (Y는 보스 Y 그대로)
+    // 보스 앞쪽 직사각형 영역 안에 타겟이 있는지 (로컬 X: ±widthHalf, 로컬 Z: 0~length)
+    bool IsTargetInForwardRect(float fWidthHalf, float fLength) const;
 
 private:
     // State update functions
@@ -241,8 +253,11 @@ private:
 
     // Attack indicators
     AttackIndicatorConfig m_IndicatorConfig;
-    GameObject* m_pRushLineIndicator = nullptr;
-    GameObject* m_pHitZoneIndicator = nullptr;
+    GameObject* m_pRushLineIndicator     = nullptr;
+    GameObject* m_pHitZoneIndicator      = nullptr;  // 테두리 (공격 내내 고정 크기)
+    GameObject* m_pHitZoneFillIndicator  = nullptr;  // 내부 fill (windup 동안 0 → 1 차오름)
+    float       m_fIndicatorTimer    = 0.0f;  // Attack 진입 후 경과 시간 (그로우인/펄스/fill 진행도)
+    float       m_fAttackOriginForwardOffset = 0.0f;  // 보스 앞쪽 공격 원점 오프셋 (크라켄=촉수 앞 8u)
 
     // Timers
     float m_fAttackCooldownTimer = 0.0f;

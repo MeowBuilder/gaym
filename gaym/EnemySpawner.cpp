@@ -380,41 +380,120 @@ void EnemySpawner::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pComma
 
     RegisterEnemyPreset("Dragon", dragon);
 
-    // Register Kraken Boss preset (Water stage boss)
+    // Register Kraken Boss preset (Water stage boss — 느릿 + 넓은 범위 + 4패턴)
     EnemySpawnData kraken;
     kraken.m_strMeshPath      = "Assets/Enemies/Kraken/KRAKEN.bin";
     kraken.m_strAnimationPath = "Assets/Enemies/Kraken/KRAKEN_Anim.bin";
     kraken.m_strTexturePath   = "Assets/Enemies/Kraken/Textures/Tex_KRAKEN_BODY_BaseColor.png";
     kraken.m_xmf3Scale = XMFLOAT3(3.0f, 3.0f, 3.0f);
     kraken.m_xmf4Color = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
+    kraken.m_fColliderXZMultiplier = 0.8f;   // 거대 몸체에 맞춰 XZ 피격 반경 확대
 
     kraken.m_Stats.m_fMaxHP              = 1000.0f;
     kraken.m_Stats.m_fCurrentHP          = 1000.0f;
-    kraken.m_Stats.m_fMoveSpeed          = 6.0f;
-    kraken.m_Stats.m_fAttackRange        = 15.0f;
-    kraken.m_Stats.m_fAttackCooldown     = 2.0f;
-    kraken.m_Stats.m_fLongRangeThreshold = 30.0f;
-    kraken.m_Stats.m_fMidRangeThreshold  = 15.0f;
+    kraken.m_Stats.m_fMoveSpeed          = 5.0f;
+    kraken.m_Stats.m_fAttackRange        = 30.0f;   // Breath 가 기본이라 사정거리 확보
+    kraken.m_Stats.m_fAttackCooldown     = 1.6f;    // 빠른 견제 발사 텀
+    kraken.m_Stats.m_fLongRangeThreshold = 40.0f;
+    kraken.m_Stats.m_fMidRangeThreshold  = 18.0f;
 
     kraken.m_bIsBoss = true;
-    kraken.m_fSpecialAttackCooldown = 6.0f;
-    kraken.m_nSpecialAttackChance   = 40;
+    kraken.m_fSpecialAttackCooldown = 4.5f;
+    kraken.m_nSpecialAttackChance   = 70;     // 쿨 끝나면 70% 확률 특수기 (나머지는 Breath 지속)
+    // 사각형 판정이 보스 중심(z=0)부터 전방으로 뻗어나가므로 offset 0 으로
+    kraken.m_fAttackOriginForwardOffset = 0.0f;
 
     kraken.m_AnimConfig.m_strIdleClip    = "Idle";
     kraken.m_AnimConfig.m_strChaseClip   = "Walk";
-    kraken.m_AnimConfig.m_strAttackClip  = "Attack_Forward";
+    kraken.m_AnimConfig.m_strAttackClip  = "Attack_Forward_RM";   // 기본 = 잉크 발사 애니
     kraken.m_AnimConfig.m_strStaggerClip = "Hit";
     kraken.m_AnimConfig.m_strDeathClip   = "Death";
 
-    kraken.m_IndicatorConfig.m_eType      = IndicatorType::Circle;
-    kraken.m_IndicatorConfig.m_fHitRadius = 12.0f;
+    // 전방 직사각형 인디케이터 — 촉수가 앞으로 휘두르는 과장된 범위
+    kraken.m_IndicatorConfig.m_eType      = IndicatorType::ForwardBox;
+    kraken.m_IndicatorConfig.m_fHitRadius = 14.0f;   // 반폭 (총 너비 28u)
+    kraken.m_IndicatorConfig.m_fHitLength = 30.0f;   // 전방 30u — 과장된 촉수 휩쓸기 범위
 
-    kraken.m_fnCreateAttack = []() {
-        return std::make_unique<MeleeAttackBehavior>(40.0f, 0.5f, 0.3f, 0.5f);
+    // ── 기본 공격 = 작은 잉크 투사체 다수 지속 발사 (견제기 역할) ────────────────
+    //   · projectileCount 10 (많이)
+    //   · projectileScale 1.0 (기본 작게) — 변주 시 0.55~1.9 배로 다양화
+    //   · bVariedProjectiles=true 로 크기/속도/각도/데미지/발사 위치 모두 랜덤 변주
+    kraken.m_fnCreateAttack = [pProjMgr]() {
+        return std::make_unique<BreathAttackBehavior>(
+            pProjMgr,
+            7.0f,     // dmgPerHit (평균 — ±30% 변주)
+            34.0f,    // projectileSpeed (평균 — 0.75~1.45 배)
+            10,       // projectileCount (많이)
+            55.0f,    // spreadAngle (넓게 뿌림)
+            0.4f,     // windup (빠름)
+            1.1f,     // breath duration
+            0.2f,     // recovery
+            0.6f,     // projectileRadius (평균)
+            1.0f,     // projectileScale 기본 — 변주로 0.55~1.9 배
+            ElementType::Water,
+            "Attack_Forward_RM",
+            true);    // ★ varied projectiles: 크기/속도/각/발사 위치 랜덤
     };
 
-    kraken.m_fnCreateSpecialAttack = [pProjMgr]() {
-        return std::make_unique<RushAoEAttackBehavior>(60.0f, 12.0f, 1.5f, 0.4f, 0.3f, 0.5f, 8.0f);
+    // ── 특수기 팩토리: 3종 랜덤 (TailSweep / HeavyCombo / 360 탄막) ───────────
+    kraken.m_fnCreateSpecialAttack = [pProjMgr]() -> std::unique_ptr<IAttackBehavior> {
+        int roll = rand() % 100;
+        if (roll < 45)
+        {
+            // 광역 휩쓸기 — 앞쪽 사각형 (14×30 확장)
+            return std::make_unique<TailSweepAttackBehavior>(
+                55.0f,   // dmg
+                0.8f,    // windup
+                0.5f,    // sweep duration
+                0.7f,    // recovery
+                14.0f,   // hitRange (미사용 — rect 모드)
+                180.0f,  // sweepArc (미사용)
+                false,
+                "Sweep_Attack",
+                14.0f,   // rectWidthHalf — 반폭 14 (총 28u)
+                30.0f);  // rectLength — 전방 30u
+        }
+        else if (roll < 75)
+        {
+            // 3연타 필살 콤보 — 사각형 판정 (14×30)
+            std::vector<ComboAttackBehavior::ComboHit> hits;
+            ComboAttackBehavior::ComboHit h;
+            h.strAnimation = "Sweep_Smash_Attack_3_HIt_Combo";
+            h.fHitRange      = 14.0f;
+            h.fConeAngle     = 160.0f;
+            h.fRectWidthHalf = 14.0f;
+            h.fRectLength    = 30.0f;
+            h.bTrackTarget = true;
+            h.fDamage = 30.0f; h.fWindupTime = 0.7f; h.fHitTime = 0.2f; h.fRecoveryTime = 0.6f;
+            hits.push_back(h);
+            h.bTrackTarget = false;
+            h.fDamage = 55.0f; h.fWindupTime = 0.8f; h.fHitTime = 0.2f; h.fRecoveryTime = 0.5f;
+            hits.push_back(h);
+            h.fDamage = 85.0f; h.fWindupTime = 0.9f; h.fHitTime = 0.3f; h.fRecoveryTime = 0.6f;
+            hits.push_back(h);
+            return std::make_unique<ComboAttackBehavior>(hits);
+        }
+        else
+        {
+            // 360° 탄막 — 뒤에 숨은 플레이어 견제 + 혼란스러운 다양한 투사체
+            //   spread 360°로 전 방향 스프레이, count 많음, 변주 활성
+            //   지면 AoE 가 아니니 인디케이터 억제됨 (false 전달)
+            auto pBehavior = std::make_unique<BreathAttackBehavior>(
+                pProjMgr,
+                10.0f,    // dmg/hit
+                28.0f,    // speed (평균)
+                16,       // count (많음)
+                360.0f,   // spread — 전 방향
+                0.9f,     // windup (좀 더 길게 — 몸을 웅크리는 느낌)
+                1.6f,     // duration (계속 뿜음)
+                0.4f,     // recovery
+                0.8f,     // radius
+                1.1f,     // scale 기본
+                ElementType::Water,
+                "Unreal Take",  // 포효 동시 분사 — 몸을 벌리며 뿜는 느낌
+                true);    // varied
+            return pBehavior;
+        }
     };
 
     RegisterEnemyPreset("Kraken", kraken);
@@ -559,13 +638,21 @@ void EnemySpawner::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pComma
     RegisterEnemyPreset("BlueDragon", blueDragon);
 
     // Create shared meshes for attack indicators
-    m_pRingMesh = new RingMesh(pDevice, pCommandList, 1.0f, 0.93f, 48);
+    // m_pRingMesh = 얇은 테두리 링 (공격 범위 윤곽) — 공격 내내 고정 표시
+    m_pRingMesh = new RingMesh(pDevice, pCommandList, 1.0f, 0.96f, 48);   // 0.88 → 0.96 (더 얇게)
     m_pRingMesh->AddRef();
+    // m_pDiscMesh = 꽉 찬 원판 (공격 타이밍에 맞춰 차오르는 fill)
+    m_pDiscMesh = new RingMesh(pDevice, pCommandList, 1.0f, 0.0f, 48);
+    m_pDiscMesh->AddRef();
     m_pLineMesh = new LineMesh(pDevice, pCommandList, 0.4f);
     m_pLineMesh->AddRef();
 
     m_pFanMesh = new FanMesh(pDevice, pCommandList, 90.0f, 24);
     m_pFanMesh->AddRef();
+
+    // ForwardBox 전방 직사각형용 flat cube — 단위 크기, 실제 크기는 Transform 스케일로
+    m_pBoxMesh = new CubeMesh(pDevice, pCommandList, 1.0f, 0.02f, 1.0f);
+    m_pBoxMesh->AddRef();
 
     OutputDebugString(L"[EnemySpawner] Initialized with default presets\n");
 }
@@ -701,6 +788,7 @@ void EnemySpawner::SetupEnemyComponents(GameObject* pEnemy, const EnemySpawnData
     pEnemyComp->SetStats(data.m_Stats);
     pEnemyComp->SetTarget(pTarget);
     pEnemyComp->SetRoom(pRoom);
+    pEnemyComp->SetAttackOriginForwardOffset(data.m_fAttackOriginForwardOffset);
 
     // Set flying mode if enabled
     if (data.m_bIsFlying)
@@ -998,17 +1086,18 @@ GameObject* EnemySpawner::CreateIndicatorObject(CRoom* pRoom, Mesh* pMesh)
     pMesh->AddRef();
     pIndicator->SetMesh(pMesh);
 
-    // Red emissive material
+    // 위협적인 붉은 발광 바닥 (로스트아크 텔레그래프 느낌)
     MATERIAL redMaterial;
-    redMaterial.m_cAmbient = XMFLOAT4(0.3f, 0.0f, 0.0f, 1.0f);
-    redMaterial.m_cDiffuse = XMFLOAT4(1.0f, 0.1f, 0.1f, 1.0f);
-    redMaterial.m_cSpecular = XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f);
-    redMaterial.m_cEmissive = XMFLOAT4(0.8f, 0.0f, 0.0f, 1.0f);
+    redMaterial.m_cAmbient  = XMFLOAT4(0.5f, 0.05f, 0.02f, 1.0f);
+    redMaterial.m_cDiffuse  = XMFLOAT4(1.0f, 0.15f, 0.1f,  1.0f);
+    redMaterial.m_cSpecular = XMFLOAT4(0.0f, 0.0f,  0.0f,  1.0f);
+    redMaterial.m_cEmissive = XMFLOAT4(1.6f, 0.25f, 0.1f,  1.0f);  // 강한 붉은 발광
     pIndicator->SetMaterial(redMaterial);
 
-    // Add render component
+    // Add render component — 오버레이 플래그로 depth 무시 + 맨 위에 렌더
     auto* pRenderComp = pIndicator->AddComponent<RenderComponent>();
     pRenderComp->SetMesh(pMesh);
+    pRenderComp->SetOverlay(true);
     m_pShader->AddRenderComponent(pRenderComp);
 
     // FIX: Room이 Inactive일 때 Room::Update가 early return하여 인디케이터의
@@ -1027,11 +1116,31 @@ void EnemySpawner::SetupAttackIndicators(GameObject* pEnemy, EnemyComponent* pEn
 
     if (config.m_eType == IndicatorType::Circle)
     {
-        // Melee: ring around enemy (positioned by ShowIndicators on attack start)
-        GameObject* pHitZone = CreateIndicatorObject(pRoom, m_pRingMesh);
-        if (pHitZone)
+        // 테두리 링 (고정 크기, 공격 범위 윤곽)
+        GameObject* pBorder = CreateIndicatorObject(pRoom, m_pRingMesh);
+        if (pBorder)
         {
-            pEnemyComp->SetHitZoneIndicator(pHitZone);
+            pEnemyComp->SetHitZoneIndicator(pBorder);
+        }
+        // 내부 fill 원판 (windup 동안 0→1 차오름)
+        GameObject* pFill = CreateIndicatorObject(pRoom, m_pDiscMesh);
+        if (pFill)
+        {
+            pEnemyComp->SetHitZoneFillIndicator(pFill);
+        }
+    }
+    else if (config.m_eType == IndicatorType::ForwardBox)
+    {
+        // 전방 직사각형: 외곽 flat box (border 역할 — 살짝 큼) + 내부 fill (차오름)
+        GameObject* pBorder = CreateIndicatorObject(pRoom, m_pBoxMesh);
+        if (pBorder)
+        {
+            pEnemyComp->SetHitZoneIndicator(pBorder);
+        }
+        GameObject* pFill = CreateIndicatorObject(pRoom, m_pBoxMesh);
+        if (pFill)
+        {
+            pEnemyComp->SetHitZoneFillIndicator(pFill);
         }
     }
     else if (config.m_eType == IndicatorType::RushCircle)
