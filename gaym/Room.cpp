@@ -11,6 +11,7 @@
 #include "Mesh.h"
 #include "Shader.h"
 #include "LavaGeyserManager.h"
+#include "NetworkManager.h"
 
 CRoom::CRoom()
 {
@@ -313,8 +314,18 @@ void CRoom::SpawnPortalCube()
     pInteractable->SetPromptText(L"[F] Enter Portal");
     pInteractable->SetInteractionDistance(5.0f);
     pInteractable->SetOnInteract([this](InteractableComponent* pComp) {
-        if (m_pScene)
+        if (!m_pScene)
+            return;
+
+        // 서버 연결 시 서버 권위 방 전환 (S_ROOM_TRANSITION 수신 시 실제 전환)
+        NetworkManager* pNet = NetworkManager::GetInstance();
+        if (pNet && pNet->IsConnected())
         {
+            pNet->SendPortalInteract();
+        }
+        else
+        {
+            // 오프라인 폴백
             m_pScene->TransitionToNextRoom();
         }
     });

@@ -190,6 +190,27 @@ bool Handle_S_MOVE(PacketSessionRef& session, Protocol::S_MOVE& pkt)
     return true;
 }
 
+// 방 전환 처리
+bool Handle_S_ROOM_TRANSITION(PacketSessionRef& session, Protocol::S_ROOM_TRANSITION& pkt)
+{
+    uint32 stageIndex = pkt.stageindex();
+    uint32 roomIndex = pkt.roomindex();
+    bool isBossRoom = pkt.isbossroom();
+
+    char buf[256];
+    sprintf_s(buf, "[Network] S_ROOM_TRANSITION received: stage=%u room=%u boss=%d",
+        stageIndex, roomIndex, isBossRoom ? 1 : 0);
+    WriteNetworkLog(buf);
+
+    NetworkManager* pNetMgr = NetworkManager::GetInstance();
+    if (pNetMgr)
+    {
+        pNetMgr->QueueRoomTransition(stageIndex, roomIndex, isBossRoom);
+    }
+
+    return true;
+}
+
 // 플레이어 스킬 처리
 bool Handle_S_SKILL(PacketSessionRef& session, Protocol::S_SKILL& pkt)
 {

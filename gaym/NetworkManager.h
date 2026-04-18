@@ -32,7 +32,8 @@ enum class NetworkCommand
     Despawn,
     Move,
     Skill,
-    SetLocalPlayerId
+    SetLocalPlayerId,
+    RoomTransition
 };
 
 // 네트워크 명령 구조체
@@ -45,6 +46,11 @@ struct NetworkCommandData
     float x, y, z;
     float dirX, dirY, dirZ;  // 방향 정보
     int skillType;           // 스킬 타입 (Protocol::SkillType)
+
+    // Room transition fields
+    uint32 stageIndex;
+    uint32 roomIndex;
+    bool isBossRoom;
 };
 
 // =============================================================================
@@ -85,7 +91,9 @@ public:
     // 서버 연결
     bool Connect(const std::wstring& ip, uint16 port);
     void Disconnect();
-    bool IsConnected() const { return m_bConnected; }
+    // 실제로 "합류 완료" 상태: TCP 핸드셰이크 + ENTER_GAME 응답(LocalPlayerId 발급)까지.
+    // 서버가 꺼졌거나 핸드셰이크만 된 상태는 false → 호출자는 오프라인 폴백 경로로 빠짐.
+    bool IsConnected() const { return m_bConnected && m_pSession != nullptr && m_nLocalPlayerId.load() != 0; }
 
     // 프레임마다 호출 (큐에 쌓인 명령 처리)
     void Update(Scene* pScene, ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList);
@@ -95,6 +103,9 @@ public:
 
     // 로컬 플레이어 스킬 전송
     void SendSkill(int skillType, float x, float y, float z, float dirX, float dirY, float dirZ);
+
+    // 포탈 상호작용 전송 (F키)
+    void SendPortalInteract();
 
     // 로컬 플레이어 ID 설정/조회 (atomic으로 스레드 안전)
     void SetLocalPlayerId(uint64 playerId) { m_nLocalPlayerId.store(playerId); }
@@ -110,6 +121,7 @@ public:
     void QueueMovePlayer(uint64 playerId, float x, float y, float z, float dirX, float dirY, float dirZ);
     void QueueSkill(uint64 playerId, int skillType, float x, float y, float z, float dirX, float dirY, float dirZ);
     void QueueSetLocalPlayerId(uint64 playerId);
+    void QueueRoomTransition(uint32 stageIndex, uint32 roomIndex, bool isBossRoom);
 
     // 원격 플레이어 조회
     GameObject* GetRemotePlayer(uint64 playerId);
@@ -144,6 +156,7 @@ private:
     void ProcessDespawnPlayer(Scene* pScene, uint64 playerId);
     void ProcessMovePlayer(uint64 playerId, float x, float y, float z, float dirX, float dirY, float dirZ);
     void ProcessSkill(Scene* pScene, uint64 playerId, int skillType, float x, float y, float z, float dirX, float dirY, float dirZ);
+    void ProcessRoomTransition(Scene* pScene, uint32 stageIndex, uint32 roomIndex, bool isBossRoom);
 
     // 원격 플레이어 마지막 이동 시간 (idle 전환용)
     std::unordered_map<uint64, float> m_mapRemotePlayerMoveTime;

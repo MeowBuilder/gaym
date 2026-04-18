@@ -1057,20 +1057,9 @@ void Scene::Update(float deltaTime, InputSystem* pInputSystem)
     if (m_pCurrentRoom)
     {
         m_pCurrentRoom->Update(deltaTime);
-
-        // 보스 클리어 감지 → 다음 스테이지 자동 전환
-        if (m_bInBossRoom && m_pCurrentRoom->GetState() == RoomState::Cleared)
-        {
-            m_bInBossRoom = false;
-            OutputDebugString(L"[Scene] Boss defeated! Transitioning to next stage...\n");
-            switch (m_eCurrentTheme)
-            {
-            case StageTheme::Fire:  TransitionToWaterStage();  break;
-            case StageTheme::Water: TransitionToEarthStage();  break;
-            case StageTheme::Earth: TransitionToGrassStage();  break;
-            case StageTheme::Grass: TransitionToWaterStage();  break;  // 풀 보스 이후는 처음부터
-            }
-        }
+        // 보스 클리어 → 포탈이 Room::CheckClearCondition에서 스폰됨.
+        // 플레이어가 포탈 F 상호작용하면 TransitionToNextRoom에서
+        // m_bInBossRoom 플래그를 보고 다음 스테이지로 넘김.
     }
 
     // ── Dragon boss intro cutscene ──────────────────────────────────────────
@@ -1906,14 +1895,32 @@ void Scene::TransitionToNextRoom()
 {
     OutputDebugString(L"[Scene] Transitioning to next room...\n");
 
+    // 보스방에서 포탈 탄 경우 → 다음 스테이지로 (방 카운트 증가 X)
+    if (m_bInBossRoom)
+    {
+        m_bInBossRoom = false;
+        switch (m_eCurrentTheme)
+        {
+        case StageTheme::Fire:  TransitionToWaterStage();  return;
+        case StageTheme::Water: TransitionToEarthStage();  return;
+        case StageTheme::Earth: TransitionToGrassStage();  return;
+        case StageTheme::Grass: TransitionToWaterStage();  return;  // 엔드 처리 전까지 루프
+        }
+    }
+
     m_nRoomCount++;
 
-    // 5스테이지 클리어 후 보스전 진입
+    // 5방 클리어 후 현재 테마의 보스방 진입
     if (m_nRoomCount >= 5)
     {
-        OutputDebugString(L"[Scene] 5 stages cleared - entering boss room!\n");
-        TransitionToBossRoom();
-        return;
+        OutputDebugString(L"[Scene] 5 rooms cleared - entering boss room!\n");
+        switch (m_eCurrentTheme)
+        {
+        case StageTheme::Water: TransitionToWaterBossRoom();  return;
+        case StageTheme::Earth: TransitionToEarthBossRoom();  return;
+        case StageTheme::Grass: TransitionToGrassBossRoom();  return;
+        default:                TransitionToBossRoom();       return;  // Fire (Dragon)
+        }
     }
 
     if (m_vMapPool.empty())
@@ -2389,6 +2396,7 @@ void Scene::TransitionToWaterStage()
 
     // ── 1. 테마 변경 (조명 색상에 영향)
     m_eCurrentTheme = StageTheme::Water;
+    m_nRoomCount = 0;  // 새 스테이지 진입 → 방 카운트 리셋
 
     // ── 2. 셰이더 RC 목록 전체 클리어
     m_vShaders[0]->ClearRenderComponents();
@@ -3044,6 +3052,7 @@ void Scene::TransitionToEarthStage()
 
     m_eCurrentTheme = StageTheme::Earth;
     m_bInBossRoom = false;
+    m_nRoomCount = 0;  // 새 스테이지 진입 → 방 카운트 리셋
 
     m_vShaders[0]->ClearRenderComponents();
     ProcessPendingDeletions();
@@ -3108,6 +3117,7 @@ void Scene::TransitionToGrassStage()
 
     m_eCurrentTheme = StageTheme::Grass;
     m_bInBossRoom = false;
+    m_nRoomCount = 0;  // 새 스테이지 진입 → 방 카운트 리셋
 
     m_vShaders[0]->ClearRenderComponents();
     ProcessPendingDeletions();

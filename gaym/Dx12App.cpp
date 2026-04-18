@@ -9,6 +9,8 @@
 #include "DropItemComponent.h"
 #include "PlayerComponent.h"
 #include "TransformComponent.h"
+#include "Room.h"
+#include "EnemyComponent.h"
 #include <DescriptorHeap.h>  // DirectXTK12
 #include <sstream>
 #include <iomanip>
@@ -561,6 +563,27 @@ void Dx12App::FrameAdvance()
                 {
                     pPlayerComp->Heal(10.0f);
                 }
+            }
+        }
+
+        // DEBUG: K key = 현재 방 적 전원 즉사 (포탈/드랍 테스트용)
+        if (m_inputSystem.IsKeyPressed('K'))
+        {
+            CRoom* pRoom = m_pScene->GetCurrentRoom();
+            if (pRoom)
+            {
+                int killed = 0;
+                for (EnemyComponent* pEnemy : pRoom->GetEnemies())
+                {
+                    if (pEnemy && !pEnemy->IsDead())
+                    {
+                        pEnemy->TakeDamage(99999.0f, false);
+                        ++killed;
+                    }
+                }
+                wchar_t buf[64];
+                swprintf_s(buf, L"[Debug] K: killed %d enemies\n", killed);
+                OutputDebugString(buf);
             }
         }
     }

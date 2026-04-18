@@ -259,6 +259,10 @@ void NetworkManager::Update(Scene* pScene, ID3D12Device* pDevice, ID3D12Graphics
         case NetworkCommand::SetLocalPlayerId:
             // 이미 1차에서 처리됨
             break;
+
+        case NetworkCommand::RoomTransition:
+            ProcessRoomTransition(pScene, cmd.stageIndex, cmd.roomIndex, cmd.isBossRoom);
+            break;
         }
     }
 }
@@ -296,6 +300,53 @@ void NetworkManager::SendSkill(int skillType, float x, float y, float z, float d
 
     auto sendBuffer = ServerPacketHandler::MakeSendBuffer(skillPkt);
     m_pSession->Send(sendBuffer);
+}
+
+void NetworkManager::SendPortalInteract()
+{
+    if (!m_bConnected || !m_pSession)
+        return;
+
+    Protocol::C_PORTAL_INTERACT pkt;
+    auto sendBuffer = ServerPacketHandler::MakeSendBuffer(pkt);
+    m_pSession->Send(sendBuffer);
+
+    OutputDebugString(L"[Network] C_PORTAL_INTERACT sent\n");
+}
+
+void NetworkManager::QueueRoomTransition(uint32 stageIndex, uint32 roomIndex, bool isBossRoom)
+{
+    std::lock_guard<std::mutex> lock(m_queueMutex);
+
+    NetworkCommandData cmd{};
+    cmd.type = NetworkCommand::RoomTransition;
+    cmd.stageIndex = stageIndex;
+    cmd.roomIndex = roomIndex;
+    cmd.isBossRoom = isBossRoom;
+
+    m_vCommandQueue.push_back(cmd);
+}
+
+void NetworkManager::ProcessRoomTransition(Scene* pScene, uint32 stageIndex, uint32 roomIndex, bool isBossRoom)
+{
+    if (!pScene)
+        return;
+
+    wchar_t buf[256];
+    swprintf_s(buf, L"[Network] ProcessRoomTransition stage=%u room=%u boss=%d\n",
+        stageIndex, roomIndex, isBossRoom ? 1 : 0);
+    OutputDebugString(buf);
+
+    if (isBossRoom)
+    {
+        // A단계: 현재는 불 보스만 연결 (스테이지별 보스는 차후 작업)
+        pScene->TransitionToBossRoom();
+    }
+    else
+    {
+        // roomIndex를 풀 인덱스로 사용 → 모든 클라가 동일한 맵 로드
+        pScene->TransitionToRoomByIndex(static_cast<int>(roomIndex));
+    }
 }
 
 void NetworkManager::QueueSpawnPlayer(uint64 playerId, const std::string& name, int playerType, float x, float y, float z)
