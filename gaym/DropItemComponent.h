@@ -2,6 +2,7 @@
 
 #include "Component.h"
 #include "SkillTypes.h"
+#include "RuneDef.h"
 #include <array>
 
 class DropItemComponent : public Component
@@ -16,8 +17,8 @@ public:
     void GenerateRandomRunes();
 
     // Get the rune options
-    const std::array<ActivationType, 3>& GetRuneOptions() const { return m_RuneOptions; }
-    ActivationType GetRuneOption(int index) const;
+    const std::array<EquippedRune, 3>& GetRuneOptions() const { return m_RuneOptions; }
+    EquippedRune GetRuneOption(int index) const;
 
     // Check if drop is active (can be picked up)
     bool IsActive() const { return m_bIsActive; }
@@ -27,7 +28,7 @@ public:
     float GetBobOffset() const { return m_fBobOffset; }
 
 private:
-    std::array<ActivationType, 3> m_RuneOptions;
+    std::array<EquippedRune, 3> m_RuneOptions;
     bool m_bIsActive = true;
 
     // Gravity system

@@ -154,7 +154,7 @@ public:
     void CancelDropInteraction(); // Cancel selection (e.g., ESC or walk away)
     bool IsSelectingRune() const { return m_eDropState == DropInteractionState::SelectingRune; }
     bool IsSelectingSkill() const { return m_eDropState == DropInteractionState::SelectingSkill; }
-    ActivationType GetSelectedRune() const { return m_eSelectedRune; }
+    const std::string& GetSelectedRune() const { return m_sSelectedRuneId; }
 
     GameObject* CreateGameObject(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList);
 
@@ -277,7 +277,7 @@ private:
     DropInteractionState m_eDropState = DropInteractionState::None;
     GameObject* m_pCurrentDropItem = nullptr;  // The drop we're interacting with
     float m_fDropInteractionDistance = 5.0f;
-    ActivationType m_eSelectedRune = ActivationType::None;  // Selected rune waiting for skill assignment
+    std::string m_sSelectedRuneId;  // Selected rune ID waiting for skill slot assignment ("" = none)
 
     // ── Map pool ──────────────────────────────────────────────────────────────
     // Add map JSON paths here. TransitionToNextRoom picks one at random.

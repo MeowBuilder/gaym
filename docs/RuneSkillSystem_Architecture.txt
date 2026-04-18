@@ -1,0 +1,295 @@
+================================================================================
+  RuneCode - 룬/스킬 시스템 아키텍처 설계문서
+  대상 독자: 이 프로젝트를 처음 보는 개발자 및 AI
+================================================================================
+
+작성일: 2026-04-18
+관련 파일: RuneDef.h, RuneRegistry.h/cpp, SkillComponent.h/cpp,
+           SkillTypes.h, VFXTypes.h(VFXModifier), RuneList.md
+
+--------------------------------------------------------------------------------
+1. 설계 목표
+--------------------------------------------------------------------------------
+
+"룬을 추가할 때 스킬 코드를 건드리지 않아도 된다"
+
+룬은 RuneRegistry.cpp 한 곳에 정의하면 된다.
+스킬은 어떤 룬이 장착됐는지 모르고, 계산된 수치(SkillStats)만 읽는다.
+SkillComponent는 룬 타입별 분기를 하지 않고, SkillStats 값으로 동작한다.
+
+--------------------------------------------------------------------------------
+2. 시스템 개요 (데이터 흐름)
+--------------------------------------------------------------------------------
+
+[플레이어 인벤토리]
+  EquippedRune { runeId="F02", stackCount=2 }  ← 룬 ID + 누적 횟수만 저장
+
+      ↓  SkillComponent::BuildSkillStats(slot) 호출
+
+[RuneRegistry]
+  runeId → RuneDef 조회
+  RuneDef::ApplyTo(stats, stackCount) 호출
+
+      ↓  누적 결과
+
+[SkillStats]  ← 최종 수치 덩어리
+  damageMult=1.3, cooldownMult=0.9, activationType=Charge,
+  extraProjectiles=1, piercing=false, onCastHooks=[...], ...
+
+      ↓  스킬 Execute / SkillComponent 발동 로직에서 사용
+
+[ISkillBehavior::Execute(caster, target, stats)]
+  stats.damageMult 곱해서 데미지 계산
+  stats.IsCharge() 로 발동 방식 확인
+  stats.onCastHooks 콜백 실행
+
+
+--------------------------------------------------------------------------------
+3. 핵심 자료구조
+--------------------------------------------------------------------------------
+
+■ RuneDef (gaym/RuneDef.h)
+  룬 한 종류의 정적 정의. RuneRegistry에 등록됨.
+
+  struct RuneDef {
+      string id, name;
+      RuneGrade grade;
+      ElementType element;         // None = 모든 원소 적용
+
+      // 스탯 배율 (기본값 1.0, 1스택 기준)
+      // 스탯 스택 공식: effective = 1 + (baseMult - 1) * stackCount
+      float damageMult;            // 예: 1.10 → 10% 증가
+      float cooldownMult;          // 예: 0.90 → 10% 감소
+      float rangeMult, radiusMult, castTimeMult, durationMult;
+      float statusDurationMult, statusChanceMult, knockbackMult;
+
+      optional<ActivationType> activationOverride;  // 발동 방식 변경 룬
+      VFXModifier vfxMod;          // 파티클/이펙트 수정자
+
+      // 행동 플래그 (True/False 또는 수치)
+      int   extraProjectiles;      // 연사 룬: +1 투사체
+      bool  piercing;              // 관통 룬
+      bool  homing;                // 궤도 룬 (L08)
+      float lifestealRatio;        // 흡수 비율 (L05, W05)
+      float execDamageBonus;       // 처형자 추가 피해 배율 (L06)
+      bool  doublecast;            // 쌍둥이별 (L01)
+      bool  echoOnCast;            // 잔상 (L09)
+      float cdResetChance;         // 무한 쿨다운 초기화 확률 (L10)
+
+      // 고급 훅 (복잡한 룬만 사용, 단순 룬은 nullptr)
+      function<void(SkillContext&)> onCast;
+      function<void(SkillContext&)> onHit;
+  };
+
+■ SkillStats (gaym/RuneDef.h)
+  BuildSkillStats() 가 반환하는 누적 계산 결과.
+  스킬 동작 전 과정에서 이 구조체만 읽으면 됨.
+
+  struct SkillStats {
+      float damageMult, cooldownMult, rangeMult, radiusMult, ...;
+      ActivationType activationType;          // 최종 발동 방식
+      optional<ElementType> elementOverride;  // 원소 변경 룬 적용 시
+      VFXModifier vfxMod;
+
+      int   extraProjectiles;
+      bool  piercing, homing, doublecast, echoOnCast;
+      float lifestealRatio, execDamageBonus, cdResetChance;
+
+      vector<function<void(SkillContext&)>> onCastHooks;
+      vector<function<void(SkillContext&)>> onHitHooks;
+
+      bool IsCharge()  const;  // 편의 헬퍼
+      bool IsChannel() const;
+      bool IsPlace()   const;
+      RuneCombo ToRuneCombo() const;  // 레거시 코드 호환용
+  };
+
+■ SkillContext (gaym/RuneDef.h)
+  onCast/onHit 훅에 전달되는 실행 컨텍스트.
+
+  struct SkillContext {
+      GameObject* caster;
+      XMFLOAT3    targetPos;
+      ElementType element;
+      float       baseDamage;
+      float       damageDealt;   // onHit에서 채워짐
+      int         projectileIdx; // 분열 투사체 인덱스
+  };
+
+■ RuneRegistry (gaym/RuneRegistry.h/cpp)
+  모든 RuneDef를 map으로 관리하는 싱글턴.
+  RuneRegistry::Get().Find("F02") → const RuneDef*
+
+■ EquippedRune (gaym/RuneDef.h)
+  스킬 슬롯에 실제로 장착된 룬 인스턴스.
+
+  struct EquippedRune {
+      string runeId;       // "" = 빈 슬롯
+      int    stackCount;   // 중복 획득 횟수
+  };
+
+
+--------------------------------------------------------------------------------
+4. 룬 추가 방법 (RuneRegistry.cpp 한 곳에서만 작업)
+--------------------------------------------------------------------------------
+
+예시: "용암 (F05, 유니크, 불 피해 +35%, 방어력 감소)" 룬 추가
+
+  Register({
+      .id      = "F05",
+      .name    = "용암",
+      .grade   = RuneGrade::Unique,
+      .element = ElementType::Fire,
+      .damageMult = 1.35f,
+      .onHit   = [](SkillContext& ctx) {
+          // 적에게 방어력 감소 디버프 적용 로직
+          // ctx.caster, ctx.targetPos 활용
+      }
+  });
+
+→ 이 3~10줄 추가만으로 새 룬 완성.
+→ 어떤 스킬 코드도 수정할 필요 없음.
+
+
+--------------------------------------------------------------------------------
+5. 스킬이 룬 효과를 적용하는 방법
+--------------------------------------------------------------------------------
+
+// 스킬 Execute 내부 예시 (FireballBehavior.cpp)
+void FireballBehavior::Execute(GameObject* caster, const XMFLOAT3& target, float mult)
+{
+    auto* sc = caster->GetComponent<SkillComponent>();
+    SkillStats stats = sc ? sc->BuildSkillStats(m_slot) : SkillStats{};
+
+    float damage = m_SkillData.damage * mult * stats.damageMult;
+    float range  = m_SkillData.range  * stats.rangeMult;
+
+    // 연사 룬: 투사체 수 결정
+    int projCount = 1 + stats.extraProjectiles;
+
+    // onCast 훅 실행 (쌍둥이별, 잔상 등)
+    SkillContext ctx{ caster, target, m_SkillData.element, damage };
+    for (auto& hook : stats.onCastHooks) hook(ctx);
+}
+
+
+--------------------------------------------------------------------------------
+6. SkillComponent 발동 방식 처리
+--------------------------------------------------------------------------------
+
+SkillComponent::ExecuteWithActivationType(slot, target):
+    SkillStats stats = BuildSkillStats(slot, defaultType);
+
+    if (stats.IsCharge())   → 차지 모드 시작
+    if (stats.IsChannel())  → 채널링 모드 시작
+    if (stats.IsPlace())    → 배치 모드
+    else                    → 즉발 실행
+
+기존 RuneCombo 기반 분기는 모두 stats.Is*() 로 대체.
+
+
+--------------------------------------------------------------------------------
+7. DropItemComponent → 룬 드랍
+--------------------------------------------------------------------------------
+
+DropItemComponent는 EquippedRune[3] 을 생성해서 플레이어에게 선택지 제공.
+GenerateRandomRunes():
+  - RuneRegistry 전체 목록에서 등급별 가중치로 3개 랜덤 선택
+  - m_RuneOptions[i].runeId = "F02" 같은 ID 저장
+
+Scene::SelectRuneByClick(i):
+  - m_sSelectedRuneId = pDropComp->GetRuneOption(i).runeId
+
+Scene::SelectSkillSlot(slot, runeSlotIndex):
+  - pSkill->SetRuneSlot(slot, runeSlotIndex, m_sSelectedRuneId)
+
+
+--------------------------------------------------------------------------------
+8. 행동 훅 사용 패턴 (복잡한 레전더리 룬)
+--------------------------------------------------------------------------------
+
+■ L01 쌍둥이별 (doublecast)
+  RuneDef: .doublecast = true
+  SkillComponent에서 ExecuteOrSplit 후 doublecast 플래그 체크 → 50% 위력 재실행
+
+■ L08 궤도 (유도 투사체)
+  RuneDef: .homing = true
+  ProjectileManager가 stats.homing 을 읽고 유도 로직 활성화
+
+■ L09 잔상
+  RuneDef: .echoOnCast = true
+  onCast 훅에서 2초 후 동일 Execute 재발동 예약 (타이머 시스템 필요)
+
+■ L06 처형자
+  RuneDef: .execDamageBonus = 0.5f (체력 30% 이하 +50% 피해)
+  각 스킬의 HitEnemy 로직에서 stats.execDamageBonus 확인 후 추가 적용
+
+■ 완전 커스텀 룬 (onCast/onHit 람다)
+  Register({
+      .id   = "S04",
+      .name = "연쇄",
+      .onHit = [](SkillContext& ctx) {
+          // 설치물 간 연쇄 번개 발생 로직
+      }
+  });
+
+
+--------------------------------------------------------------------------------
+9. VFX 연동
+--------------------------------------------------------------------------------
+
+RuneDef.vfxMod (VFXModifier 타입) 가 SkillStats.vfxMod 로 누적됨.
+FluidSkillVFXManager::SpawnSequenceEffect() 내부에서
+VFXLibrary::ApplyModifier(def, stats.vfxMod) 를 통해 파티클 수/크기/속도 변경.
+
+VFXModifier 필드:
+  particleCountMult, strengthMult, sizeScaleMult, speedMult, phaseOverride
+
+
+--------------------------------------------------------------------------------
+10. 파일 맵
+--------------------------------------------------------------------------------
+
+gaym/RuneDef.h          ← RuneDef, SkillStats, SkillContext, EquippedRune, RuneGrade
+gaym/RuneRegistry.h     ← RuneRegistry 클래스 선언
+gaym/RuneRegistry.cpp   ← 50종 룬 전체 정의 (여기만 수정하면 룬 추가/수정 완료)
+gaym/SkillTypes.h       ← SkillSlot, ElementType, ActivationType, RuneCombo (레거시)
+gaym/SkillComponent.h   ← BuildSkillStats(), m_SkillRunes (EquippedRune 배열)
+gaym/SkillComponent.cpp ← BuildSkillStats() 구현, GetRuneCombo() 호환 래퍼
+gaym/DropItemComponent.h/cpp ← EquippedRune[3] 드랍 생성
+gaym/ISkillBehavior.h   ← Execute(caster, target, damageMult) 인터페이스 (미변경)
+gaym/VFXTypes.h         ← VFXModifier 정의 (미변경)
+docs/RuneList.md        ← 50종 룬 기획 목록 (구현 참조용)
+
+
+--------------------------------------------------------------------------------
+11. 스택 수치 공식
+--------------------------------------------------------------------------------
+
+동일 룬을 중복 획득하면 stackCount 증가.
+RuneDef::ApplyTo(stats, stackCount) 에서 적용:
+
+  effective_damageMult = 1 + (damageMult - 1) * stackCount
+  예: damageMult=1.10, stackCount=3 → 1 + 0.10*3 = 1.30 (+30%)
+
+등급별 stackBonus는 RuneList.md 참조 (노멀 +10%, 레어 +8% 등).
+현재 구현에서는 단순 선형 스택 (향후 등급별 체감 가능).
+
+
+--------------------------------------------------------------------------------
+12. 확장 가이드
+--------------------------------------------------------------------------------
+
+Q. 완전히 새로운 발동 방식 (예: 연속 시전) 을 추가하려면?
+A. ActivationType 열거형에 새 값 추가 → SkillComponent::ExecuteWithActivationType에
+   해당 케이스 1개 추가 → RuneDef.activationOverride 에 그 값 지정하면 완료.
+
+Q. 특정 스킬에만 적용되는 룬을 만들려면?
+A. onCast 훅 안에서 ctx.caster의 스킬 타입을 확인 후 분기. 또는 RuneDef에
+   compatibleSkills 필드를 추가해 BuildSkillStats에서 필터링.
+
+Q. 원소 조합 시너지 (물+불=증기) 를 구현하려면?
+A. BuildSkillStats 내에서 장착된 룬들의 element 조합을 체크 후
+   SkillStats에 synergyElement 플래그/VFXModifier 추가.
+
+================================================================================

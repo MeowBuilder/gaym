@@ -7,6 +7,7 @@
 #include "ISkillBehavior.h"
 #include "SkillData.h"
 #include "DropItemComponent.h"
+#include "RuneRegistry.h"
 #include "PlayerComponent.h"
 #include "TransformComponent.h"
 #include "Room.h"
@@ -857,17 +858,6 @@ void Dx12App::RenderText()
                     DropItemComponent* pDropComp = pDropItem->GetComponent<DropItemComponent>();
                     if (pDropComp)
                     {
-                        const wchar_t* typeNames[] = { L"None", L"Instant", L"Charge", L"Channel", L"Place", L"Enhance", L"Split" };
-                        const wchar_t* typeDescs[] = {
-                            L"Empty",
-                            L"1x damage",
-                            L"Hold: 1x~3x damage",
-                            L"Hold: 0.3x per tick",
-                            L"1.5x trap damage",
-                            L"Buff: 2x next attack",
-                            L"Fire 2 projectiles"
-                        };
-
                         // Title
                         const wchar_t* titleText = L"=== Click to Select a Rune ===";
                         XMVECTOR titleSize = m_spriteFont->MeasureString(titleText);
@@ -877,14 +867,17 @@ void Dx12App::RenderText()
 
                         // Rune options (clickable)
                         XMFLOAT2 mousePos = m_inputSystem.GetMousePosition();
-                        float optionLineHeight = 55.0f;  // 간격 넓힘 (40 -> 55)
+                        float optionLineHeight = 55.0f;
                         for (int i = 0; i < 3; ++i)
                         {
-                            ActivationType runeType = pDropComp->GetRuneOption(i);
-                            int typeIndex = static_cast<int>(runeType);
+                            EquippedRune er = pDropComp->GetRuneOption(i);
+                            const RuneDef* def = RuneRegistry::Get().Find(er.runeId);
+                            std::wstring wname = def
+                                ? std::wstring(def->name.begin(), def->name.end())
+                                : std::wstring(er.runeId.begin(), er.runeId.end());
 
                             std::wstringstream optionText;
-                            optionText << L"> " << typeNames[typeIndex] << L" - " << typeDescs[typeIndex];
+                            optionText << L"> " << wname;
 
                             float optionY = screenCenterY + i * optionLineHeight;
                             XMVECTOR optionSize = m_spriteFont->MeasureString(optionText.str().c_str());
@@ -921,10 +914,13 @@ void Dx12App::RenderText()
                 DirectX::Colors::Gold);
 
             // Show selected rune info
-            const wchar_t* typeNames[] = { L"None", L"Instant", L"Charge", L"Channel", L"Place", L"Enhance", L"Split" };
-            ActivationType selectedRune = m_pScene->GetSelectedRune();
+            const std::string& selId = m_pScene->GetSelectedRune();
+            const RuneDef* selDef = RuneRegistry::Get().Find(selId);
+            std::wstring wselName = selDef
+                ? std::wstring(selDef->name.begin(), selDef->name.end())
+                : std::wstring(selId.begin(), selId.end());
             std::wstringstream selectedText;
-            selectedText << L"Selected Rune: " << typeNames[static_cast<int>(selectedRune)];
+            selectedText << L"Selected Rune: " << wselName;
             XMVECTOR selectedSize = m_spriteFont->MeasureString(selectedText.str().c_str());
             m_spriteFont->DrawString(m_spriteBatch.get(), selectedText.str().c_str(),
                 XMFLOAT2(screenCenterX - XMVectorGetX(selectedSize) / 2.0f, screenCenterY - 60.0f),
@@ -956,19 +952,22 @@ void Dx12App::RenderText()
                     float runeWidth = 120.0f;
                     float runeHeight = 35.0f;
 
-                    ActivationType runeType = pSkill ? pSkill->GetRuneSlot(static_cast<SkillSlot>(skillIdx), runeIdx) : ActivationType::None;
+                    EquippedRune er = pSkill
+                        ? pSkill->GetRuneSlot(static_cast<SkillSlot>(skillIdx), runeIdx)
+                        : EquippedRune{};
+                    const RuneDef* rDef = RuneRegistry::Get().Find(er.runeId);
+                    std::wstring wRuneName = er.IsEmpty() ? L"[Empty]"
+                        : (rDef ? std::wstring(rDef->name.begin(), rDef->name.end())
+                                : std::wstring(er.runeId.begin(), er.runeId.end()));
 
-                    // Check hover
                     bool isHovered = (mousePos.x >= runeX && mousePos.x <= runeX + runeWidth &&
                                       mousePos.y >= slotY && mousePos.y <= slotY + runeHeight);
 
-                    // Draw slot
-                    const wchar_t* runeName = (runeType == ActivationType::None) ? L"[Empty]" : typeNames[static_cast<int>(runeType)];
-                    XMVECTORF32 color = (runeType == ActivationType::None)
+                    XMVECTORF32 color = er.IsEmpty()
                         ? (isHovered ? DirectX::Colors::Yellow : DirectX::Colors::DarkGray)
                         : DirectX::Colors::Cyan;
 
-                    m_spriteFont->DrawString(m_spriteBatch.get(), runeName, XMFLOAT2(runeX, slotY), color);
+                    m_spriteFont->DrawString(m_spriteBatch.get(), wRuneName.c_str(), XMFLOAT2(runeX, slotY), color);
                 }
             }
 
