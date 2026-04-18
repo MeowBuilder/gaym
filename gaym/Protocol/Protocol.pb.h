@@ -48,7 +48,7 @@ struct TableStruct_Protocol_2eproto {
     PROTOBUF_SECTION_VARIABLE(protodesc_cold);
   static const ::PROTOBUF_NAMESPACE_ID::internal::AuxiliaryParseTableField aux[]
     PROTOBUF_SECTION_VARIABLE(protodesc_cold);
-  static const ::PROTOBUF_NAMESPACE_ID::internal::ParseTable schema[18]
+  static const ::PROTOBUF_NAMESPACE_ID::internal::ParseTable schema[19]
     PROTOBUF_SECTION_VARIABLE(protodesc_cold);
   static const ::PROTOBUF_NAMESPACE_ID::internal::FieldMetadata field_metadata[];
   static const ::PROTOBUF_NAMESPACE_ID::internal::SerializationTable serialization_table[];
@@ -74,6 +74,9 @@ extern C_PORTAL_INTERACTDefaultTypeInternal _C_PORTAL_INTERACT_default_instance_
 class C_SKILL;
 struct C_SKILLDefaultTypeInternal;
 extern C_SKILLDefaultTypeInternal _C_SKILL_default_instance_;
+class C_TORCH_INTERACT;
+struct C_TORCH_INTERACTDefaultTypeInternal;
+extern C_TORCH_INTERACTDefaultTypeInternal _C_TORCH_INTERACT_default_instance_;
 class MonsterInfo;
 struct MonsterInfoDefaultTypeInternal;
 extern MonsterInfoDefaultTypeInternal _MonsterInfo_default_instance_;
@@ -118,6 +121,7 @@ template<> ::Protocol::C_LOGIN* Arena::CreateMaybeMessage<::Protocol::C_LOGIN>(A
 template<> ::Protocol::C_MOVE* Arena::CreateMaybeMessage<::Protocol::C_MOVE>(Arena*);
 template<> ::Protocol::C_PORTAL_INTERACT* Arena::CreateMaybeMessage<::Protocol::C_PORTAL_INTERACT>(Arena*);
 template<> ::Protocol::C_SKILL* Arena::CreateMaybeMessage<::Protocol::C_SKILL>(Arena*);
+template<> ::Protocol::C_TORCH_INTERACT* Arena::CreateMaybeMessage<::Protocol::C_TORCH_INTERACT>(Arena*);
 template<> ::Protocol::MonsterInfo* Arena::CreateMaybeMessage<::Protocol::MonsterInfo>(Arena*);
 template<> ::Protocol::S_CHAT* Arena::CreateMaybeMessage<::Protocol::S_CHAT>(Arena*);
 template<> ::Protocol::S_DESPAWN* Arena::CreateMaybeMessage<::Protocol::S_DESPAWN>(Arena*);
@@ -2150,6 +2154,125 @@ class C_PORTAL_INTERACT final :
 };
 // -------------------------------------------------------------------
 
+class C_TORCH_INTERACT final :
+    public ::PROTOBUF_NAMESPACE_ID::Message /* @@protoc_insertion_point(class_definition:Protocol.C_TORCH_INTERACT) */ {
+ public:
+  inline C_TORCH_INTERACT() : C_TORCH_INTERACT(nullptr) {}
+  ~C_TORCH_INTERACT() override;
+  explicit constexpr C_TORCH_INTERACT(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
+
+  C_TORCH_INTERACT(const C_TORCH_INTERACT& from);
+  C_TORCH_INTERACT(C_TORCH_INTERACT&& from) noexcept
+    : C_TORCH_INTERACT() {
+    *this = ::std::move(from);
+  }
+
+  inline C_TORCH_INTERACT& operator=(const C_TORCH_INTERACT& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline C_TORCH_INTERACT& operator=(C_TORCH_INTERACT&& from) noexcept {
+    if (this == &from) return *this;
+    if (GetOwningArena() == from.GetOwningArena()) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  static const ::PROTOBUF_NAMESPACE_ID::Descriptor* descriptor() {
+    return GetDescriptor();
+  }
+  static const ::PROTOBUF_NAMESPACE_ID::Descriptor* GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  static const ::PROTOBUF_NAMESPACE_ID::Reflection* GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  static const C_TORCH_INTERACT& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const C_TORCH_INTERACT* internal_default_instance() {
+    return reinterpret_cast<const C_TORCH_INTERACT*>(
+               &_C_TORCH_INTERACT_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages =
+    13;
+
+  friend void swap(C_TORCH_INTERACT& a, C_TORCH_INTERACT& b) {
+    a.Swap(&b);
+  }
+  inline void Swap(C_TORCH_INTERACT* other) {
+    if (other == this) return;
+    if (GetOwningArena() == other->GetOwningArena()) {
+      InternalSwap(other);
+    } else {
+      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(C_TORCH_INTERACT* other) {
+    if (other == this) return;
+    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  inline C_TORCH_INTERACT* New() const final {
+    return new C_TORCH_INTERACT();
+  }
+
+  C_TORCH_INTERACT* New(::PROTOBUF_NAMESPACE_ID::Arena* arena) const final {
+    return CreateMaybeMessage<C_TORCH_INTERACT>(arena);
+  }
+  void CopyFrom(const ::PROTOBUF_NAMESPACE_ID::Message& from) final;
+  void MergeFrom(const ::PROTOBUF_NAMESPACE_ID::Message& from) final;
+  void CopyFrom(const C_TORCH_INTERACT& from);
+  void MergeFrom(const C_TORCH_INTERACT& from);
+  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
+  bool IsInitialized() const final;
+
+  size_t ByteSizeLong() const final;
+  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
+  ::PROTOBUF_NAMESPACE_ID::uint8* _InternalSerialize(
+      ::PROTOBUF_NAMESPACE_ID::uint8* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
+  int GetCachedSize() const final { return _cached_size_.Get(); }
+
+  private:
+  void SharedCtor();
+  void SharedDtor();
+  void SetCachedSize(int size) const final;
+  void InternalSwap(C_TORCH_INTERACT* other);
+  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
+  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
+    return "Protocol.C_TORCH_INTERACT";
+  }
+  protected:
+  explicit C_TORCH_INTERACT(::PROTOBUF_NAMESPACE_ID::Arena* arena);
+  private:
+  static void ArenaDtor(void* object);
+  inline void RegisterArenaDtor(::PROTOBUF_NAMESPACE_ID::Arena* arena);
+  public:
+
+  ::PROTOBUF_NAMESPACE_ID::Metadata GetMetadata() const final;
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+
+  // @@protoc_insertion_point(class_scope:Protocol.C_TORCH_INTERACT)
+ private:
+  class _Internal;
+
+  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
+  typedef void InternalArenaConstructable_;
+  typedef void DestructorSkippable_;
+  mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
+  friend struct ::TableStruct_Protocol_2eproto;
+};
+// -------------------------------------------------------------------
+
 class S_ROOM_TRANSITION final :
     public ::PROTOBUF_NAMESPACE_ID::Message /* @@protoc_insertion_point(class_definition:Protocol.S_ROOM_TRANSITION) */ {
  public:
@@ -2194,7 +2317,7 @@ class S_ROOM_TRANSITION final :
                &_S_ROOM_TRANSITION_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    13;
+    14;
 
   friend void swap(S_ROOM_TRANSITION& a, S_ROOM_TRANSITION& b) {
     a.Swap(&b);
@@ -2348,7 +2471,7 @@ class MonsterInfo final :
                &_MonsterInfo_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    14;
+    15;
 
   friend void swap(MonsterInfo& a, MonsterInfo& b) {
     a.Swap(&b);
@@ -2557,7 +2680,7 @@ class S_MONSTER_SPAWN final :
                &_S_MONSTER_SPAWN_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    15;
+    16;
 
   friend void swap(S_MONSTER_SPAWN& a, S_MONSTER_SPAWN& b) {
     a.Swap(&b);
@@ -2698,7 +2821,7 @@ class S_MONSTER_MOVE final :
                &_S_MONSTER_MOVE_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    16;
+    17;
 
   friend void swap(S_MONSTER_MOVE& a, S_MONSTER_MOVE& b) {
     a.Swap(&b);
@@ -2874,7 +2997,7 @@ class S_MONSTER_DESPAWN final :
                &_S_MONSTER_DESPAWN_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    17;
+    18;
 
   friend void swap(S_MONSTER_DESPAWN& a, S_MONSTER_DESPAWN& b) {
     a.Swap(&b);
@@ -3906,6 +4029,10 @@ inline void S_SKILL::set_dirz(float value) {
 
 // -------------------------------------------------------------------
 
+// C_TORCH_INTERACT
+
+// -------------------------------------------------------------------
+
 // S_ROOM_TRANSITION
 
 // uint32 stageIndex = 1;
@@ -4350,6 +4477,8 @@ inline void S_MONSTER_DESPAWN::set_monsterid(::PROTOBUF_NAMESPACE_ID::uint64 val
 #ifdef __GNUC__
   #pragma GCC diagnostic pop
 #endif  // __GNUC__
+// -------------------------------------------------------------------
+
 // -------------------------------------------------------------------
 
 // -------------------------------------------------------------------

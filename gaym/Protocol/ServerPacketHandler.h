@@ -20,11 +20,11 @@ enum : uint16
 	PKT_C_SKILL = 1010,
 	PKT_S_SKILL = 1011,
 	PKT_C_PORTAL_INTERACT = 1012,
-	PKT_S_ROOM_TRANSITION = 1013,
-	PKT_S_MONSTER_SPAWN = 1014,
-	PKT_S_MONSTER_MOVE = 1015,
-	PKT_S_MONSTER_DESPAWN = 1016,
-	PKT_C_ROOM_START = 1017,
+	PKT_C_TORCH_INTERACT = 1013,
+	PKT_S_ROOM_TRANSITION = 1014,
+	PKT_S_MONSTER_SPAWN = 1015,
+	PKT_S_MONSTER_MOVE = 1016,
+	PKT_S_MONSTER_DESPAWN = 1017,
 };
 
 // Custom Handlers
@@ -72,19 +72,7 @@ public:
 	static SendBufferRef MakeSendBuffer(Protocol::C_MOVE& pkt) { return MakeSendBuffer(pkt, PKT_C_MOVE); }
 	static SendBufferRef MakeSendBuffer(Protocol::C_SKILL& pkt) { return MakeSendBuffer(pkt, PKT_C_SKILL); }
 	static SendBufferRef MakeSendBuffer(Protocol::C_PORTAL_INTERACT& pkt) { return MakeSendBuffer(pkt, PKT_C_PORTAL_INTERACT); }
-
-	// 빈 바디 패킷 송신용 (C_ROOM_START 등 — .pb 클래스 재생성 전 임시 우회)
-	// 서버는 헤더 id로 구분하고, 바디 0 바이트로 파싱되므로 호환됨.
-	static SendBufferRef MakeSendBufferEmpty(uint16 pktId)
-	{
-		const uint16 packetSize = sizeof(PacketHeader);
-		SendBufferRef sendBuffer = GSendBufferManager->Open(packetSize);
-		PacketHeader* header = reinterpret_cast<PacketHeader*>(sendBuffer->Buffer());
-		header->size = packetSize;
-		header->id = pktId;
-		sendBuffer->Close(packetSize);
-		return sendBuffer;
-	}
+	static SendBufferRef MakeSendBuffer(Protocol::C_TORCH_INTERACT& pkt) { return MakeSendBuffer(pkt, PKT_C_TORCH_INTERACT); }
 
 private:
 	template<typename PacketType, typename ProcessFunc>

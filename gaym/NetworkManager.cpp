@@ -329,16 +329,16 @@ void NetworkManager::SendPortalInteract()
     OutputDebugString(L"[Network] C_PORTAL_INTERACT sent\n");
 }
 
-void NetworkManager::SendRoomStart()
+void NetworkManager::SendTorchInteract()
 {
     if (!m_bConnected || !m_pSession)
         return;
 
-    // C_ROOM_START 바디 empty — 헤더만 송신 (proto 재생성 전 임시 우회)
-    auto sendBuffer = ServerPacketHandler::MakeSendBufferEmpty(PKT_C_ROOM_START);
+    Protocol::C_TORCH_INTERACT pkt;
+    auto sendBuffer = ServerPacketHandler::MakeSendBuffer(pkt);
     m_pSession->Send(sendBuffer);
 
-    OutputDebugString(L"[Network] C_ROOM_START sent\n");
+    OutputDebugString(L"[Network] C_TORCH_INTERACT sent\n");
 }
 
 void NetworkManager::QueueRoomTransition(uint32 stageIndex, uint32 roomIndex, bool isBossRoom)

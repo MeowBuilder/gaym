@@ -286,8 +286,8 @@ void Scene::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList)
             {
                 // 온라인: 서버에 전투 시작 요청만 송신, 로컬 상태 변경은 서버 응답(S_MONSTER_SPAWN)에서
                 // Hide는 중복 전송 방지 차원 (서버 응답 실패 시에도 재전송 방지 — 재진입 시 UI는 재생성됨)
-                pNet->SendRoomStart();
-                OutputDebugString(L"[Scene] Room start requested to server\n");
+                pNet->SendTorchInteract();
+                OutputDebugString(L"[Scene] Torch interact requested to server\n");
             }
             else
             {
