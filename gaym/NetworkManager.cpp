@@ -341,6 +341,7 @@ void NetworkManager::SendTorchInteract()
     if (!m_bConnected || !m_pSession)
     {
         WriteNetworkLog("[Network] SendTorchInteract BLOCKED (not connected or no session)");
+        OutputDebugString(L"[CLIENT][SendTorchInteract] blocked - not connected\n");
         return;
     }
 
@@ -348,7 +349,7 @@ void NetworkManager::SendTorchInteract()
     auto sendBuffer = ServerPacketHandler::MakeSendBuffer(pkt);
     m_pSession->Send(sendBuffer);
 
-    OutputDebugString(L"[Network] C_TORCH_INTERACT sent\n");
+    OutputDebugString(L"[CLIENT][SendTorchInteract] sent\n");
     WriteNetworkLog("[Network] C_TORCH_INTERACT sent");
 }
 
