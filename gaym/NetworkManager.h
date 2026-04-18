@@ -192,6 +192,10 @@ private:
 
     // 서버 몬스터 관리 (메인 스레드에서만 접근)
     std::unordered_map<uint64, GameObject*> m_mapServerMonsters;
+
+    // 몬스터별 preset 클립 이름 (Idle/Walk 각 모델별로 다름)
+    struct ServerMonsterClips { std::string idle; std::string walk; };
+    std::unordered_map<uint64, ServerMonsterClips> m_mapServerMonsterClips;
     std::unordered_map<uint64, float> m_mapServerMonsterMoveTime;  // idle 전환용
 
     // 원격 플레이어 마지막 이동 시간 (idle 전환용)

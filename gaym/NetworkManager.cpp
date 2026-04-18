@@ -921,6 +921,7 @@ struct MonsterPreset
     float scale;
     const char* idleClip;
     const char* walkClip;
+    const char* texturePath;  // 명시적 텍스처 경로 — .bin에 <AlbedoMap> 없을 때 필수
 };
 
 static MonsterPreset GetMonsterPresetByType(uint32 monsterType)
@@ -928,50 +929,101 @@ static MonsterPreset GetMonsterPresetByType(uint32 monsterType)
     // 서버 MonsterType enum 순서와 일치해야 함:
     // 0 None, 1 TestEnemy, 2 AirElemental, 3 RangedEnemy, 4 RushAoEEnemy, 5 RushFrontEnemy,
     // 6 Dragon, 7 Kraken, 8 Golem, 9 Demon, 10 BlueDragon
+    // 클립 이름은 서버 동기화 이전 상태로 원복 — invisibility 디버깅 중이므로 diff 최소화.
+    // (실제 .bin에 맞지 않을 수 있으나, 그건 별개 문제로 나중에 별도 처리)
     switch (monsterType)
     {
     case 2: // AirElemental
         return { "Assets/Enemies/Elementals/AirElemental_Bl/AirElemental_Bl.bin",
                  "Assets/Enemies/Elementals/AirElemental_Bl/AirElemental_Bl_Anim.bin",
-                 2.0f, "Idle", "Walk" };
+                 2.0f, "Idle", "Walk",
+                 "Assets/Enemies/Elementals/AirElemental_Bl/Textures/T_AirElemental_Body_Bl_D.png" };
     case 3: // RangedEnemy (StormElemental)
         return { "Assets/Enemies/Elementals/StormElemental_Bl/StormElemental_Bl.bin",
                  "Assets/Enemies/Elementals/StormElemental_Bl/StormElemental_Bl_Anim.bin",
-                 2.0f, "Idle", "Walk" };
+                 2.0f, "Idle", "Walk",
+                 "Assets/Enemies/Elementals/StormElemental_Bl/Textures/T_StormElemental_Bl_D.png" };
     case 4: // RushAoEEnemy (FireGolem)
         return { "Assets/Enemies/Elementals/FireGolem_Rd/FireGolem_Rd.bin",
                  "Assets/Enemies/Elementals/FireGolem_Rd/FireGolem_Rd_Anim.bin",
-                 2.0f, "Idle", "Walk" };
+                 2.0f, "Idle", "Walk",
+                 "Assets/Enemies/Elementals/FireGolem_Rd/Textures/T_FireGolem_Rd_D.png" };
     case 5: // RushFrontEnemy (EarthElemental)
         return { "Assets/Enemies/Elementals/EarthElemental_Gn/EarthElemental_Gn.bin",
                  "Assets/Enemies/Elementals/EarthElemental_Gn/EarthElemental_Gn_Anim.bin",
-                 2.0f, "Idle", "Walk" };
+                 2.0f, "Idle", "Walk",
+                 "Assets/Enemies/Elementals/EarthElemental_Gn/Textures/T_EarthElemental_Gn_D.png" };
     case 6: // Dragon (Red)
         return { "Assets/Enemies/Dragon/Red.bin",
                  "Assets/Enemies/Dragon/Red_Anim.bin",
-                 3.0f, "Idle01", "Walk" };
+                 3.0f, "Idle01", "Walk", "" };
     case 7: // Kraken
         return { "Assets/Enemies/Kraken/KRAKEN.bin",
                  "Assets/Enemies/Kraken/KRAKEN_Anim.bin",
-                 3.0f, "Idle", "Walk" };
+                 3.0f, "Idle", "Walk", "" };
     case 8: // Golem
         return { "Assets/Enemies/golem/Golem01_Generic_prefab.bin",
                  "Assets/Enemies/golem/Golem01_Generic_prefab_Anim.bin",
-                 8.0f, "Golem_battle_stand_ge", "Golem_battle_walk_ge" };
+                 8.0f, "Golem_battle_stand_ge", "Golem_battle_walk_ge", "" };
     case 9: // Demon
         return { "Assets/Enemies/demon/Demon.bin",
                  "Assets/Enemies/demon/Demon_Anim.bin",
-                 3.5f, "Idle1", "Run" };
+                 3.5f, "Idle1", "Run", "" };
     case 10: // BlueDragon
         return { "Assets/Enemies/Dragon_blue/Blue.bin",
                  "Assets/Enemies/Dragon_blue/Blue_Anim.bin",
-                 3.0f, "Idle01", "Walk" };
+                 3.0f, "Idle01", "Walk", "" };
     case 1: // TestEnemy — 메쉬 없음, 큐브 fallback 생략하고 air 대체
     default:
         return { "Assets/Enemies/Elementals/AirElemental_Bl/AirElemental_Bl.bin",
                  "Assets/Enemies/Elementals/AirElemental_Bl/AirElemental_Bl_Anim.bin",
-                 2.0f, "Idle", "Walk" };
+                 2.0f, "Idle", "Walk",
+                 "Assets/Enemies/Elementals/AirElemental_Bl/Textures/T_AirElemental_Body_Bl_D.png" };
     }
+}
+
+// EnemySpawner::LoadTextureToHierarchy 미러 — 하이러키 순회하며 텍스처+흰 머티리얼 적용.
+// 목적: MATERIAL이 garbage로 초기화되어 diffuse=0 → 메쉬가 까맣게 렌더되어 보이지 않는 문제 해결.
+static void ApplyWhiteMaterialAndTextureToHierarchy(
+    Scene* pScene, ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList,
+    GameObject* pGO, const char* texturePath)
+{
+    if (!pGO || !pScene) return;
+
+    if (pGO->GetMesh())
+    {
+        MATERIAL mat;
+        mat.m_cAmbient  = XMFLOAT4(0.3f, 0.3f, 0.3f, 1.0f);
+        mat.m_cDiffuse  = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
+        mat.m_cSpecular = XMFLOAT4(0.3f, 0.3f, 0.3f, 32.0f);
+        mat.m_cEmissive = XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f);
+        pGO->SetMaterial(mat);
+
+        if (texturePath && texturePath[0] != '\0' && !pGO->HasTexture())
+        {
+            pGO->SetTextureName(texturePath);
+            D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle;
+            D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle;
+            pScene->AllocateDescriptor(&cpuHandle, &gpuHandle);
+            pGO->LoadTexture(pDevice, pCommandList, cpuHandle);
+            pGO->SetSrvGpuDescriptorHandle(gpuHandle);
+
+            wchar_t buf[256];
+            swprintf_s(buf, L"[Network] Applied white material + texture to [%hs] tex=%hs\n",
+                pGO->m_pstrFrameName, texturePath);
+            OutputDebugString(buf);
+        }
+        else
+        {
+            wchar_t buf[256];
+            swprintf_s(buf, L"[Network] Applied white material to [%hs] (no new texture, hasTexture=%d)\n",
+                pGO->m_pstrFrameName, pGO->HasTexture() ? 1 : 0);
+            OutputDebugString(buf);
+        }
+    }
+
+    if (pGO->m_pChild)   ApplyWhiteMaterialAndTextureToHierarchy(pScene, pDevice, pCommandList, pGO->m_pChild, texturePath);
+    if (pGO->m_pSibling) ApplyWhiteMaterialAndTextureToHierarchy(pScene, pDevice, pCommandList, pGO->m_pSibling, texturePath);
 }
 
 void NetworkManager::ProcessMonsterSpawn(Scene* pScene, ID3D12Device* pDevice,
@@ -1028,6 +1080,10 @@ void NetworkManager::ProcessMonsterSpawn(Scene* pScene, ID3D12Device* pDevice,
         pAnim->Play(preset.idleClip, true);
     }
 
+    // 흰 머티리얼 + 텍스처 강제 적용 (MeshLoader가 .bin에서 세팅 안 했을 경우 대비)
+    // → 서버 권위 스폰에서 유일하게 빠져 있던 스텝. EnemySpawner::LoadTextureToHierarchy 미러.
+    ApplyWhiteMaterialAndTextureToHierarchy(pScene, pDevice, pCommandList, pMonster, preset.texturePath);
+
     // 쉐이더 등록 (렌더링)
     Shader* pDefaultShader = pScene->GetDefaultShader();
     if (pDefaultShader)
@@ -1039,10 +1095,21 @@ void NetworkManager::ProcessMonsterSpawn(Scene* pScene, ID3D12Device* pDevice,
     pMonster->Init(pDevice, pCommandList);
 
     m_mapServerMonsters[monsterId] = pMonster;
+    m_mapServerMonsterClips[monsterId] = { preset.idleClip, preset.walkClip };
 
-    wchar_t buf[256];
-    swprintf_s(buf, L"[Network] Spawned NetMonster_%llu type=%u at (%.1f,%.1f,%.1f) boss=%d hp=%.1f\n",
-        monsterId, monsterType, x, y, z, isBoss ? 1 : 0, hp);
+    // 디버그: 실제 배치된 transform과 preset 클립 확인
+    XMFLOAT3 finalPos = pT ? pT->GetPosition() : XMFLOAT3{0,0,0};
+    XMFLOAT3 finalRot = pT ? pT->GetRotation() : XMFLOAT3{0,0,0};
+    XMFLOAT3 finalSca = pT ? pT->GetScale()    : XMFLOAT3{1,1,1};
+    wchar_t buf[512];
+    swprintf_s(buf, L"[Network] Spawned NetMonster_%llu type=%u boss=%d hp=%.1f\n"
+                    L"  pos=(%.2f,%.2f,%.2f) rot=(%.1f,%.1f,%.1f) scale=(%.2f,%.2f,%.2f)\n"
+                    L"  idleClip=%hs walkClip=%hs mesh=%hs\n",
+        monsterId, monsterType, isBoss ? 1 : 0, hp,
+        finalPos.x, finalPos.y, finalPos.z,
+        finalRot.x, finalRot.y, finalRot.z,
+        finalSca.x, finalSca.y, finalSca.z,
+        preset.idleClip, preset.walkClip, preset.meshPath);
     OutputDebugString(buf);
 }
 
@@ -1062,11 +1129,14 @@ void NetworkManager::ProcessMonsterMove(uint64 monsterId, float x, float y, floa
         pT->SetRotation(rot.x, yaw, rot.z);
     }
 
-    // 걷기 애니메이션 부드럽게 전환
+    // 걷기 애니메이션 부드럽게 전환 — preset별 walk 클립 이름 사용
     auto* pAnim = pMonster->GetComponent<AnimationComponent>();
     if (pAnim)
     {
-        pAnim->CrossFade("Walk", 0.1f, true);
+        auto clipIt = m_mapServerMonsterClips.find(monsterId);
+        const char* walkClip = (clipIt != m_mapServerMonsterClips.end())
+            ? clipIt->second.walk.c_str() : "Walk";
+        pAnim->CrossFade(walkClip, 0.1f, true);
     }
 
     m_mapServerMonsterMoveTime[monsterId] = 0.0f;
@@ -1085,8 +1155,10 @@ void NetworkManager::CheckServerMonsterIdle(float deltaTime)
                 auto* pAnim = mIt->second->GetComponent<AnimationComponent>();
                 if (pAnim)
                 {
-                    // 가능한 Idle 클립 후보 순차 시도 (preset별 이름 다름)
-                    pAnim->CrossFade("Idle", 0.2f, true);
+                    auto clipIt = m_mapServerMonsterClips.find(it->first);
+                    const char* idleClip = (clipIt != m_mapServerMonsterClips.end())
+                        ? clipIt->second.idle.c_str() : "Idle";
+                    pAnim->CrossFade(idleClip, 0.2f, true);
                 }
             }
             it = m_mapServerMonsterMoveTime.erase(it);
@@ -1105,6 +1177,7 @@ void NetworkManager::ProcessMonsterDespawn(Scene* pScene, uint64 monsterId)
     pScene->MarkForDeletion(pMonster);
     m_mapServerMonsters.erase(it);
     m_mapServerMonsterMoveTime.erase(monsterId);
+    m_mapServerMonsterClips.erase(monsterId);
 
     wchar_t buf[128];
     swprintf_s(buf, L"[Network] Despawned NetMonster_%llu\n", monsterId);
