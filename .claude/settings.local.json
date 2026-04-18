@@ -29,7 +29,22 @@
       "Bash(awk '/<Frame>:/{getline; getline fname; frame=fname} /<Vertices>:/{getline; if\\($1+0<20\\) print \"Golem Frame \\\\\"\"frame\"\\\\\" vertices: \"$1}' \"C:/Users/khj16/Downloads/gaym/gaym/Assets/Enemies/Golem/Golem01_Generic_prefab.txt\")",
       "Bash(grep -rn \"frame=''\\\\|m_pstrFrameName\\\\[0\\\\] = 0\\\\|m_pstrFrameName\\\\[0\\\\] = '\\\\\\\\\\\\\\\\0'\" \"C:/Users/khj16/Downloads/gaym/gaym/\"*.cpp)",
       "Bash(python *)",
-      "Bash(grep -E \"void set_|clear_|protected|class|public:|{$\")"
+      "Bash(grep -E \"void set_|clear_|protected|class|public:|{$\")",
+      "Bash(grep -E \"\\\\.\\(cpp|h\\)$\")",
+      "Bash(\"C:\\\\Program Files\\\\Microsoft Visual Studio\\\\2022\\\\Community\\\\MSBuild\\\\Current\\\\Bin\\\\amd64\\\\MSBuild.exe\" \"C:\\\\Users\\\\tta12\\\\Documents\\\\저장소\\\\gaym\\\\gaym\\\\gaym.sln\" -p:Configuration=Release -p:Platform=x64 -v:minimal)",
+      "Bash(\"C:\\\\Program Files\\\\Microsoft Visual Studio\\\\2022\\\\Community\\\\MSBuild\\\\Current\\\\Bin\\\\amd64\\\\MSBuild.exe\" gaym/gaym.sln -p:Configuration=Release -p:Platform=x64 -v:minimal)",
+      "Bash(Select-String -Pattern \"succeeded|FAILED|error C\")",
+      "Bash(echo \"exit: $?\")",
+      "Read(//tmp/**)",
+      "Bash(awk NR>=1995 && NR<=2010 *)",
+      "Bash(grep -iv \"speed\\\\|//.*max\")",
+      "Bash(xargs grep *)",
+      "Bash(\"C:\\\\Program Files\\\\Microsoft Visual Studio\\\\2022\\\\Community\\\\MSBuild\\\\Current\\\\Bin\\\\amd64\\\\MSBuild.exe\" \"C:\\\\Users\\\\tta12\\\\Documents/저장소/gaym/gaym/gaym.sln\" -p:Configuration=Release -p:Platform=x64)",
+      "WebSearch",
+      "Bash(git fetch *)",
+      "Bash(git add *)",
+      "Bash(git merge *)",
+      "Bash(git stash *)"
     ]
   }
 }
