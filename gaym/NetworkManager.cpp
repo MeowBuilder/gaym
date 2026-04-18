@@ -329,6 +329,18 @@ void NetworkManager::SendPortalInteract()
     OutputDebugString(L"[Network] C_PORTAL_INTERACT sent\n");
 }
 
+void NetworkManager::SendRoomStart()
+{
+    if (!m_bConnected || !m_pSession)
+        return;
+
+    // C_ROOM_START 바디 empty — 헤더만 송신 (proto 재생성 전 임시 우회)
+    auto sendBuffer = ServerPacketHandler::MakeSendBufferEmpty(PKT_C_ROOM_START);
+    m_pSession->Send(sendBuffer);
+
+    OutputDebugString(L"[Network] C_ROOM_START sent\n");
+}
+
 void NetworkManager::QueueRoomTransition(uint32 stageIndex, uint32 roomIndex, bool isBossRoom)
 {
     std::lock_guard<std::mutex> lock(m_queueMutex);
@@ -1004,7 +1016,8 @@ void NetworkManager::ProcessMonsterSpawn(Scene* pScene, ID3D12Device* pDevice,
     {
         pT->SetPosition(x, y, z);
         pT->SetScale(preset.scale, preset.scale, preset.scale);
-        pT->SetRotation(0.0f, XMConvertToDegrees(yaw), 0.0f);
+        // 서버가 yaw를 도(degree)로 보냄 → 그대로 사용 (이중 변환 버그 제거)
+        pT->SetRotation(0.0f, yaw, 0.0f);
     }
 
     // 애니메이션
@@ -1044,10 +1057,9 @@ void NetworkManager::ProcessMonsterMove(uint64 monsterId, float x, float y, floa
     if (pT)
     {
         pT->SetPosition(x, y, z);
-        // yaw (라디안) → 도 변환 후 Y축 회전만 갱신
-        float yawDeg = XMConvertToDegrees(yaw);
+        // 서버가 yaw를 도(degree)로 보냄 → 그대로 사용
         XMFLOAT3 rot = pT->GetRotation();
-        pT->SetRotation(rot.x, yawDeg, rot.z);
+        pT->SetRotation(rot.x, yaw, rot.z);
     }
 
     // 걷기 애니메이션 부드럽게 전환

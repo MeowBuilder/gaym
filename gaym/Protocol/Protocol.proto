@@ -66,6 +66,10 @@ message C_PORTAL_INTERACT // Ŭ�� -> ���� ��Ż ��ȣ�ۿ� 
 {
 }
 
+message C_ROOM_START // 클라 -> 서버: 현재 방 전투 시작 요청 (상호작용 큐브 F키)
+{
+}
+
 message S_ROOM_TRANSITION // ���� -> Ŭ�� �� ��ȯ �˸�
 {
 	uint32 stageIndex = 1;

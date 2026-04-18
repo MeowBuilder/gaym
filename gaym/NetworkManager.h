@@ -117,6 +117,9 @@ public:
     // 포탈 상호작용 전송 (F키)
     void SendPortalInteract();
 
+    // 방 전투 시작 요청 전송 (상호작용 큐브 F키) — 서버가 몬스터 스폰 트리거
+    void SendRoomStart();
+
     // 로컬 플레이어 ID 설정/조회 (atomic으로 스레드 안전)
     void SetLocalPlayerId(uint64 playerId) { m_nLocalPlayerId.store(playerId); }
     uint64 GetLocalPlayerId() const { return m_nLocalPlayerId.load(); }

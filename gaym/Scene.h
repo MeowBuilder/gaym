@@ -235,51 +235,43 @@ private:
     XMFLOAT3 m_xmf3PendingKrakenPos = {};        // dragon death position
     EnemyComponent* m_pPreloadedKraken = nullptr; // pre-spawned but hidden
 
-    // Kraken emergence cinematic + water-rise mechanic
-    // WaterRise는 컷씬이 아니라 실제 게임플레이 (조작/카메라 반환)
+    // Kraken 컷씬: Rumble→Rise→Burst→Reveal→Roar→Jump→Slam→WaterRise→None
+    //  - Jump: Roar 위치 → 맵 바깥 수면 위로 포물선 점프
+    //  - Slam: 수면 쾅 내려치기 (카메라 쉐이크)
+    //  - WaterRise: 서서히 차오르는 수면이 플레이어를 기존 맵보다 높은 곳으로 띄움
     enum class KrakenCutsceneStage {
         None,
-        Rumble, Rise, Burst, Reveal,       // 등장 시퀀스
-        Roar,                              // Unreal Take 포효
-        MoveToSlam,                        // 맵 바깥(물 바닥 위) 지점으로 이동
-        Slam,                              // 바깥 지점에서 바닥 탕 (카메라 쉐이크)
-        WaterRise                          // 물 + 플레이어 상승 (조작 가능)
+        Rumble, Rise, Burst, Reveal,
+        Roar,
+        Jump,
+        Slam,
+        WaterRise
     };
     KrakenCutsceneStage m_eKrakenStage = KrakenCutsceneStage::None;
     float m_fKrakenEmergeTimer = 0.0f;
-    bool  m_bKrakenEmerging = false;
     bool  m_bSlamShakeTriggered = false;
-    bool  m_bWaterRiseRevealed = false;  // 상부 맵 reveal 1회성
-    XMFLOAT3 m_xmf3KrakenSlamPos = {};   // 슬램 목표 위치 (MoveToSlam 시작 시 계산)
-    XMFLOAT3 m_xmf3KrakenRoarPos = {};   // Roar 종료 시 크라켄 위치 (이동 시작점)
+    XMFLOAT3 m_xmf3KrakenJumpStart = {}; // Roar 종료 시 크라켄 위치 (점프 시작점)
+    XMFLOAT3 m_xmf3KrakenJumpEnd   = {}; // 점프 착지점 (맵 바깥 수면 위 슬램 지점)
     static constexpr float KRAKEN_SCALE = 2.0f;
     // Stage durations (cumulative)
-    static constexpr float KRAKEN_T_RUMBLE       = 0.8f;
-    static constexpr float KRAKEN_T_RISE         = 1.7f;
-    static constexpr float KRAKEN_T_BURST        = 3.0f;
-    static constexpr float KRAKEN_T_REVEAL       = 4.5f;
-    static constexpr float KRAKEN_T_ROAR         = 6.5f;   // Reveal + 2.0s
-    static constexpr float KRAKEN_T_MOVE_TO_SLAM = 9.0f;   // Roar + 2.5s (이동)
-    static constexpr float KRAKEN_T_SLAM         = 10.2f;  // MoveToSlam + 1.2s (임팩트)
-    static constexpr float KRAKEN_T_WATER_RISE   = 20.2f;  // Slam + 10s (긴 상승, 플레이어 조작 중)
-    // 슬램 지점: bossPos 기준 XZ 오프셋 (상부 맵과 반대 방향으로 맵 바깥)
+    static constexpr float KRAKEN_T_RUMBLE     = 0.8f;
+    static constexpr float KRAKEN_T_RISE       = 1.7f;
+    static constexpr float KRAKEN_T_BURST      = 3.0f;
+    static constexpr float KRAKEN_T_REVEAL     = 4.5f;
+    static constexpr float KRAKEN_T_ROAR       = 6.5f;   // Reveal + 2.0s
+    static constexpr float KRAKEN_T_JUMP       = 8.3f;   // Roar + 1.8s (빠른 점프 arc)
+    static constexpr float KRAKEN_T_SLAM       = 9.3f;   // Jump + 1.0s (임팩트)
+    static constexpr float KRAKEN_T_WATER_RISE = 17.3f;  // Slam + 8s (서서히 차오름)
+
+    // 슬램/점프 착지점 (맵 바깥 수면 위)
     static constexpr float KRAKEN_SLAM_OFFSET_X = 0.0f;
     static constexpr float KRAKEN_SLAM_OFFSET_Z = -70.0f;
-    static constexpr float KRAKEN_SLAM_Y        = -1.5f;   // 수면 살짝 아래 (수면 Y=-4 + 몸 높이)
+    static constexpr float KRAKEN_LAND_Y        = -2.0f;   // 수면(-4) 위 몸체 노출 Y
+    static constexpr float KRAKEN_JUMP_PEAK_DY  = 25.0f;   // 점프 최고점 추가 Y
 
-    // 물 상승 기믹 수치
-    static constexpr float KRAKEN_WATER_Y_START  = -4.0f;  // 초기 물 Y (TransitionToWaterBossRoom과 일치)
-    static constexpr float KRAKEN_WATER_Y_TARGET = 22.0f;  // 상승 목표 (상부 플랫폼 Y=25 바로 아래)
-    static constexpr float KRAKEN_UPPER_PLATFORM_Y = 25.0f;
-    // 상부 맵 XZ 오프셋 — 하부와 다른 위치에 배치, 상승 중 플레이어 수평 이동
-    static constexpr float KRAKEN_UPPER_OFFSET_X = 0.0f;
-    static constexpr float KRAKEN_UPPER_OFFSET_Z = 80.0f;
-
-    // 상부 맵 — 하부 맵 복제본 (크라켄 기믹 대상)
-    std::vector<GameObject*> m_vUpperMapObjects;     // 복제된 상부 맵 오브젝트들
-    GameObject* m_pUpperPlatform = nullptr;          // 레거시 참조 (사용 안 함, 컴파일 호환성)
-    XMFLOAT3    m_vPlayerRiseStartXYZ = {};          // 상승 시작 시 플레이어 위치 (XZ 포함)
-    float       m_fPlayerRiseStartY = 0.0f;          // 레거시 — 호환성 유지
+    // 물 상승: 기존 맵 타일(Y=0)보다 훨씬 위로 → "더 높은 곳에서 전투" 연출
+    static constexpr float KRAKEN_WATER_Y_START = -4.0f;
+    static constexpr float KRAKEN_WATER_Y_END   = 15.0f;
 
     // Drop interaction
     DropInteractionState m_eDropState = DropInteractionState::None;
