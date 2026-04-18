@@ -196,6 +196,22 @@ private:
     // 몬스터별 preset 클립 이름 (Idle/Walk 각 모델별로 다름)
     struct ServerMonsterClips { std::string idle; std::string walk; };
     std::unordered_map<uint64, ServerMonsterClips> m_mapServerMonsterClips;
+
+    // 서버 MOVE 패킷 간격이 띄엄띄엄해서 직접 SetPosition하면 순간이동처럼 보임.
+    // 타겟 pos/yaw 저장 → 매 프레임 exponential smoothing으로 접근.
+    struct ServerMonsterTarget
+    {
+        float px = 0.0f, py = 0.0f, pz = 0.0f;
+        float yaw = 0.0f;
+        bool  hasTarget = false;
+    };
+    std::unordered_map<uint64, ServerMonsterTarget> m_mapServerMonsterTarget;
+
+public:
+    // 매 프레임 타겟을 향해 몬스터 transform 보간 (Dx12App 메인 루프에서 호출)
+    void InterpolateServerMonsters(float deltaTime);
+
+private:
     std::unordered_map<uint64, float> m_mapServerMonsterMoveTime;  // idle 전환용
 
     // 원격 플레이어 마지막 이동 시간 (idle 전환용)

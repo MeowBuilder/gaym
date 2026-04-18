@@ -13,6 +13,9 @@
 #include "SkillTypes.h"
 #include "ProjectileManager.h"
 
+// ServerPacketHandler.cpp에 정의된 파일 로그 함수 — network_log.txt에 append
+extern void WriteNetworkLog(const std::string& msg);
+
 // 싱글톤 인스턴스
 NetworkManager* NetworkManager::s_pInstance = nullptr;
 
@@ -320,25 +323,33 @@ void NetworkManager::SendSkill(int skillType, float x, float y, float z, float d
 void NetworkManager::SendPortalInteract()
 {
     if (!m_bConnected || !m_pSession)
+    {
+        WriteNetworkLog("[Network] SendPortalInteract BLOCKED (not connected or no session)");
         return;
+    }
 
     Protocol::C_PORTAL_INTERACT pkt;
     auto sendBuffer = ServerPacketHandler::MakeSendBuffer(pkt);
     m_pSession->Send(sendBuffer);
 
     OutputDebugString(L"[Network] C_PORTAL_INTERACT sent\n");
+    WriteNetworkLog("[Network] C_PORTAL_INTERACT sent");
 }
 
 void NetworkManager::SendTorchInteract()
 {
     if (!m_bConnected || !m_pSession)
+    {
+        WriteNetworkLog("[Network] SendTorchInteract BLOCKED (not connected or no session)");
         return;
+    }
 
     Protocol::C_TORCH_INTERACT pkt;
     auto sendBuffer = ServerPacketHandler::MakeSendBuffer(pkt);
     m_pSession->Send(sendBuffer);
 
     OutputDebugString(L"[Network] C_TORCH_INTERACT sent\n");
+    WriteNetworkLog("[Network] C_TORCH_INTERACT sent");
 }
 
 void NetworkManager::QueueRoomTransition(uint32 stageIndex, uint32 roomIndex, bool isBossRoom)
@@ -929,29 +940,33 @@ static MonsterPreset GetMonsterPresetByType(uint32 monsterType)
     // 서버 MonsterType enum 순서와 일치해야 함:
     // 0 None, 1 TestEnemy, 2 AirElemental, 3 RangedEnemy, 4 RushAoEEnemy, 5 RushFrontEnemy,
     // 6 Dragon, 7 Kraken, 8 Golem, 9 Demon, 10 BlueDragon
-    // 클립 이름은 서버 동기화 이전 상태로 원복 — invisibility 디버깅 중이므로 diff 최소화.
-    // (실제 .bin에 맞지 않을 수 있으나, 그건 별개 문제로 나중에 별도 처리)
+    // 클립 이름은 EnemySpawner.cpp의 elementalAnim / 보스별 config와 반드시 일치
+    //   elementals: idle="idle", chase="Run_Forward"
+    //   Dragon/BlueDragon: idle="Idle01"/"Idle", chase="Walk"
+    //   Kraken: idle="Idle", chase="Walk"
+    //   Golem: idle/chase="Golem_battle_stand_ge"/"Golem_battle_walk_ge"
+    //   Demon: idle="Idle1", chase="Run"
     switch (monsterType)
     {
     case 2: // AirElemental
         return { "Assets/Enemies/Elementals/AirElemental_Bl/AirElemental_Bl.bin",
                  "Assets/Enemies/Elementals/AirElemental_Bl/AirElemental_Bl_Anim.bin",
-                 2.0f, "Idle", "Walk",
+                 2.0f, "idle", "Run_Forward",
                  "Assets/Enemies/Elementals/AirElemental_Bl/Textures/T_AirElemental_Body_Bl_D.png" };
     case 3: // RangedEnemy (StormElemental)
         return { "Assets/Enemies/Elementals/StormElemental_Bl/StormElemental_Bl.bin",
                  "Assets/Enemies/Elementals/StormElemental_Bl/StormElemental_Bl_Anim.bin",
-                 2.0f, "Idle", "Walk",
+                 2.0f, "idle", "Run_Forward",
                  "Assets/Enemies/Elementals/StormElemental_Bl/Textures/T_StormElemental_Bl_D.png" };
     case 4: // RushAoEEnemy (FireGolem)
         return { "Assets/Enemies/Elementals/FireGolem_Rd/FireGolem_Rd.bin",
                  "Assets/Enemies/Elementals/FireGolem_Rd/FireGolem_Rd_Anim.bin",
-                 2.0f, "Idle", "Walk",
+                 2.0f, "idle", "Run_Forward",
                  "Assets/Enemies/Elementals/FireGolem_Rd/Textures/T_FireGolem_Rd_D.png" };
     case 5: // RushFrontEnemy (EarthElemental)
         return { "Assets/Enemies/Elementals/EarthElemental_Gn/EarthElemental_Gn.bin",
                  "Assets/Enemies/Elementals/EarthElemental_Gn/EarthElemental_Gn_Anim.bin",
-                 2.0f, "Idle", "Walk",
+                 2.0f, "idle", "Run_Forward",
                  "Assets/Enemies/Elementals/EarthElemental_Gn/Textures/T_EarthElemental_Gn_D.png" };
     case 6: // Dragon (Red)
         return { "Assets/Enemies/Dragon/Red.bin",
@@ -969,15 +984,15 @@ static MonsterPreset GetMonsterPresetByType(uint32 monsterType)
         return { "Assets/Enemies/demon/Demon.bin",
                  "Assets/Enemies/demon/Demon_Anim.bin",
                  3.5f, "Idle1", "Run", "" };
-    case 10: // BlueDragon
+    case 10: // BlueDragon (EnemySpawner: idle="Idle", chase="Walk")
         return { "Assets/Enemies/Dragon_blue/Blue.bin",
                  "Assets/Enemies/Dragon_blue/Blue_Anim.bin",
-                 3.0f, "Idle01", "Walk", "" };
+                 3.0f, "Idle", "Walk", "" };
     case 1: // TestEnemy — 메쉬 없음, 큐브 fallback 생략하고 air 대체
     default:
         return { "Assets/Enemies/Elementals/AirElemental_Bl/AirElemental_Bl.bin",
                  "Assets/Enemies/Elementals/AirElemental_Bl/AirElemental_Bl_Anim.bin",
-                 2.0f, "Idle", "Walk",
+                 2.0f, "idle", "Run_Forward",
                  "Assets/Enemies/Elementals/AirElemental_Bl/Textures/T_AirElemental_Body_Bl_D.png" };
     }
 }
@@ -1008,17 +1023,27 @@ static void ApplyWhiteMaterialAndTextureToHierarchy(
             pGO->LoadTexture(pDevice, pCommandList, cpuHandle);
             pGO->SetSrvGpuDescriptorHandle(gpuHandle);
 
-            wchar_t buf[256];
-            swprintf_s(buf, L"[Network] Applied white material + texture to [%hs] tex=%hs\n",
+            wchar_t wbuf[256];
+            swprintf_s(wbuf, L"[Network] Applied white material + texture to [%hs] tex=%hs\n",
                 pGO->m_pstrFrameName, texturePath);
-            OutputDebugString(buf);
+            OutputDebugString(wbuf);
+
+            char abuf[256];
+            sprintf_s(abuf, "[Network] Applied white material + texture to [%s] tex=%s",
+                pGO->m_pstrFrameName, texturePath);
+            WriteNetworkLog(abuf);
         }
         else
         {
-            wchar_t buf[256];
-            swprintf_s(buf, L"[Network] Applied white material to [%hs] (no new texture, hasTexture=%d)\n",
+            wchar_t wbuf[256];
+            swprintf_s(wbuf, L"[Network] Applied white material to [%hs] (no new texture, hasTexture=%d)\n",
                 pGO->m_pstrFrameName, pGO->HasTexture() ? 1 : 0);
-            OutputDebugString(buf);
+            OutputDebugString(wbuf);
+
+            char abuf[256];
+            sprintf_s(abuf, "[Network] Applied white material to [%s] (no new texture, hasTexture=%d)",
+                pGO->m_pstrFrameName, pGO->HasTexture() ? 1 : 0);
+            WriteNetworkLog(abuf);
         }
     }
 
@@ -1097,20 +1122,36 @@ void NetworkManager::ProcessMonsterSpawn(Scene* pScene, ID3D12Device* pDevice,
     m_mapServerMonsters[monsterId] = pMonster;
     m_mapServerMonsterClips[monsterId] = { preset.idleClip, preset.walkClip };
 
-    // 디버그: 실제 배치된 transform과 preset 클립 확인
+    // 보간 타겟 초기값 = 스폰 위치 (첫 MOVE 전까진 제자리)
+    ServerMonsterTarget initTgt;
+    initTgt.px = x; initTgt.py = y; initTgt.pz = z;
+    initTgt.yaw = yaw;
+    initTgt.hasTarget = true;
+    m_mapServerMonsterTarget[monsterId] = initTgt;
+
+    // 디버그: 실제 배치된 transform과 preset 클립 확인 (VS Output + file 둘 다)
     XMFLOAT3 finalPos = pT ? pT->GetPosition() : XMFLOAT3{0,0,0};
     XMFLOAT3 finalRot = pT ? pT->GetRotation() : XMFLOAT3{0,0,0};
     XMFLOAT3 finalSca = pT ? pT->GetScale()    : XMFLOAT3{1,1,1};
-    wchar_t buf[512];
-    swprintf_s(buf, L"[Network] Spawned NetMonster_%llu type=%u boss=%d hp=%.1f\n"
-                    L"  pos=(%.2f,%.2f,%.2f) rot=(%.1f,%.1f,%.1f) scale=(%.2f,%.2f,%.2f)\n"
-                    L"  idleClip=%hs walkClip=%hs mesh=%hs\n",
+    wchar_t wbuf[512];
+    swprintf_s(wbuf, L"[Network] Spawned NetMonster_%llu type=%u boss=%d hp=%.1f\n"
+                     L"  pos=(%.2f,%.2f,%.2f) rot=(%.1f,%.1f,%.1f) scale=(%.2f,%.2f,%.2f)\n"
+                     L"  idleClip=%hs walkClip=%hs mesh=%hs\n",
         monsterId, monsterType, isBoss ? 1 : 0, hp,
         finalPos.x, finalPos.y, finalPos.z,
         finalRot.x, finalRot.y, finalRot.z,
         finalSca.x, finalSca.y, finalSca.z,
         preset.idleClip, preset.walkClip, preset.meshPath);
-    OutputDebugString(buf);
+    OutputDebugString(wbuf);
+
+    char abuf[512];
+    sprintf_s(abuf, "[Network] Spawned NetMonster_%llu type=%u boss=%d hp=%.1f | pos=(%.2f,%.2f,%.2f) rot=(%.1f,%.1f,%.1f) scale=(%.2f,%.2f,%.2f) | idleClip=%s walkClip=%s mesh=%s",
+        monsterId, monsterType, isBoss ? 1 : 0, hp,
+        finalPos.x, finalPos.y, finalPos.z,
+        finalRot.x, finalRot.y, finalRot.z,
+        finalSca.x, finalSca.y, finalSca.z,
+        preset.idleClip, preset.walkClip, preset.meshPath);
+    WriteNetworkLog(abuf);
 }
 
 void NetworkManager::ProcessMonsterMove(uint64 monsterId, float x, float y, float z, float yaw)
@@ -1120,13 +1161,22 @@ void NetworkManager::ProcessMonsterMove(uint64 monsterId, float x, float y, floa
         return;
 
     GameObject* pMonster = it->second;
-    TransformComponent* pT = pMonster->GetTransform();
-    if (pT)
+
+    // 직접 SetPosition하지 않고 타겟만 갱신. InterpolateServerMonsters에서 부드럽게 접근.
+    ServerMonsterTarget& tgt = m_mapServerMonsterTarget[monsterId];
+    tgt.px = x; tgt.py = y; tgt.pz = z;
+    tgt.yaw = yaw;
+    if (!tgt.hasTarget)
     {
-        pT->SetPosition(x, y, z);
-        // 서버가 yaw를 도(degree)로 보냄 → 그대로 사용
-        XMFLOAT3 rot = pT->GetRotation();
-        pT->SetRotation(rot.x, yaw, rot.z);
+        // 첫 패킷은 즉시 스냅 (스폰 직후 0,0,0에서 시작하지 않게)
+        TransformComponent* pT = pMonster->GetTransform();
+        if (pT)
+        {
+            pT->SetPosition(x, y, z);
+            XMFLOAT3 rot = pT->GetRotation();
+            pT->SetRotation(rot.x, yaw, rot.z);
+        }
+        tgt.hasTarget = true;
     }
 
     // 걷기 애니메이션 부드럽게 전환 — preset별 walk 클립 이름 사용
@@ -1178,8 +1228,49 @@ void NetworkManager::ProcessMonsterDespawn(Scene* pScene, uint64 monsterId)
     m_mapServerMonsters.erase(it);
     m_mapServerMonsterMoveTime.erase(monsterId);
     m_mapServerMonsterClips.erase(monsterId);
+    m_mapServerMonsterTarget.erase(monsterId);
 
     wchar_t buf[128];
     swprintf_s(buf, L"[Network] Despawned NetMonster_%llu\n", monsterId);
     OutputDebugString(buf);
+}
+
+void NetworkManager::InterpolateServerMonsters(float deltaTime)
+{
+    // 각 몬스터의 현재 transform을 타겟을 향해 exponential smoothing.
+    // 서버 MOVE 패킷이 띄엄띄엄 와도 움직임은 부드럽게 이어짐.
+    constexpr float POS_SMOOTH_RATE = 12.0f;  // 높을수록 빨리 따라감 (클 수록 덜 부드러움)
+    constexpr float YAW_SMOOTH_RATE = 10.0f;
+
+    const float posAlpha = 1.0f - expf(-POS_SMOOTH_RATE * deltaTime);
+    const float yawAlpha = 1.0f - expf(-YAW_SMOOTH_RATE * deltaTime);
+
+    for (auto& kv : m_mapServerMonsterTarget)
+    {
+        uint64 monsterId = kv.first;
+        const ServerMonsterTarget& tgt = kv.second;
+        if (!tgt.hasTarget) continue;
+
+        auto mIt = m_mapServerMonsters.find(monsterId);
+        if (mIt == m_mapServerMonsters.end()) continue;
+
+        TransformComponent* pT = mIt->second->GetTransform();
+        if (!pT) continue;
+
+        // 위치 보간
+        XMFLOAT3 cur = pT->GetPosition();
+        XMFLOAT3 next;
+        next.x = cur.x + (tgt.px - cur.x) * posAlpha;
+        next.y = cur.y + (tgt.py - cur.y) * posAlpha;
+        next.z = cur.z + (tgt.pz - cur.z) * posAlpha;
+        pT->SetPosition(next);
+
+        // yaw 보간 — 360 경계 넘어갈 때 최단 경로 선택
+        XMFLOAT3 rot = pT->GetRotation();
+        float delta = tgt.yaw - rot.y;
+        while (delta >  180.0f) delta -= 360.0f;
+        while (delta < -180.0f) delta += 360.0f;
+        float nextYaw = rot.y + delta * yawAlpha;
+        pT->SetRotation(rot.x, nextYaw, rot.z);
+    }
 }

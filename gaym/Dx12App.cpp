@@ -1246,6 +1246,9 @@ void Dx12App::UpdateNetwork(float deltaTime)
     // 서버 몬스터 idle 전환 체크
     m_pNetworkManager->CheckServerMonsterIdle(deltaTime);
 
+    // 서버 몬스터 위치/회전 보간 (MOVE 패킷 간격 사이 부드럽게 이동)
+    m_pNetworkManager->InterpolateServerMonsters(deltaTime);
+
     // 이동 패킷 전송 간격 체크
     m_fNetworkSendTimer += deltaTime;
     if (m_fNetworkSendTimer < m_fNetworkSendInterval)

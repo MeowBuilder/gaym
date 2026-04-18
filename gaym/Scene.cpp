@@ -30,6 +30,9 @@
 #include "WICTextureLoader12.h"
 #include "D3dx12.h"
 
+// ServerPacketHandler.cpp에 정의된 파일 로그 함수 (network_log.txt append)
+extern void WriteNetworkLog(const std::string& msg);
+
 Scene::Scene()
 {
     m_pCamera = std::make_unique<CCamera>();
@@ -278,20 +281,31 @@ void Scene::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList)
         pInteractable->SetPromptText(L"[F] Interact");
         pInteractable->SetInteractionDistance(m_fInteractionDistance);
         pInteractable->SetOnInteract([this](InteractableComponent* pComp) {
-            if (!m_pCurrentRoom || m_pCurrentRoom->GetState() != RoomState::Inactive)
+            WriteNetworkLog("[Scene] InteractionCube OnInteract fired");
+
+            if (!m_pCurrentRoom)
+            {
+                WriteNetworkLog("[Scene] OnInteract aborted: no current room");
                 return;
+            }
+            if (m_pCurrentRoom->GetState() != RoomState::Inactive)
+            {
+                WriteNetworkLog("[Scene] OnInteract aborted: room already active/cleared");
+                return;
+            }
 
             NetworkManager* pNet = NetworkManager::GetInstance();
-            if (pNet && pNet->IsConnected())
+            bool bOnline = (pNet && pNet->IsConnected());
+            WriteNetworkLog(bOnline ? "[Scene] OnInteract path: ONLINE → SendTorchInteract"
+                                    : "[Scene] OnInteract path: OFFLINE → local SetState(Active)");
+
+            if (bOnline)
             {
-                // 온라인: 서버에 전투 시작 요청만 송신, 로컬 상태 변경은 서버 응답(S_MONSTER_SPAWN)에서
-                // Hide는 중복 전송 방지 차원 (서버 응답 실패 시에도 재전송 방지 — 재진입 시 UI는 재생성됨)
                 pNet->SendTorchInteract();
                 OutputDebugString(L"[Scene] Torch interact requested to server\n");
             }
             else
             {
-                // 오프라인: 로컬 전투 시작
                 m_pCurrentRoom->SetState(RoomState::Active);
                 OutputDebugString(L"[Scene] Room activated locally (offline)\n");
             }
