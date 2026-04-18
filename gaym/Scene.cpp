@@ -1731,20 +1731,18 @@ void Scene::SelectRune(int choice)
         return;
     }
 
-    // Get the selected rune type
-    ActivationType selectedRune = pDropComp->GetRuneOption(choice);
+    // Get the selected rune
+    EquippedRune selectedRune = pDropComp->GetRuneOption(choice);
 
-    // Apply to player's skill component
-    if (m_pPlayerGameObject)
+    // Apply to player's skill component (slot Q, runeIndex 0 — legacy path)
+    if (m_pPlayerGameObject && !selectedRune.IsEmpty())
     {
         SkillComponent* pSkill = m_pPlayerGameObject->GetComponent<SkillComponent>();
         if (pSkill)
         {
-            pSkill->SetActivationType(selectedRune);
-
-            const wchar_t* typeNames[] = { L"Instant", L"Charge", L"Channel", L"Place", L"Enhance" };
+            pSkill->SetRuneSlot(SkillSlot::Q, 0, selectedRune.runeId, selectedRune.stackCount);
             wchar_t buffer[128];
-            swprintf_s(buffer, L"[Scene] Rune selected: %s\n", typeNames[static_cast<int>(selectedRune)]);
+            swprintf_s(buffer, L"[Scene] Rune selected (legacy): %hs\n", selectedRune.runeId.c_str());
             OutputDebugString(buffer);
         }
     }
@@ -1768,7 +1766,7 @@ void Scene::CancelDropInteraction()
 {
     m_eDropState = DropInteractionState::None;
     m_pCurrentDropItem = nullptr;
-    m_eSelectedRune = ActivationType::None;
+    m_sSelectedRuneId.clear();
     OutputDebugString(L"[Scene] Drop interaction cancelled\n");
 }
 
@@ -1793,13 +1791,13 @@ void Scene::SelectRuneByClick(int runeIndex)
         return;
     }
 
-    // Store selected rune and move to skill selection state
-    m_eSelectedRune = pDropComp->GetRuneOption(runeIndex);
+    // Store selected rune ID and move to skill selection state
+    EquippedRune selected = pDropComp->GetRuneOption(runeIndex);
+    m_sSelectedRuneId = selected.runeId;
     m_eDropState = DropInteractionState::SelectingSkill;
 
-    const wchar_t* typeNames[] = { L"None", L"Instant", L"Charge", L"Channel", L"Place", L"Enhance", L"Split" };
     wchar_t buffer[128];
-    swprintf_s(buffer, L"[Scene] Rune clicked: %s - Now select skill slot\n", typeNames[static_cast<int>(m_eSelectedRune)]);
+    swprintf_s(buffer, L"[Scene] Rune clicked: %hs - Now select skill slot\n", m_sSelectedRuneId.c_str());
     OutputDebugString(buffer);
 }
 
@@ -1808,7 +1806,7 @@ void Scene::SelectSkillSlot(SkillSlot slot, int runeSlotIndex)
     if (m_eDropState != DropInteractionState::SelectingSkill)
         return;
 
-    if (m_eSelectedRune == ActivationType::None)
+    if (m_sSelectedRuneId.empty())
     {
         CancelDropInteraction();
         return;
@@ -1820,16 +1818,12 @@ void Scene::SelectSkillSlot(SkillSlot slot, int runeSlotIndex)
         SkillComponent* pSkill = m_pPlayerGameObject->GetComponent<SkillComponent>();
         if (pSkill)
         {
-            pSkill->SetRuneSlot(slot, runeSlotIndex, m_eSelectedRune);
-
-            // Also update legacy activation type to the first skill's first rune
-            pSkill->SetActivationType(pSkill->GetSkillActivationType(SkillSlot::Q));
+            pSkill->SetRuneSlot(slot, runeSlotIndex, m_sSelectedRuneId);
 
             const wchar_t* slotNames[] = { L"Q", L"E", L"R", L"RMB" };
-            const wchar_t* typeNames[] = { L"None", L"Instant", L"Charge", L"Channel", L"Place", L"Enhance", L"Split" };
             wchar_t buffer[128];
-            swprintf_s(buffer, L"[Scene] Rune %s assigned to %s slot %d\n",
-                typeNames[static_cast<int>(m_eSelectedRune)], slotNames[static_cast<int>(slot)], runeSlotIndex + 1);
+            swprintf_s(buffer, L"[Scene] Rune %hs assigned to %s slot %d\n",
+                m_sSelectedRuneId.c_str(), slotNames[static_cast<int>(slot)], runeSlotIndex + 1);
             OutputDebugString(buffer);
         }
     }
@@ -1851,7 +1845,7 @@ void Scene::SelectSkillSlot(SkillSlot slot, int runeSlotIndex)
 
     // Reset state
     m_pCurrentDropItem = nullptr;
-    m_eSelectedRune = ActivationType::None;
+    m_sSelectedRuneId.clear();
     m_eDropState = DropInteractionState::None;
 }
 

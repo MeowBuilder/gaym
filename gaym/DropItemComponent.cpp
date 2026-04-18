@@ -1,8 +1,10 @@
 #include "stdafx.h"
 #include "DropItemComponent.h"
+#include "RuneRegistry.h"
 #include "GameObject.h"
 #include "TransformComponent.h"
 #include <random>
+#include <algorithm>
 
 DropItemComponent::DropItemComponent(GameObject* pOwner)
     : Component(pOwner)
@@ -50,39 +52,57 @@ void DropItemComponent::Update(float deltaTime)
 
 void DropItemComponent::GenerateRandomRunes()
 {
-    // Random number generator
     static std::random_device rd;
     static std::mt19937 gen(rd());
-    std::uniform_int_distribution<int> dist(0, static_cast<int>(ActivationType::Count) - 1);
 
-    // Generate 3 unique runes
-    std::vector<ActivationType> available;
-    for (int i = 0; i < static_cast<int>(ActivationType::Count); ++i)
+    // Grade weights: Normal 50%, Rare 30%, Epic 15%, Unique 4%, Legendary 1%
+    static const std::pair<RuneGrade, int> gradeWeights[] = {
+        { RuneGrade::Normal,    50 },
+        { RuneGrade::Rare,      30 },
+        { RuneGrade::Epic,      15 },
+        { RuneGrade::Unique,     4 },
+        { RuneGrade::Legendary,  1 },
+    };
+
+    auto pickGrade = [&]() -> RuneGrade {
+        std::uniform_int_distribution<int> d(1, 100);
+        int roll = d(gen);
+        int accum = 0;
+        for (auto& [grade, w] : gradeWeights) {
+            accum += w;
+            if (roll <= accum) return grade;
+        }
+        return RuneGrade::Normal;
+    };
+
+    const RuneRegistry& reg = RuneRegistry::Get();
+
+    // Pick 3 distinct rune IDs
+    std::vector<std::string> picked;
+    for (int attempt = 0; attempt < 30 && static_cast<int>(picked.size()) < 3; ++attempt)
     {
-        available.push_back(static_cast<ActivationType>(i));
-    }
+        RuneGrade grade = pickGrade();
+        auto ids = reg.GetIdsByGrade(grade);
+        if (ids.empty()) continue;
 
-    // Shuffle and pick first 3
-    std::shuffle(available.begin(), available.end(), gen);
+        std::uniform_int_distribution<int> d(0, static_cast<int>(ids.size()) - 1);
+        std::string id = ids[d(gen)];
+        if (std::find(picked.begin(), picked.end(), id) == picked.end())
+            picked.push_back(id);
+    }
+    while (static_cast<int>(picked.size()) < 3) picked.push_back("X01"); // fallback
 
     for (int i = 0; i < 3; ++i)
-    {
-        m_RuneOptions[i] = available[i];
-    }
+        m_RuneOptions[i] = { picked[i], 1 };
 
-    // Debug output
-    const wchar_t* typeNames[] = { L"Instant", L"Charge", L"Channel", L"Place", L"Enhance" };
     wchar_t buffer[256];
-    swprintf_s(buffer, L"[Drop] Generated runes: [1] %s, [2] %s, [3] %s\n",
-        typeNames[static_cast<int>(m_RuneOptions[0])],
-        typeNames[static_cast<int>(m_RuneOptions[1])],
-        typeNames[static_cast<int>(m_RuneOptions[2])]);
+    swprintf_s(buffer, L"[Drop] Generated runes: [1] %hs, [2] %hs, [3] %hs\n",
+        picked[0].c_str(), picked[1].c_str(), picked[2].c_str());
     OutputDebugString(buffer);
 }
 
-ActivationType DropItemComponent::GetRuneOption(int index) const
+EquippedRune DropItemComponent::GetRuneOption(int index) const
 {
-    if (index < 0 || index >= 3)
-        return ActivationType::Instant;
+    if (index < 0 || index >= 3) return {};
     return m_RuneOptions[index];
 }

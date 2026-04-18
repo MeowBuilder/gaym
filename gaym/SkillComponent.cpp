@@ -8,6 +8,7 @@
 #include "TransformComponent.h"
 #include "Dx12App.h" // For runtime window size
 #include "NetworkManager.h" // For skill sync
+#include "RuneRegistry.h"
 
 SkillComponent::SkillComponent(GameObject* pOwner)
     : Component(pOwner)
@@ -20,11 +21,7 @@ SkillComponent::SkillComponent(GameObject* pOwner)
     // Initialize all skill states to Ready
     m_SkillStates.fill(SkillState::Ready);
 
-    // Initialize all rune slots to None (empty)
-    for (auto& skillRunes : m_SkillRunes)
-    {
-        skillRunes.fill(ActivationType::None);
-    }
+    // m_SkillRunes is value-initialized; EquippedRune default ctor sets runeId="" (empty)
 }
 
 SkillComponent::~SkillComponent()
@@ -447,34 +444,37 @@ void SkillComponent::SetActivationType(ActivationType type)
     }
 }
 
-void SkillComponent::SetRuneSlot(SkillSlot skill, int runeIndex, ActivationType type)
+void SkillComponent::SetRuneSlot(SkillSlot skill, int runeIndex,
+                                   const std::string& runeId, int stackCount)
 {
     size_t skillIdx = static_cast<size_t>(skill);
     if (skillIdx >= static_cast<size_t>(SkillSlot::Count) || runeIndex < 0 || runeIndex >= RUNES_PER_SKILL)
         return;
 
-    m_SkillRunes[skillIdx][runeIndex] = type;
+    m_SkillRunes[skillIdx][runeIndex] = { runeId, stackCount };
 
     const wchar_t* slotNames[] = { L"Q", L"E", L"R", L"RMB" };
-    const wchar_t* typeNames[] = { L"None", L"Instant", L"Charge", L"Channel", L"Place", L"Enhance", L"Split" };
     wchar_t buffer[128];
+    std::wstring wid(runeId.begin(), runeId.end());
     swprintf_s(buffer, 128, L"[Skill] Rune set: %s slot %d = %s\n",
-        slotNames[skillIdx], runeIndex + 1, typeNames[static_cast<int>(type)]);
+        slotNames[skillIdx], runeIndex + 1, wid.c_str());
     OutputDebugString(buffer);
 }
 
-ActivationType SkillComponent::GetRuneSlot(SkillSlot skill, int runeIndex) const
+EquippedRune SkillComponent::GetRuneSlot(SkillSlot skill, int runeIndex) const
 {
     size_t skillIdx = static_cast<size_t>(skill);
     if (skillIdx >= static_cast<size_t>(SkillSlot::Count) || runeIndex < 0 || runeIndex >= RUNES_PER_SKILL)
-        return ActivationType::None;
-
+        return {};
     return m_SkillRunes[skillIdx][runeIndex];
 }
 
 void SkillComponent::ClearRuneSlot(SkillSlot skill, int runeIndex)
 {
-    SetRuneSlot(skill, runeIndex, ActivationType::None);
+    size_t skillIdx = static_cast<size_t>(skill);
+    if (skillIdx >= static_cast<size_t>(SkillSlot::Count) || runeIndex < 0 || runeIndex >= RUNES_PER_SKILL)
+        return;
+    m_SkillRunes[skillIdx][runeIndex] = {};
 }
 
 int SkillComponent::GetEquippedRuneCount(SkillSlot skill) const
@@ -485,49 +485,53 @@ int SkillComponent::GetEquippedRuneCount(SkillSlot skill) const
 
     int count = 0;
     for (int i = 0; i < RUNES_PER_SKILL; ++i)
-    {
-        if (m_SkillRunes[skillIdx][i] != ActivationType::None)
-            ++count;
-    }
+        if (!m_SkillRunes[skillIdx][i].IsEmpty()) ++count;
     return count;
+}
+
+SkillStats SkillComponent::BuildSkillStats(SkillSlot skill, ActivationType defaultType) const
+{
+    SkillStats stats;
+    stats.activationType = defaultType;
+
+    size_t skillIdx = static_cast<size_t>(skill);
+    if (skillIdx >= static_cast<size_t>(SkillSlot::Count))
+        return stats;
+
+    const RuneRegistry& reg = RuneRegistry::Get();
+    for (int i = 0; i < RUNES_PER_SKILL; ++i)
+    {
+        const EquippedRune& er = m_SkillRunes[skillIdx][i];
+        if (er.IsEmpty()) continue;
+        const RuneDef* def = reg.Find(er.runeId);
+        if (def) def->ApplyTo(stats, er.stackCount);
+    }
+    return stats;
 }
 
 ActivationType SkillComponent::GetSkillActivationType(SkillSlot skill) const
 {
-    RuneCombo combo = GetRuneCombo(skill);
-
-    // Priority: Charge > Channel > Place > Enhance > Split > Instant
-    if (combo.hasCharge)   return ActivationType::Charge;
-    if (combo.hasChannel)  return ActivationType::Channel;
-    if (combo.hasPlace)    return ActivationType::Place;
-    if (combo.hasEnhance)  return ActivationType::Enhance;
-    if (combo.hasSplit)    return ActivationType::Split;
-    return ActivationType::Instant;
+    ActivationType defaultType = ActivationType::Instant;
+    size_t idx = static_cast<size_t>(skill);
+    if (idx < m_Skills.size() && m_Skills[idx])
+        defaultType = m_Skills[idx]->GetSkillData().activationType;
+    return BuildSkillStats(skill, defaultType).activationType;
 }
 
 RuneCombo SkillComponent::GetRuneCombo(SkillSlot skill) const
 {
-    RuneCombo combo;
-    size_t skillIdx = static_cast<size_t>(skill);
-    if (skillIdx >= static_cast<size_t>(SkillSlot::Count))
-        return combo;
+    ActivationType defaultType = ActivationType::Instant;
+    size_t idx = static_cast<size_t>(skill);
+    if (idx < m_Skills.size() && m_Skills[idx])
+        defaultType = m_Skills[idx]->GetSkillData().activationType;
+    SkillStats stats = BuildSkillStats(skill, defaultType);
+    // dummy — keep old count field populated
+    RuneCombo combo = stats.ToRuneCombo();
+    combo.count = GetEquippedRuneCount(skill);
 
-    for (int i = 0; i < RUNES_PER_SKILL; ++i)
-    {
-        ActivationType type = m_SkillRunes[skillIdx][i];
-        if (type == ActivationType::None) continue;
+    // legacy split flag: also set when extraProjectiles > 0
+    if (stats.extraProjectiles > 0) combo.hasSplit = true;
 
-        switch (type)
-        {
-        case ActivationType::Instant:  combo.hasInstant = true; break;
-        case ActivationType::Charge:   combo.hasCharge = true; break;
-        case ActivationType::Channel:  combo.hasChannel = true; break;
-        case ActivationType::Place:    combo.hasPlace = true; break;
-        case ActivationType::Enhance:  combo.hasEnhance = true; break;
-        case ActivationType::Split:    combo.hasSplit = true; break;
-        }
-        ++combo.count;
-    }
     return combo;
 }
 

@@ -2,6 +2,7 @@
 
 #include "Component.h"
 #include "SkillTypes.h"
+#include "RuneDef.h"
 #include <memory>
 #include <array>
 
@@ -48,15 +49,20 @@ public:
     ActivationType GetActivationType() const { return m_CurrentActivationType; }
 
     // Per-skill rune slot management
-    void SetRuneSlot(SkillSlot skill, int runeIndex, ActivationType type);
-    ActivationType GetRuneSlot(SkillSlot skill, int runeIndex) const;
-    void ClearRuneSlot(SkillSlot skill, int runeIndex);
-    int GetEquippedRuneCount(SkillSlot skill) const;
+    void         SetRuneSlot(SkillSlot skill, int runeIndex, const std::string& runeId, int stackCount = 1);
+    EquippedRune GetRuneSlot(SkillSlot skill, int runeIndex) const;
+    void         ClearRuneSlot(SkillSlot skill, int runeIndex);
+    int          GetEquippedRuneCount(SkillSlot skill) const;
+
+    // Build accumulated SkillStats from all runes equipped on a slot.
+    // defaultType: the skill's own ActivationType used as fallback if no rune overrides it.
+    SkillStats BuildSkillStats(SkillSlot skill,
+                               ActivationType defaultType = ActivationType::Instant) const;
 
     // Get combined activation type for a skill (based on equipped runes)
     ActivationType GetSkillActivationType(SkillSlot skill) const;
 
-    // Get rune combo flags for a skill (all equipped rune types)
+    // Legacy: get rune combo flags (delegates to BuildSkillStats internally)
     RuneCombo GetRuneCombo(SkillSlot skill) const;
 
     // Block rune input (e.g., during drop rune selection)
@@ -104,9 +110,9 @@ private:
     // Current activation type (set by rune) - legacy, for backwards compatibility
     ActivationType m_CurrentActivationType = ActivationType::Instant;
 
-    // Per-skill rune slots: [skill][runeSlot] = ActivationType
-    // None = empty slot
-    std::array<std::array<ActivationType, RUNES_PER_SKILL>, static_cast<size_t>(SkillSlot::Count)> m_SkillRunes;
+    // Per-skill rune slots: [skill][runeSlot] = EquippedRune
+    // Empty runeId = empty slot
+    std::array<std::array<EquippedRune, RUNES_PER_SKILL>, static_cast<size_t>(SkillSlot::Count)> m_SkillRunes;
 
     // Charge system
     bool m_bIsCharging = false;
