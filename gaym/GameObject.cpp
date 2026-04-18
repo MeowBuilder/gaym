@@ -46,7 +46,7 @@ void GameObject::Update(float deltaTime)
         XMMATRIX worldMatrix = XMLoadFloat4x4(&m_pTransform->GetWorldMatrix());
         XMStoreFloat4x4(&m_pcbMappedGameObject->m_xmf4x4World, XMMatrixTranspose(worldMatrix));
         m_pcbMappedGameObject->m_nMaterialIndex = m_nMaterialIndex;
-        m_pcbMappedGameObject->mMaterial = m_Material; // Copy the new material struct
+        m_pcbMappedGameObject->mMaterial = m_Material;
         m_pcbMappedGameObject->m_bHasTexture = (HasTexture() && !s_bDebugNoTexture) ? 1 : 0;
     }
 

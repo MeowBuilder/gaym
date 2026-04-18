@@ -33,7 +33,10 @@ enum class NetworkCommand
     Move,
     Skill,
     SetLocalPlayerId,
-    RoomTransition
+    RoomTransition,
+    MonsterSpawn,
+    MonsterMove,
+    MonsterDespawn
 };
 
 // 네트워크 명령 구조체
@@ -51,6 +54,13 @@ struct NetworkCommandData
     uint32 stageIndex;
     uint32 roomIndex;
     bool isBossRoom;
+
+    // Monster fields
+    uint64 monsterId;
+    uint32 monsterType;
+    float monsterYaw;
+    float monsterHp;
+    bool monsterIsBoss;
 };
 
 // =============================================================================
@@ -123,6 +133,17 @@ public:
     void QueueSetLocalPlayerId(uint64 playerId);
     void QueueRoomTransition(uint32 stageIndex, uint32 roomIndex, bool isBossRoom);
 
+    // 몬스터 큐잉 (네트워크 스레드에서 호출 → 메인 스레드에서 처리)
+    void QueueMonsterSpawn(uint64 monsterId, uint32 monsterType,
+                           float x, float y, float z, float yaw,
+                           float hp, bool isBoss);
+    void QueueMonsterMove(uint64 monsterId, float x, float y, float z, float yaw);
+    void QueueMonsterDespawn(uint64 monsterId);
+
+    // 서버 몬스터 조회
+    GameObject* GetServerMonster(uint64 monsterId);
+    bool HasServerMonsters() const { return !m_mapServerMonsters.empty(); }
+
     // 원격 플레이어 조회
     GameObject* GetRemotePlayer(uint64 playerId);
 
@@ -158,6 +179,18 @@ private:
     void ProcessSkill(Scene* pScene, uint64 playerId, int skillType, float x, float y, float z, float dirX, float dirY, float dirZ);
     void ProcessRoomTransition(Scene* pScene, uint32 stageIndex, uint32 roomIndex, bool isBossRoom);
 
+    // 몬스터 처리 (메인 스레드)
+    void ProcessMonsterSpawn(Scene* pScene, ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList,
+                             uint64 monsterId, uint32 monsterType,
+                             float x, float y, float z, float yaw,
+                             float hp, bool isBoss);
+    void ProcessMonsterMove(uint64 monsterId, float x, float y, float z, float yaw);
+    void ProcessMonsterDespawn(Scene* pScene, uint64 monsterId);
+
+    // 서버 몬스터 관리 (메인 스레드에서만 접근)
+    std::unordered_map<uint64, GameObject*> m_mapServerMonsters;
+    std::unordered_map<uint64, float> m_mapServerMonsterMoveTime;  // idle 전환용
+
     // 원격 플레이어 마지막 이동 시간 (idle 전환용)
     std::unordered_map<uint64, float> m_mapRemotePlayerMoveTime;
 
@@ -182,4 +215,7 @@ public:
 
     // 원격 플레이어 VFX 타임아웃 체크 (Update에서 호출)
     void CheckRemotePlayerVFXTimeout(Scene* pScene, float deltaTime);
+
+    // 서버 몬스터 idle 전환 체크 (Update에서 호출)
+    void CheckServerMonsterIdle(float deltaTime);
 };

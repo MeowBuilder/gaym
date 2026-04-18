@@ -1243,6 +1243,9 @@ void Dx12App::UpdateNetwork(float deltaTime)
     // 원격 플레이어 VFX 타임아웃 체크
     m_pNetworkManager->CheckRemotePlayerVFXTimeout(m_pScene.get(), deltaTime);
 
+    // 서버 몬스터 idle 전환 체크
+    m_pNetworkManager->CheckServerMonsterIdle(deltaTime);
+
     // 이동 패킷 전송 간격 체크
     m_fNetworkSendTimer += deltaTime;
     if (m_fNetworkSendTimer < m_fNetworkSendInterval)

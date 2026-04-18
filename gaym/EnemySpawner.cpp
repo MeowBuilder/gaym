@@ -1011,6 +1011,12 @@ GameObject* EnemySpawner::CreateIndicatorObject(CRoom* pRoom, Mesh* pMesh)
     pRenderComp->SetMesh(pMesh);
     m_pShader->AddRenderComponent(pRenderComp);
 
+    // FIX: Room이 Inactive일 때 Room::Update가 early return하여 인디케이터의
+    // GameObject::Update가 호출되지 않아 CBV가 ZeroMemory 상태로 렌더링되는 버그 방지.
+    // 생성 직후 Transform과 CB를 한 번 강제 동기화.
+    pIndicator->GetTransform()->Update(0.0f);
+    pIndicator->Update(0.0f);
+
     return pIndicator;
 }
 

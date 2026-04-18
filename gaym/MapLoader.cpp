@@ -568,6 +568,7 @@ bool MapLoader::LoadIntoScene(
                         pos[0].f()*MAP_SCALE, pos[1].f()*MAP_SCALE, -pos[2].f()*MAP_SCALE);
                     pSubGO->GetTransform()->SetRotation(XMFLOAT4(rot[0].f(), rot[1].f(), -rot[2].f(), rot[3].f()));
                     pSubGO->GetTransform()->SetScale(sx, sy, sz);
+                    pSubGO->SetMesh(objRes.subMeshes[mi]);  // FIX: GameObject에도 mesh 지정 (누락 버그)
                     auto* pRC2 = pSubGO->AddComponent<RenderComponent>();
                     pRC2->SetMesh(objRes.subMeshes[mi]);
                     pRC2->SetCastsShadow(true);

@@ -183,6 +183,14 @@ void CRoom::SpawnEnemies()
 
     m_bEnemiesSpawned = true;
 
+    // 네트워크 연결 상태면 서버가 몬스터를 관리하므로 로컬 스폰 스킵
+    NetworkManager* pNet = NetworkManager::GetInstance();
+    if (pNet && pNet->IsConnected())
+    {
+        OutputDebugString(L"[Room] Skipping local enemy spawn — server authoritative mode\n");
+        return;
+    }
+
     if (!m_pSpawner)
     {
         OutputDebugString(L"[Room] No spawner set - cannot spawn enemies\n");
@@ -241,12 +249,11 @@ void CRoom::SpawnDropItem()
                                         1.0f, 1.0f, 1.0f);
     m_pDropItem->SetMesh(pCubeMesh);
 
-    // Set white material with glow
     MATERIAL whiteMaterial;
     whiteMaterial.m_cAmbient = XMFLOAT4(0.3f, 0.3f, 0.3f, 1.0f);
-    whiteMaterial.m_cDiffuse = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);  // White color
+    whiteMaterial.m_cDiffuse = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
     whiteMaterial.m_cSpecular = XMFLOAT4(1.0f, 1.0f, 1.0f, 64.0f);
-    whiteMaterial.m_cEmissive = XMFLOAT4(0.5f, 0.5f, 0.5f, 1.0f);  // Glow effect
+    whiteMaterial.m_cEmissive = XMFLOAT4(0.5f, 0.5f, 0.5f, 1.0f);
     m_pDropItem->SetMaterial(whiteMaterial);
 
     // Add RenderComponent for visibility
@@ -298,12 +305,11 @@ void CRoom::SpawnPortalCube()
                                         1.0f, 1.0f, 1.0f);
     m_pPortalCube->SetMesh(pCubeMesh);
 
-    // Set blue material with glow
     MATERIAL blueMaterial;
     blueMaterial.m_cAmbient = XMFLOAT4(0.0f, 0.0f, 0.3f, 1.0f);
-    blueMaterial.m_cDiffuse = XMFLOAT4(0.2f, 0.4f, 1.0f, 1.0f);  // Blue color
+    blueMaterial.m_cDiffuse = XMFLOAT4(0.2f, 0.4f, 1.0f, 1.0f);
     blueMaterial.m_cSpecular = XMFLOAT4(0.5f, 0.5f, 0.5f, 32.0f);
-    blueMaterial.m_cEmissive = XMFLOAT4(0.0f, 0.2f, 0.6f, 1.0f);  // Blue glow
+    blueMaterial.m_cEmissive = XMFLOAT4(0.0f, 0.2f, 0.6f, 1.0f);
     m_pPortalCube->SetMaterial(blueMaterial);
 
     // Add RenderComponent for visibility

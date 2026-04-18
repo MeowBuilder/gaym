@@ -699,7 +699,18 @@ void SkillComponent::ExecuteWithActivationType(SkillSlot slot, const DirectX::XM
             DirectX::XMFLOAT3 lookDir;
             DirectX::XMStoreFloat3(&lookDir, lookVec);
 
-            pNetMgr->SendSkill(skillType, pos.x, pos.y, pos.z, lookDir.x, lookDir.y, lookDir.z);
+            // R 스킬(Meteor)은 마우스 클릭 타겟 위치가 본질 정보.
+            // 프로토콜에 별도 target 필드가 없어서 dirX/Y/Z 슬롯을 절대 타겟 좌표로 재활용.
+            // 원격 수신 측(NetworkManager::ProcessSkill case 3)이 이를 position으로 해석.
+            if (slot == SkillSlot::R)
+            {
+                pNetMgr->SendSkill(skillType, pos.x, pos.y, pos.z,
+                    targetPosition.x, targetPosition.y, targetPosition.z);
+            }
+            else
+            {
+                pNetMgr->SendSkill(skillType, pos.x, pos.y, pos.z, lookDir.x, lookDir.y, lookDir.z);
+            }
         }
     }
 }

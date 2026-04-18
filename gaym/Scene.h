@@ -172,7 +172,7 @@ public:
 
     void AllocateDescriptor(D3D12_CPU_DESCRIPTOR_HANDLE* pCpuHandle, D3D12_GPU_DESCRIPTOR_HANDLE* pGpuHandle)
     {
-        if (m_nNextDescriptorIndex >= 4096)
+        if (m_nNextDescriptorIndex >= 16384)
         {
             OutputDebugString(L"[Scene] ERROR: Descriptor heap overflow! Increase heap size.\n");
             *pCpuHandle = m_pDescriptorHeap->GetCPUHandle(0);

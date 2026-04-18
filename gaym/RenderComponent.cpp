@@ -30,6 +30,7 @@ void RenderComponent::Render(ID3D12GraphicsCommandList* pCommandList)
     if (!m_pMesh)
         return;
 
+
     // Set the per-object descriptor table to root parameter 0 (CBV)
     pCommandList->SetGraphicsRootDescriptorTable(0, m_pOwner->GetGpuDescriptorHandle());
 

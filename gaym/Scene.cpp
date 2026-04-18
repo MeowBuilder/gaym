@@ -58,7 +58,7 @@ void Scene::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList)
 {
     // Create Descriptor Heap
     m_pDescriptorHeap = std::make_unique<CDescriptorHeap>();
-    m_pDescriptorHeap->Create(pDevice, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 4096, true);
+    m_pDescriptorHeap->Create(pDevice, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 16384, true);
 
     // Create Pass Constant Buffer
     UINT nConstantBufferSize = (sizeof(PassConstants) + 255) & ~255;
@@ -1291,8 +1291,8 @@ void Scene::Render(ID3D12GraphicsCommandList* pCommandList, D3D12_GPU_DESCRIPTOR
                        m_d3dFoamOpacityGpuHandle, m_d3dFoamDiffuseGpuHandle);
     }
 
-    // Terrain 렌더 (불투명, 전용 힙 사용)
-    if (m_pTerrain && m_pTerrain->IsLoaded())
+    // Terrain 렌더 (불투명, 전용 힙 사용) — Water stage에만 사용 (다른 stage에선 흰 면 버그)
+    if (m_pTerrain && m_pTerrain->IsLoaded() && m_eCurrentTheme == StageTheme::Water)
     {
         m_pTerrain->Render(pCommandList, GetPassCBVAddress());
 
@@ -1944,6 +1944,9 @@ void Scene::TransitionToNextRoom()
 
     // ── 2b. 디스크립터 인덱스를 워터마크로 리셋 (맵 슬롯 재활용)
     m_nNextDescriptorIndex = m_nPersistentDescriptorEnd;
+    // 이전 스테이지의 CBV 리소스 재사용 캐시 클리어 — 스테이지별 슬롯 타입 패턴이
+    // 달라 SRV가 CBV 슬롯을 덮어쓰는 충돌 방지. 뷰는 항상 새로 생성한다.
+    m_vCBCache.clear();
 
     // ── 2c. 횃불 시스템 클리어 (새 맵에서 다시 배치)
     if (m_pTorchSystem) m_pTorchSystem->Clear();
@@ -2052,6 +2055,9 @@ void Scene::TransitionToRoomByIndex(int index)
     m_pCurrentRoom = nullptr;
 
     m_nNextDescriptorIndex = m_nPersistentDescriptorEnd;
+    // 이전 스테이지의 CBV 리소스 재사용 캐시 클리어 — 스테이지별 슬롯 타입 패턴이
+    // 달라 SRV가 CBV 슬롯을 덮어쓰는 충돌 방지. 뷰는 항상 새로 생성한다.
+    m_vCBCache.clear();
 
     // 횃불 시스템 클리어
     if (m_pTorchSystem) m_pTorchSystem->Clear();
@@ -2131,6 +2137,9 @@ void Scene::TransitionToBossRoom()
 
     // ── 3. 디스크립터 인덱스를 워터마크로 리셋
     m_nNextDescriptorIndex = m_nPersistentDescriptorEnd;
+    // 이전 스테이지의 CBV 리소스 재사용 캐시 클리어 — 스테이지별 슬롯 타입 패턴이
+    // 달라 SRV가 CBV 슬롯을 덮어쓰는 충돌 방지. 뷰는 항상 새로 생성한다.
+    m_vCBCache.clear();
 
     // ── 3b. 횃불 시스템 클리어
     if (m_pTorchSystem) m_pTorchSystem->Clear();
@@ -2408,6 +2417,9 @@ void Scene::TransitionToWaterStage()
 
     // ── 4. 디스크립터 인덱스를 워터마크로 리셋
     m_nNextDescriptorIndex = m_nPersistentDescriptorEnd;
+    // 이전 스테이지의 CBV 리소스 재사용 캐시 클리어 — 스테이지별 슬롯 타입 패턴이
+    // 달라 SRV가 CBV 슬롯을 덮어쓰는 충돌 방지. 뷰는 항상 새로 생성한다.
+    m_vCBCache.clear();
 
     // ── 5. 횃불 시스템 클리어
     if (m_pTorchSystem) m_pTorchSystem->Clear();
@@ -2788,6 +2800,9 @@ void Scene::TransitionToWaterBossRoom()
 
     // ── 4. 디스크립터 인덱스를 워터마크로 리셋
     m_nNextDescriptorIndex = m_nPersistentDescriptorEnd;
+    // 이전 스테이지의 CBV 리소스 재사용 캐시 클리어 — 스테이지별 슬롯 타입 패턴이
+    // 달라 SRV가 CBV 슬롯을 덮어쓰는 충돌 방지. 뷰는 항상 새로 생성한다.
+    m_vCBCache.clear();
 
     // ── 5. 횃불 시스템 클리어
     if (m_pTorchSystem) m_pTorchSystem->Clear();
@@ -2842,10 +2857,13 @@ void Scene::TransitionToWaterBossRoom()
         CRoom* pTempRoom = m_pCurrentRoom;
         m_pCurrentRoom = nullptr;
 
-        m_pWaterPlane = CreateGameObject(pDevice, pCommandList);
+        // FIX: 기존 WaterPlane이 있으면 재사용 (고아 WaterPlane이 GrassStage에서 흰 면으로 보이는 버그 방지)
+        bool bCreateNewWater = (m_pWaterPlane == nullptr);
+        if (bCreateNewWater)
+            m_pWaterPlane = CreateGameObject(pDevice, pCommandList);
         m_pCurrentRoom = pTempRoom;
 
-        if (m_pWaterPlane)
+        if (m_pWaterPlane && bCreateNewWater)
         {
             GridPlaneMesh* pPlaneMesh = new GridPlaneMesh(pDevice, pCommandList, 1.0f, 1.0f, 256, 256);
             m_pWaterPlane->SetMesh(pPlaneMesh);
@@ -3059,6 +3077,9 @@ void Scene::TransitionToEarthStage()
     m_vRooms.clear();
     m_pCurrentRoom = nullptr;
     m_nNextDescriptorIndex = m_nPersistentDescriptorEnd;
+    // 이전 스테이지의 CBV 리소스 재사용 캐시 클리어 — 스테이지별 슬롯 타입 패턴이
+    // 달라 SRV가 CBV 슬롯을 덮어쓰는 충돌 방지. 뷰는 항상 새로 생성한다.
+    m_vCBCache.clear();
     if (m_pTorchSystem) m_pTorchSystem->Clear();
 
     // 용암·물 바닥 숨기기
@@ -3124,6 +3145,9 @@ void Scene::TransitionToGrassStage()
     m_vRooms.clear();
     m_pCurrentRoom = nullptr;
     m_nNextDescriptorIndex = m_nPersistentDescriptorEnd;
+    // 이전 스테이지의 CBV 리소스 재사용 캐시 클리어 — 스테이지별 슬롯 타입 패턴이
+    // 달라 SRV가 CBV 슬롯을 덮어쓰는 충돌 방지. 뷰는 항상 새로 생성한다.
+    m_vCBCache.clear();
     if (m_pTorchSystem) m_pTorchSystem->Clear();
 
     if (m_pLavaPlane)  m_pLavaPlane->GetTransform()->SetPosition(0.0f, -10000.0f, 0.0f);
@@ -3185,6 +3209,9 @@ void Scene::TransitionToEarthBossRoom()
     m_vRooms.clear();
     m_pCurrentRoom = nullptr;
     m_nNextDescriptorIndex = m_nPersistentDescriptorEnd;
+    // 이전 스테이지의 CBV 리소스 재사용 캐시 클리어 — 스테이지별 슬롯 타입 패턴이
+    // 달라 SRV가 CBV 슬롯을 덮어쓰는 충돌 방지. 뷰는 항상 새로 생성한다.
+    m_vCBCache.clear();
     if (m_pTorchSystem) m_pTorchSystem->Clear();
 
     if (m_pLavaPlane)  m_pLavaPlane->GetTransform()->SetPosition(0.0f, -10000.0f, 0.0f);
@@ -3267,6 +3294,9 @@ void Scene::TransitionToGrassBossRoom()
     m_vRooms.clear();
     m_pCurrentRoom = nullptr;
     m_nNextDescriptorIndex = m_nPersistentDescriptorEnd;
+    // 이전 스테이지의 CBV 리소스 재사용 캐시 클리어 — 스테이지별 슬롯 타입 패턴이
+    // 달라 SRV가 CBV 슬롯을 덮어쓰는 충돌 방지. 뷰는 항상 새로 생성한다.
+    m_vCBCache.clear();
     if (m_pTorchSystem) m_pTorchSystem->Clear();
 
     if (m_pLavaPlane)  m_pLavaPlane->GetTransform()->SetPosition(0.0f, -10000.0f, 0.0f);
