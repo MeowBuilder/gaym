@@ -2,6 +2,7 @@
 
 #include "ISkillBehavior.h"
 #include "SkillData.h"
+#include "VFXLibrary.h"
 
 class FluidSkillVFXManager;
 class Scene;
@@ -28,12 +29,18 @@ private:
     uint32_t GetRuneFlags(GameObject* caster) const;
     void     HitEnemiesInBeam(float damage);
 
+    static VFXSequenceDef BuildCoreBeamDef();
+    static VFXSequenceDef BuildSwirlDef();
+    static VFXSequenceDef BuildBurstDef();
+
     SkillData m_SkillData;
     bool m_bIsFinished = true;
     bool m_bIsActive = false;
     FluidSkillVFXManager* m_pVFXManager = nullptr;
     Scene*       m_pScene       = nullptr;
-    int m_vfxId = -1;
+    int m_vfxCoreId  = -1;  // 코어 빔 (직선 흐름)
+    int m_vfxSwirlId = -1;  // 나선 공전
+    int m_vfxBurstId = -1;  // 시작점 방사 스파크
     GameObject* m_pCaster = nullptr;
     XMFLOAT3 m_lastTargetPos = { 0.f, 0.f, 0.f };
 

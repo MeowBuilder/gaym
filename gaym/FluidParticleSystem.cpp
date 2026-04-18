@@ -1097,13 +1097,37 @@ void FluidParticleSystem::Update(float deltaTime)
             if (m_BeamDesc.enableFlow) {
                 p.beamT += p.beamSpeed * dt;
 
-                // 끝 도달 또는 범위 이탈 → 시작으로 리셋 (새 퍼짐 오프셋 할당)
+                // 끝 도달 또는 범위 이탈 → 시작으로 리셋
                 if (p.beamT >= totalDist || p.beamT < 0.f) {
-                    p.beamT     = 0.f;
-                    p.beamRx    = (Rand01() - 0.5f) * 2.f * m_BeamDesc.spreadRadius;
-                    // 설정된 수직 배율(verticalScale)을 적용하여 형태 제어
-                    p.beamRy    = (Rand01() - 0.5f) * 2.f * (m_BeamDesc.spreadRadius * m_BeamDesc.verticalScale); 
+                    p.beamT = 0.f;
+                    if (m_BeamDesc.swirlSpeed != 0.f || m_BeamDesc.swirlExpand) {
+                        p.beamAngle = Rand01() * XM_2PI;
+                        p.beamSizeScale = 1.f;
+                    } else {
+                        p.beamRx = (Rand01() - 0.5f) * 2.f * m_BeamDesc.spreadRadius;
+                        p.beamRy = (Rand01() - 0.5f) * 2.f * (m_BeamDesc.spreadRadius * m_BeamDesc.verticalScale);
+                    }
                     p.beamSpeed = m_BeamDesc.speedMin + Rand01() * (m_BeamDesc.speedMax - m_BeamDesc.speedMin);
+                }
+            }
+
+            // swirl/expand: beamT 기반 반경 + 각도 공전
+            if ((m_BeamDesc.swirlSpeed != 0.f || m_BeamDesc.swirlExpand) && totalDist > 0.f) {
+                p.beamAngle += m_BeamDesc.swirlSpeed * dt;
+                float t = p.beamT / totalDist;
+                float r = m_BeamDesc.swirlExpand
+                    ? m_BeamDesc.spreadRadius * t           // 퍼짐
+                    : m_BeamDesc.spreadRadius * (1.f - t);  // 수렴
+                p.beamRx = r * cosf(p.beamAngle);
+                p.beamRy = r * sinf(p.beamAngle);
+
+                if (m_BeamDesc.swirlFadeEnd > 0.f) {
+                    float ft = p.beamT / m_BeamDesc.swirlFadeEnd;
+                    p.beamSizeScale = m_BeamDesc.swirlFadeInOut
+                        ? (std::max)(0.f, 1.f - std::abs(2.f * ft - 1.f))  // 삼각파: 0→1→0
+                        : (std::max)(0.f, 1.f - ft);                        // 페이드 아웃
+                } else {
+                    p.beamSizeScale = 1.f;
                 }
             }
 
@@ -1168,8 +1192,10 @@ void FluidParticleSystem::UploadRenderData()
         color.y = (std::min)(color.y * boost, 1.5f);
         color.z = (std::min)(color.z * boost, 1.5f);
 
+        float sizeScale = m_Particles[i].beamSizeScale;
+        color.w *= sizeScale;
         m_pMappedParticles[renderIdx].position = m_Particles[i].position;
-        m_pMappedParticles[renderIdx].size     = m_Config.particleSize;
+        m_pMappedParticles[renderIdx].size     = m_Config.particleSize * sizeScale;
         m_pMappedParticles[renderIdx].color    = color;
 
         renderIdx++;
@@ -1277,10 +1303,20 @@ void FluidParticleSystem::InitBeamParticles()
         // 빔 전체 길이에 균등하게 배치 (중간 끊김 방지)
         float t = (float)i / (float)activeCount;
         p.beamT     = t * totalDist;
-        p.beamRx    = (Rand01() - 0.5f) * 2.f * m_BeamDesc.spreadRadius;
-        // 설정된 수직 배율(verticalScale)을 적용하여 형태 제어
-        p.beamRy    = (Rand01() - 0.5f) * 2.f * (m_BeamDesc.spreadRadius * m_BeamDesc.verticalScale); 
         p.beamSpeed = m_BeamDesc.speedMin + Rand01() * (m_BeamDesc.speedMax - m_BeamDesc.speedMin);
+        if (m_BeamDesc.swirlSpeed != 0.f || m_BeamDesc.swirlExpand) {
+            p.beamAngle     = Rand01() * XM_2PI;
+            p.beamSizeScale = 1.f;
+            float t = (totalDist > 0.f) ? p.beamT / totalDist : 0.f;
+            float r = m_BeamDesc.swirlExpand
+                ? m_BeamDesc.spreadRadius * t
+                : m_BeamDesc.spreadRadius * (1.f - t);
+            p.beamRx = r * cosf(p.beamAngle);
+            p.beamRy = r * sinf(p.beamAngle);
+        } else {
+            p.beamRx = (Rand01() - 0.5f) * 2.f * m_BeamDesc.spreadRadius;
+            p.beamRy = (Rand01() - 0.5f) * 2.f * (m_BeamDesc.spreadRadius * m_BeamDesc.verticalScale);
+        }
 
         // 초기 월드 좌표 설정
         XMVECTOR pos = XMVectorAdd(

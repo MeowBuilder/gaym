@@ -198,7 +198,7 @@ private:
     static constexpr int HASH_TABLE_SIZE      = 8192;
     static constexpr int MAX_PER_CELL         = 32;
     static constexpr int MAX_NEIGHBOR_SEARCH  = 27 * MAX_PER_CELL;
-    static constexpr int MAX_PARTICLES        = 4096;
+    static constexpr int MAX_PARTICLES        = 6144;
 
     struct SpatialHashCell
     {

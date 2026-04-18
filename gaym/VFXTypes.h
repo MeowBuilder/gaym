@@ -26,9 +26,13 @@ struct BeamDesc {
     XMFLOAT3 endPos   = {};
     float speedMin = 8.f;
     float speedMax = 16.f;
-    float spreadRadius = 0.3f; // 빔 폭 (시작점 랜덤 오프셋)
+    float spreadRadius = 0.3f; // 빔 폭 (시작점 랜덤 오프셋 / swirlSpeed 사용 시 시작 공전 반경)
     float verticalScale = 1.0f; // 수직 배율 (기본 1.0 = 원형, 보스 브레스 등은 낮춰서 납작하게 만듦)
     bool  enableFlow = false;   // 입자 흐름 활성화 (false = 정적 레이저, true = 흐르는 브레스)
+    float swirlSpeed  = 0.f;   // 공전 각속도 (rad/s). 0이면 기존 랜덤 오프셋 방식
+    bool  swirlExpand = false; // true = 반경이 beamT에 따라 커짐(퍼짐), false = 작아짐(수렴)
+    float swirlFadeEnd   = 0.f;  // 이 beamT 위치에서 크기→0 (0=페이드 없음)
+    bool  swirlFadeInOut = false; // true=시작(0)→밝아짐→swirlFadeEnd/2 피크→사라짐 (삼각파)
     XMFLOAT3 prevDir = { 0.f, 0.f, 1.f }; // 이전 프레임 방향 (빔 전체 회전 계산용)
 };
 

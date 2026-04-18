@@ -145,25 +145,28 @@ void SkillComponent::Update(float deltaTime)
         }
     }
 
-    // Update active skill if any
-    // Skip IsFinished() check if channeling or charging - those have their own completion logic
-    if (m_ActiveSkillSlot != SkillSlot::Count && !m_bIsChanneling && !m_bIsCharging)
+    // Update all skills that are currently casting (channel/charge handled above)
+    for (size_t slotIndex = 0; slotIndex < m_Skills.size(); ++slotIndex)
     {
-        size_t slotIndex = static_cast<size_t>(m_ActiveSkillSlot);
-        if (slotIndex < m_Skills.size() && m_Skills[slotIndex])
-        {
-            m_Skills[slotIndex]->Update(deltaTime);
+        if (m_SkillStates[slotIndex] != SkillState::Casting) continue;
+        if (!m_Skills[slotIndex]) continue;
 
-            // Check if skill finished
-            if (m_Skills[slotIndex]->IsFinished())
-            {
-                // Start cooldown
-                float cooldown = m_Skills[slotIndex]->GetSkillData().cooldown;
-                m_CooldownTimers[slotIndex] = cooldown;
-                m_SkillStates[slotIndex] = SkillState::Cooldown;
-                m_Skills[slotIndex]->Reset();
+        // Channel/charge 스킬은 위 블록에서 이미 처리됨
+        SkillSlot thisSlot = static_cast<SkillSlot>(slotIndex);
+        if (m_bIsChanneling && thisSlot == m_ActiveSkillSlot) continue;
+        if (m_bIsCharging   && thisSlot == m_ChargingSlot)    continue;
+
+        m_Skills[slotIndex]->Update(deltaTime);
+
+        if (m_Skills[slotIndex]->IsFinished())
+        {
+            float cooldown = m_Skills[slotIndex]->GetSkillData().cooldown;
+            m_CooldownTimers[slotIndex] = cooldown;
+            m_SkillStates[slotIndex] = SkillState::Cooldown;
+            m_Skills[slotIndex]->Reset();
+
+            if (m_ActiveSkillSlot == thisSlot)
                 m_ActiveSkillSlot = SkillSlot::Count;
-            }
         }
     }
 }
@@ -270,9 +273,6 @@ void SkillComponent::ProcessSkillInput(InputSystem* pInputSystem, CCamera* pCame
         }
         return;
     }
-
-    // Don't process new skill input if a skill is currently active
-    if (m_ActiveSkillSlot != SkillSlot::Count) return;
 
     // Check each skill slot for input
     for (size_t i = 0; i < static_cast<size_t>(SkillSlot::Count); ++i)

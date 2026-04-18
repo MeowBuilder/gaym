@@ -63,106 +63,106 @@ void VFXLibrary::Initialize() {
     }
 
     // ──────────────────────────────────────────────────────────
-    // E - 화염 빔 (Beam 모드)
+    // E - 화염 빔 코어 (Beam 모드, 좁고 밝은 백-황색 핵심 빔)
+    // 외곽 불꽃 구름은 FireBeamBehavior에서 별도 슬롯으로 스폰
     // ──────────────────────────────────────────────────────────
     {
         VFXSequenceDef def;
-        def.name          = "E_FireBeam";
+        def.name          = "E_FireBeam_Core";
         def.element       = ElementType::Fire;
-        def.particleCount = 1024;
-        def.spawnRadius   = 0.2f;
+        def.particleCount = 900;
+        def.spawnRadius   = 0.12f;  // 좁은 코어
 
         VFXPhase p0;
         p0.startTime  = 0.f;
-        p0.duration   = 99.f; // 스킬이 끝날 때까지 지속
+        p0.duration   = 99.f;
         p0.motionMode = ParticleMotionMode::Beam;
-        // startPos/endPos는 VFXManager가 플레이어 위치/방향으로 설정
-        p0.beamDesc.speedMin     = 10.f;
-        p0.beamDesc.speedMax     = 18.f;
-        p0.beamDesc.spreadRadius = 0.25f;
+        p0.beamDesc.speedMin     = 30.f;
+        p0.beamDesc.speedMax     = 52.f;
+        p0.beamDesc.spreadRadius = 0.14f;
+        p0.beamDesc.enableFlow   = true;   // 파티클이 시작→끝으로 흐름 → 쏘아지는 느낌
         def.phases.push_back(p0);
+
+        // 밝은 흰-노랑 코어
+        def.overrideColors    = true;
+        def.overrideCoreColor = { 1.0f, 0.97f, 0.78f, 1.0f };  // 흰-노랑 핵
+        def.overrideEdgeColor = { 1.0f, 0.55f, 0.08f, 0.9f };  // 주황 가장자리
 
         RegisterBase(SkillSlot::E, def);
 
-        // Channel 룬: 지속시간 증가 (VFXManager가 처리), 더 많은 파티클
+        // Channel 룬: 더 많은 파티클 + 빠른 흐름
         VFXModifier chanMod;
         chanMod.particleCountMult = 1.5f;
         chanMod.speedMult         = 1.2f;
         RegisterRuneMod(SkillSlot::E, RUNE_CHANNEL, chanMod);
 
-        // Enhance 룬: 빔 폭 넓어짐 (spreadRadius x 2.5)
+        // Enhance 룬: 더 빠르고 밝게
         VFXModifier enhMod;
         enhMod.particleCountMult = 1.4f;
-        enhMod.sizeScaleMult     = 1.5f; // spread 배율로도 활용
+        enhMod.speedMult         = 1.3f;
         RegisterRuneMod(SkillSlot::E, RUNE_ENHANCE, enhMod);
     }
 
     // ──────────────────────────────────────────────────────────
-    // R - 메테오 (OrbitalCP -> Gravity 전환)
+    // R - 메테오 (단일 거대 덩어리 낙하 + 충돌 폭발)
+    // Phase0: 거대 코어 낙하 (OrbitalCP, 위성 없음)
+    // Phase1: 충돌 — 기존 파티클이 충돌 지점에서 사방으로 터짐 (Gravity, no fade)
+    // Phase2: 바닥 화염 확산 후 서서히 소멸 (Gravity + ExplodeFade)
     // ──────────────────────────────────────────────────────────
     {
         VFXSequenceDef def;
         def.name          = "R_Meteor";
         def.element       = ElementType::Fire;
-        def.particleCount = 1024;
-        def.spawnRadius   = 12.f;  // 가장 큰 궤도(18f) - sphereRadius(6f)*2.5(15f) = 3f 여유
+        def.particleCount = 2400;
+        def.spawnRadius   = 3.f;   // 매우 타이트한 스폰 → 고밀도 코어
 
-        // Phase 0: 낙하 (OrbitalCP)
+        // Phase 0: 낙하 (OrbitalCP — 위성 없이 마스터 CP만으로 하강)
         VFXPhase p0;
-        p0.startTime  = 0.f;
-        p0.duration   = 3.f; // 낙하 시간 (충돌 전까지)
-        p0.motionMode = ParticleMotionMode::OrbitalCP;
+        p0.startTime             = 0.f;
+        p0.duration              = 3.f;
+        p0.motionMode            = ParticleMotionMode::OrbitalCP;
+        p0.globalGravityStrength = 18.f;  // 파티클에 중력 추가 → masterCP와 함께 바닥까지 낙하 보장
         def.phases.push_back(p0);
 
-        // Phase 1: 충돌 후 폭발 (Gravity) — 엄청난 방사형 폭발 + 즉시 페이드
+        // Phase 1: 충돌 폭발 — masterCPPos(충돌 지점)에서 전방위 burst
         VFXPhase p1;
         p1.startTime  = 3.f;
-        p1.duration   = 0.7f;   // 짧고 강렬하게 (1.2s → 0.7s)
+        p1.duration   = 0.7f;
         p1.motionMode = ParticleMotionMode::Gravity;
-        p1.gravityDesc.gravity         = { 0.f, -25.f, 0.f };  // 강한 중력으로 빠른 낙하
-        p1.gravityDesc.initialSpeedMin = 45.f;  // 강력한 방사 (8 → 45)
-        p1.gravityDesc.initialSpeedMax = 90.f;  // 최대 방사 속도 (20 → 90)
-        p1.phaseMaxSpeed               = 90.f;  // 속도 상한 확장 (orbital 35 → 90)
-        p1.triggerExplodeFadeOnEnter   = true;  // 폭발 즉시 파티클 축소+소멸
+        p1.gravityDesc.gravity         = { 0.f, -18.f, 0.f };
+        p1.gravityDesc.initialSpeedMin = 22.f;
+        p1.gravityDesc.initialSpeedMax = 55.f;
+        p1.phaseMaxSpeed               = 80.f;
+        p1.triggerExplodeFadeOnEnter   = false;
         def.phases.push_back(p1);
 
-        // 원자 궤도 위성 CP: 3개 평면(수평/+60°/-60°) × 4개 전자 = 12개
-        constexpr float TWO_PI = 2.f * 3.14159265358979f;
-        // ring 0: 수평(xz), ring 1: +60° 기울기, ring 2: -60° 기울기
-        const float ringRadii[3]  = { 14.f, 18.f, 16.f };
-        const float ringSpeeds[3] = { 2.0f, 1.4f, 2.8f };
-        const float ringTilts[3]  = { 0.f, 3.14159265358979f / 3.f, -3.14159265358979f / 3.f };
+        // Phase 2: 바닥 화염 확산 — 퍼진 파티클들이 낮게 깔리며 서서히 소멸
+        VFXPhase p2;
+        p2.startTime  = 3.7f;
+        p2.duration   = 1.8f;
+        p2.motionMode = ParticleMotionMode::Gravity;
+        p2.gravityDesc.gravity         = { 0.f, -38.f, 0.f };
+        p2.gravityDesc.initialSpeedMin = 4.f;
+        p2.gravityDesc.initialSpeedMax = 14.f;
+        p2.phaseMaxSpeed               = 80.f;
+        p2.triggerExplodeFadeOnEnter   = true;
+        def.phases.push_back(p2);
 
-        for (int ring = 0; ring < 3; ++ring)
-        {
-            for (int e = 0; e < 4; ++e)  // 링당 전자 4개
-            {
-                SatelliteCPDesc sat;
-                sat.orbitRadius        = ringRadii[ring];
-                sat.orbitSpeed         = ringSpeeds[ring];
-                sat.orbitPhase         = e * (TWO_PI / 4.f);  // 90° 간격
-                sat.verticalOffset     = 0.f;
-                sat.attractionStrength = 30.f;
-                sat.sphereRadius       = 6.f;  // 인력권 15f → 12f 스폰에서 모든 링(최대 18f) 포착
-                sat.orbitTiltX         = ringTilts[ring];
-                def.satelliteCPs.push_back(sat);
-            }
-        }
+        // 위성 CP 없음 — 단일 거대 덩어리
 
-        // 마스터 CP (VFXManager가 낙하 위치로 설정)
-        // masterCPStrength/SphereRadius는 VFXSequenceDef 기본값 사용
-
-        // 핵(밝은 주황-노랑) vs 궤도 링(어두운 불꽃)으로 시각적 구분
+        // 색상: 다채로운 불 — 핵(백-황금)에서 가장자리(짙은 심홍)까지 넓은 스펙트럼
         def.overrideColors    = true;
-        def.overrideCoreColor = { 1.0f, 0.70f, 0.10f, 1.0f }; // 밝은 주황-노랑 (메테오 코어)
-        def.overrideEdgeColor = { 0.9f, 0.12f, 0.0f,  0.35f }; // 어두운 불꽃 (궤도 링)
-        // 파티클 15%를 메테오 중심 근처에 집중 스폰 → 밝은 코어 형성
-        def.nucleusSpawnFraction = 0.15f;
-        def.nucleusSpawnRadius   = 2.5f;
-        // masterCPSphereRadius: 위성이 최대 18f + sphereRadius(6f) = 24f 커버 필요
-        // 경계 영역 = 10f * 2.5f = 25f → 모든 궤도 파티클 간섭 없음
-        def.masterCPStrength     = 35.f;
-        def.masterCPSphereRadius = 10.f;
+        def.overrideCoreColor = { 1.0f, 0.92f, 0.45f, 1.0f };  // 백열 황금빛 (1500°C 용암 코어)
+        def.overrideEdgeColor = { 0.72f, 0.04f, 0.01f, 0.65f }; // 짙은 심홍 (냉각되는 외곽)
+
+        // 파티클 85%를 코어에 집중 → 단단한 불덩어리 하나
+        def.nucleusSpawnFraction = 0.85f;
+        def.nucleusSpawnRadius   = 1.5f;
+
+        // 강한 인력으로 낙하 중 파티클 밀집 유지
+        def.masterCPStrength     = 65.f;   // 인력 강화 → 낙하 중 공 모양 유지
+        def.masterCPSphereRadius = 6.f;    // 구 반경 약간 축소 → 더 타이트한 덩어리
+        def.masterCPFallSpeed    = 22.f;   // 낙하 속도 증가 → 3초에 충분히 땅 도달
 
         RegisterBase(SkillSlot::R, def);
 

@@ -6,7 +6,7 @@
 class FluidSkillVFXManager;
 class Scene;
 
-// R 슬롯 - 메테오 (상공에서 낙하, OrbitalCP -> Gravity 폭발)
+// R 슬롯 - 메테오 (거대 덩어리 낙하, Phase0:OrbitalCP 낙하 → Phase1:위쪽 폭발 → Phase2:바닥 화염 확산)
 class MeteorBehavior : public ISkillBehavior
 {
 public:
@@ -44,7 +44,7 @@ private:
     static constexpr float METEOR_SPAWN_HEIGHT = 50.f;
     static constexpr float METEOR_FORWARD_DIST = 15.f;
     static constexpr float FALL_DURATION       = 3.0f;  // VFXLibrary Phase0 duration
-    static constexpr float EXPLODE_DURATION    = 1.2f;  // VFXLibrary Phase1 duration
+    static constexpr float EXPLODE_DURATION    = 2.4f;  // VFXLibrary Phase1(0.6) + Phase2(1.8)
     static constexpr float MULTI_HIT_INTERVAL  = 0.3f;  // 폭발 중 다단히트 간격 (초)
     static constexpr float EXPLODE_RADIUS      = 10.0f; // 초기 폭발 반경 (SkillData.radius)
     static constexpr float MULTI_HIT_RADIUS    = 8.0f;  // 다단히트 반경

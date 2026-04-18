@@ -30,6 +30,8 @@ struct FluidParticle
     float    beamRx     = 0.f;  // 빔 수직 평면 X 오프셋
     float    beamRy     = 0.f;  // 빔 수직 평면 Y 오프셋
     float    beamSpeed  = 0.f;  // 빔 진행 속도
+    float    beamAngle     = 0.f;  // 공전 각도 (swirlSpeed 사용 시)
+    float    beamSizeScale = 1.f;  // 렌더 크기 배율 (swirlFadeEnd 페이드용)
 };
 
 // Attraction control point (skill/rune places these)

@@ -68,6 +68,8 @@ struct VFXSequenceDef {
     float cardinalSpawnRadius  = 0.f;   // 집결 스폰 거리 (유닛)
     float cardinalInwardSpeed  = 12.f;  // 파티클 초기 내향 속도 (m/s)
 
+    float particleSize = 0.f;    // 0 = 기본값(0.35f) 사용
+
     // SSF bilateral blur 활성화 (파도처럼 덩어리로 보여야 하는 스킬에만 true)
     bool  useSSFBlur   = false;
 

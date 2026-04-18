@@ -94,7 +94,8 @@ int FluidSkillVFXManager::SpawnSequenceEffect(const XMFLOAT3& origin, const XMFL
             cfg.spawnRadius       = seqDef.spawnRadius;
             cfg.boundaryStiffness = 150.0f;
             // 보스 메가브레스 입자 크기를 7.0으로 최적화 (검은 선 제거 + 시야 확보)
-            cfg.particleSize      = (seqDef.name == "Dragon_MegaBreath") ? 7.0f : 0.35f; 
+            cfg.particleSize      = (seqDef.particleSize > 0.f) ? seqDef.particleSize
+                                  : (seqDef.name == "Dragon_MegaBreath") ? 7.0f : 0.35f;
             if (seqDef.overridePhysics) {
                 cfg.stiffness              = seqDef.sphStiffness;
                 cfg.nearPressureMultiplier = seqDef.sphNearPressureMult;
@@ -662,7 +663,7 @@ void FluidSkillVFXManager::UpdatePhase(FluidVFXSlot& slot, float dt)
 
             BeamDesc bd = phase.beamDesc;
             bd.startPos      = slot.origin;
-            bd.enableFlow    = isBossBreath; // 보스만 입자가 흐르도록 설정
+            bd.enableFlow    = isBossBreath || phase.beamDesc.enableFlow;
             bd.verticalScale = phase.beamDesc.verticalScale;
 
             XMVECTOR endV = XMVectorAdd(
@@ -683,7 +684,16 @@ void FluidSkillVFXManager::UpdatePhase(FluidVFXSlot& slot, float dt)
                 slot.pSystem->SetMaxParticleSpeed(phase.phaseMaxSpeed);
 
             slot.pSystem->SetGravityDesc(phase.gravityDesc);
-            slot.pSystem->ApplyRadialBurst(slot.origin,
+            XMFLOAT3 burstOrigin;
+            if (slot.masterCPFallSpeed > 0.f) {
+                // 낙하 메테오: 폭발 중심을 타겟 지면 바로 아래(-1m)로 고정
+                // origin.y = targetPos.y + METEOR_SPAWN_HEIGHT(50), groundY = origin.y - 50
+                float groundY = slot.origin.y - 50.0f;
+                burstOrigin = { slot.masterCPPos.x, groundY - 1.0f, slot.masterCPPos.z };
+            } else {
+                burstOrigin = slot.origin;
+            }
+            slot.pSystem->ApplyRadialBurst(burstOrigin,
                 phase.gravityDesc.initialSpeedMin,
                 phase.gravityDesc.initialSpeedMax);
 
@@ -799,9 +809,10 @@ void FluidSkillVFXManager::UpdatePhase(FluidVFXSlot& slot, float dt)
         UpdateOrbitalCPs(slot, dt);
     }
 
-    // ControlPoint + sequenceDef.cpDescs: 매 프레임 궤도 CP 갱신 (이동 투사체용)
-    if (curPhase.motionMode == ParticleMotionMode::ControlPoint &&
-        !slot.sequenceDef.cpDescs.empty())
+    // ControlPoint/Beam + sequenceDef.cpDescs: 매 프레임 궤도 CP 갱신
+    if (!slot.sequenceDef.cpDescs.empty() &&
+        (curPhase.motionMode == ParticleMotionMode::ControlPoint ||
+         curPhase.motionMode == ParticleMotionMode::Beam))
     {
         XMVECTOR fwd = XMVector3Normalize(XMLoadFloat3(&slot.direction));
         XMVECTOR worldUp = XMVectorSet(0, 1, 0, 0);
@@ -842,7 +853,7 @@ void FluidSkillVFXManager::UpdatePhase(FluidVFXSlot& slot, float dt)
         bd.speedMin     = curPhase.beamDesc.speedMin;
         bd.speedMax     = curPhase.beamDesc.speedMax;
         bd.spreadRadius = curPhase.beamDesc.spreadRadius;
-        bd.enableFlow    = isBossBreath;
+        bd.enableFlow    = isBossBreath || curPhase.beamDesc.enableFlow;
         bd.verticalScale = curPhase.beamDesc.verticalScale;
         bd.startPos     = slot.origin;
 
@@ -1197,34 +1208,37 @@ FluidSkillVFXDef FluidSkillVFXManager::GetVFXDef(ElementType element, const Rune
     return def;
 }
 
+// 슬롯의 실제 렌더 색상 반환 헬퍼 (overrideColors 우선)
+static FluidElementColor GetSlotColors(const FluidVFXSlot& slot)
+{
+    if (slot.useSequence && slot.sequenceDef.overrideColors)
+        return { slot.sequenceDef.overrideCoreColor, slot.sequenceDef.overrideEdgeColor };
+    ElementType elem = slot.useSequence ? slot.sequenceDef.element : slot.def.element;
+    return FluidElementColors::Get(elem);
+}
+
 XMFLOAT4 FluidSkillVFXManager::GetDominantFluidColor() const
 {
-    // 첫 번째 활성 슬롯의 원소 색상 반환
     for (const auto& slot : m_Slots)
     {
         if (!slot.isActive) continue;
-        ElementType elem = slot.useSequence ? slot.sequenceDef.element : slot.def.element;
-        auto colors = FluidElementColors::Get(elem);
-        return colors.coreColor;
+        return GetSlotColors(slot).coreColor;
     }
-    // 활성 슬롯 없으면 기본 파란색
     return { 0.15f, 0.55f, 1.0f, 0.85f };
 }
 
 FluidElementColor FluidSkillVFXManager::GetDominantFluidColors() const
 {
-    // 시퀀스 모드(플레이어 스킬) 슬롯 우선 반환 — 적 투사체(SpawnEffect)가 색상 덮지 않도록
+    // 시퀀스 모드(플레이어 스킬) 슬롯 우선 — 적 투사체(SpawnEffect)가 색상 덮지 않도록
     for (const auto& slot : m_Slots)
     {
         if (!slot.isActive || !slot.useSequence) continue;
-        return FluidElementColors::Get(slot.sequenceDef.element);
+        return GetSlotColors(slot);
     }
-    // 플레이어 스킬 없으면 모든 활성 슬롯에서 첫 번째
     for (const auto& slot : m_Slots)
     {
         if (!slot.isActive) continue;
-        ElementType elem = slot.useSequence ? slot.sequenceDef.element : slot.def.element;
-        return FluidElementColors::Get(elem);
+        return GetSlotColors(slot);
     }
     return FluidElementColors::Get(ElementType::None);
 }
@@ -1234,8 +1248,7 @@ FluidElementColor FluidSkillVFXManager::GetDominantFluidColors(bool blurOnly) co
     for (const auto& slot : m_Slots)
     {
         if (!slot.isActive || !slot.isPlayerEffect || slot.useBlur != blurOnly) continue;
-        ElementType elem = slot.useSequence ? slot.sequenceDef.element : slot.def.element;
-        return FluidElementColors::Get(elem);
+        return GetSlotColors(slot);
     }
     return FluidElementColors::Get(ElementType::None);
 }
