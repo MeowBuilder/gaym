@@ -259,6 +259,25 @@ void NetworkManager::Update(Scene* pScene, ID3D12Device* pDevice, ID3D12Graphics
         case NetworkCommand::SetLocalPlayerId:
             // 이미 1차에서 처리됨
             break;
+
+        case NetworkCommand::RoomTransition:
+            ProcessRoomTransition(pScene, cmd.stageIndex, cmd.roomIndex, cmd.isBossRoom);
+            break;
+
+        case NetworkCommand::MonsterSpawn:
+            ProcessMonsterSpawn(pScene, pDevice, pCommandList,
+                                cmd.monsterId, cmd.monsterType,
+                                cmd.x, cmd.y, cmd.z, cmd.monsterYaw,
+                                cmd.monsterHp, cmd.monsterIsBoss);
+            break;
+
+        case NetworkCommand::MonsterMove:
+            ProcessMonsterMove(cmd.monsterId, cmd.x, cmd.y, cmd.z, cmd.monsterYaw);
+            break;
+
+        case NetworkCommand::MonsterDespawn:
+            ProcessMonsterDespawn(pScene, cmd.monsterId);
+            break;
         }
     }
 }
@@ -296,6 +315,107 @@ void NetworkManager::SendSkill(int skillType, float x, float y, float z, float d
 
     auto sendBuffer = ServerPacketHandler::MakeSendBuffer(skillPkt);
     m_pSession->Send(sendBuffer);
+}
+
+void NetworkManager::SendPortalInteract()
+{
+    if (!m_bConnected || !m_pSession)
+        return;
+
+    Protocol::C_PORTAL_INTERACT pkt;
+    auto sendBuffer = ServerPacketHandler::MakeSendBuffer(pkt);
+    m_pSession->Send(sendBuffer);
+
+    OutputDebugString(L"[Network] C_PORTAL_INTERACT sent\n");
+}
+
+void NetworkManager::SendTorchInteract()
+{
+    if (!m_bConnected || !m_pSession)
+        return;
+
+    Protocol::C_TORCH_INTERACT pkt;
+    auto sendBuffer = ServerPacketHandler::MakeSendBuffer(pkt);
+    m_pSession->Send(sendBuffer);
+
+    OutputDebugString(L"[Network] C_TORCH_INTERACT sent\n");
+}
+
+void NetworkManager::QueueRoomTransition(uint32 stageIndex, uint32 roomIndex, bool isBossRoom)
+{
+    std::lock_guard<std::mutex> lock(m_queueMutex);
+
+    NetworkCommandData cmd{};
+    cmd.type = NetworkCommand::RoomTransition;
+    cmd.stageIndex = stageIndex;
+    cmd.roomIndex = roomIndex;
+    cmd.isBossRoom = isBossRoom;
+
+    m_vCommandQueue.push_back(cmd);
+}
+
+void NetworkManager::QueueMonsterSpawn(uint64 monsterId, uint32 monsterType,
+                                       float x, float y, float z, float yaw,
+                                       float hp, bool isBoss)
+{
+    std::lock_guard<std::mutex> lock(m_queueMutex);
+    NetworkCommandData cmd{};
+    cmd.type = NetworkCommand::MonsterSpawn;
+    cmd.monsterId = monsterId;
+    cmd.monsterType = monsterType;
+    cmd.x = x; cmd.y = y; cmd.z = z;
+    cmd.monsterYaw = yaw;
+    cmd.monsterHp = hp;
+    cmd.monsterIsBoss = isBoss;
+    m_vCommandQueue.push_back(cmd);
+}
+
+void NetworkManager::QueueMonsterMove(uint64 monsterId, float x, float y, float z, float yaw)
+{
+    std::lock_guard<std::mutex> lock(m_queueMutex);
+    NetworkCommandData cmd{};
+    cmd.type = NetworkCommand::MonsterMove;
+    cmd.monsterId = monsterId;
+    cmd.x = x; cmd.y = y; cmd.z = z;
+    cmd.monsterYaw = yaw;
+    m_vCommandQueue.push_back(cmd);
+}
+
+void NetworkManager::QueueMonsterDespawn(uint64 monsterId)
+{
+    std::lock_guard<std::mutex> lock(m_queueMutex);
+    NetworkCommandData cmd{};
+    cmd.type = NetworkCommand::MonsterDespawn;
+    cmd.monsterId = monsterId;
+    m_vCommandQueue.push_back(cmd);
+}
+
+GameObject* NetworkManager::GetServerMonster(uint64 monsterId)
+{
+    auto it = m_mapServerMonsters.find(monsterId);
+    return (it != m_mapServerMonsters.end()) ? it->second : nullptr;
+}
+
+void NetworkManager::ProcessRoomTransition(Scene* pScene, uint32 stageIndex, uint32 roomIndex, bool isBossRoom)
+{
+    if (!pScene)
+        return;
+
+    wchar_t buf[256];
+    swprintf_s(buf, L"[Network] ProcessRoomTransition stage=%u room=%u boss=%d\n",
+        stageIndex, roomIndex, isBossRoom ? 1 : 0);
+    OutputDebugString(buf);
+
+    if (isBossRoom)
+    {
+        // A단계: 현재는 불 보스만 연결 (스테이지별 보스는 차후 작업)
+        pScene->TransitionToBossRoom();
+    }
+    else
+    {
+        // roomIndex를 풀 인덱스로 사용 → 모든 클라가 동일한 맵 로드
+        pScene->TransitionToRoomByIndex(static_cast<int>(roomIndex));
+    }
 }
 
 void NetworkManager::QueueSpawnPlayer(uint64 playerId, const std::string& name, int playerType, float x, float y, float z)
@@ -721,28 +841,23 @@ void NetworkManager::ProcessSkill(Scene* pScene, uint64 playerId, int skillType,
     case 3:  // R 스킬 (Meteor) - 상공에서 낙하 VFX
         if (pVFXManager)
         {
-            // 메테오: 타겟 위치 상공에서 아래로 낙하
-            // 타겟 위치 = 캐릭터 위치 + 방향 * 거리 (지면)
-            float meteorForwardDist = 15.0f;
-            XMFLOAT3 targetPos = XMFLOAT3(
-                x + skillDirection.x * meteorForwardDist,
-                y,  // 지면 높이
-                z + skillDirection.z * meteorForwardDist
-            );
+            // R 스킬은 송신 측이 dirX/Y/Z 슬롯에 **절대 타겟 좌표**를 실어 보냄
+            // (SkillComponent 송신 로직 참조). 정규화된 방향 벡터가 아님에 주의.
+            XMFLOAT3 targetPos = XMFLOAT3(dirX, dirY, dirZ);
 
-            // 스폰 위치 = 타겟 상공 50m
-            float meteorSpawnHeight = 50.0f;
+            // 송신 측과 동일하게 MeteorBehavior::METEOR_SPAWN_HEIGHT = 50 사용
+            const float meteorSpawnHeight = 50.0f;
             XMFLOAT3 spawnPos = XMFLOAT3(targetPos.x, targetPos.y + meteorSpawnHeight, targetPos.z);
 
-            // 방향 = 아래
+            // 낙하 방향 = 아래
             XMFLOAT3 downDir = XMFLOAT3(0.0f, -1.0f, 0.0f);
 
             VFXSequenceDef seqDef = VFXLibrary::Get().GetDef(SkillSlot::R, RUNE_NONE, ElementType::Fire);
             int vfxId = pVFXManager->SpawnSequenceEffect(spawnPos, downDir, seqDef);
 
             wchar_t vfxBuf[128];
-            swprintf_s(vfxBuf, L"[Network] Spawned R (Meteor) VFX: vfxId=%d, spawn=(%.1f,%.1f,%.1f)\n",
-                vfxId, spawnPos.x, spawnPos.y, spawnPos.z);
+            swprintf_s(vfxBuf, L"[Network] Spawned R (Meteor) VFX: vfxId=%d, target=(%.1f,%.1f,%.1f) spawn=(%.1f,%.1f,%.1f)\n",
+                vfxId, targetPos.x, targetPos.y, targetPos.z, spawnPos.x, spawnPos.y, spawnPos.z);
             OutputDebugString(vfxBuf);
         }
         break;
@@ -791,5 +906,207 @@ void NetworkManager::ProcessSkill(Scene* pScene, uint64 playerId, int skillType,
 
     wchar_t buf[128];
     swprintf_s(buf, L"[Network] ProcessSkill: PlayerId=%llu SkillType=%d\n", playerId, skillType);
+    OutputDebugString(buf);
+}
+
+// =============================================================================
+// 몬스터 처리 (서버 권위)
+// =============================================================================
+
+// monsterType (서버 MonsterType enum) → 클라 프리셋 메쉬/애니메이션/스케일 매핑
+struct MonsterPreset
+{
+    const char* meshPath;
+    const char* animPath;
+    float scale;
+    const char* idleClip;
+    const char* walkClip;
+};
+
+static MonsterPreset GetMonsterPresetByType(uint32 monsterType)
+{
+    // 서버 MonsterType enum 순서와 일치해야 함:
+    // 0 None, 1 TestEnemy, 2 AirElemental, 3 RangedEnemy, 4 RushAoEEnemy, 5 RushFrontEnemy,
+    // 6 Dragon, 7 Kraken, 8 Golem, 9 Demon, 10 BlueDragon
+    switch (monsterType)
+    {
+    case 2: // AirElemental
+        return { "Assets/Enemies/Elementals/AirElemental_Bl/AirElemental_Bl.bin",
+                 "Assets/Enemies/Elementals/AirElemental_Bl/AirElemental_Bl_Anim.bin",
+                 2.0f, "Idle", "Walk" };
+    case 3: // RangedEnemy (StormElemental)
+        return { "Assets/Enemies/Elementals/StormElemental_Bl/StormElemental_Bl.bin",
+                 "Assets/Enemies/Elementals/StormElemental_Bl/StormElemental_Bl_Anim.bin",
+                 2.0f, "Idle", "Walk" };
+    case 4: // RushAoEEnemy (FireGolem)
+        return { "Assets/Enemies/Elementals/FireGolem_Rd/FireGolem_Rd.bin",
+                 "Assets/Enemies/Elementals/FireGolem_Rd/FireGolem_Rd_Anim.bin",
+                 2.0f, "Idle", "Walk" };
+    case 5: // RushFrontEnemy (EarthElemental)
+        return { "Assets/Enemies/Elementals/EarthElemental_Gn/EarthElemental_Gn.bin",
+                 "Assets/Enemies/Elementals/EarthElemental_Gn/EarthElemental_Gn_Anim.bin",
+                 2.0f, "Idle", "Walk" };
+    case 6: // Dragon (Red)
+        return { "Assets/Enemies/Dragon/Red.bin",
+                 "Assets/Enemies/Dragon/Red_Anim.bin",
+                 3.0f, "Idle01", "Walk" };
+    case 7: // Kraken
+        return { "Assets/Enemies/Kraken/KRAKEN.bin",
+                 "Assets/Enemies/Kraken/KRAKEN_Anim.bin",
+                 3.0f, "Idle", "Walk" };
+    case 8: // Golem
+        return { "Assets/Enemies/golem/Golem01_Generic_prefab.bin",
+                 "Assets/Enemies/golem/Golem01_Generic_prefab_Anim.bin",
+                 8.0f, "Golem_battle_stand_ge", "Golem_battle_walk_ge" };
+    case 9: // Demon
+        return { "Assets/Enemies/demon/Demon.bin",
+                 "Assets/Enemies/demon/Demon_Anim.bin",
+                 3.5f, "Idle1", "Run" };
+    case 10: // BlueDragon
+        return { "Assets/Enemies/Dragon_blue/Blue.bin",
+                 "Assets/Enemies/Dragon_blue/Blue_Anim.bin",
+                 3.0f, "Idle01", "Walk" };
+    case 1: // TestEnemy — 메쉬 없음, 큐브 fallback 생략하고 air 대체
+    default:
+        return { "Assets/Enemies/Elementals/AirElemental_Bl/AirElemental_Bl.bin",
+                 "Assets/Enemies/Elementals/AirElemental_Bl/AirElemental_Bl_Anim.bin",
+                 2.0f, "Idle", "Walk" };
+    }
+}
+
+void NetworkManager::ProcessMonsterSpawn(Scene* pScene, ID3D12Device* pDevice,
+                                         ID3D12GraphicsCommandList* pCommandList,
+                                         uint64 monsterId, uint32 monsterType,
+                                         float x, float y, float z, float yaw,
+                                         float hp, bool isBoss)
+{
+    // 중복 방지
+    if (m_mapServerMonsters.find(monsterId) != m_mapServerMonsters.end())
+    {
+        // 이미 있으면 위치만 갱신
+        ProcessMonsterMove(monsterId, x, y, z, yaw);
+        return;
+    }
+
+    MonsterPreset preset = GetMonsterPresetByType(monsterType);
+
+    // 서버 몬스터는 로컬 Room에 속하지 않는 전역 오브젝트로 생성
+    CRoom* pPrevRoom = pScene->GetCurrentRoom();
+    pScene->SetCurrentRoom(nullptr);
+
+    GameObject* pMonster = MeshLoader::LoadGeometryFromFile(
+        pScene, pDevice, pCommandList, nullptr, preset.meshPath);
+
+    pScene->SetCurrentRoom(pPrevRoom);
+
+    if (!pMonster)
+    {
+        wchar_t buf[256];
+        swprintf_s(buf, L"[Network] ProcessMonsterSpawn: mesh load FAILED type=%u path=%hs\n",
+            monsterType, preset.meshPath);
+        OutputDebugString(buf);
+        return;
+    }
+
+    sprintf_s(pMonster->m_pstrFrameName, "NetMonster_%llu", monsterId);
+
+    // 위치/회전/스케일
+    TransformComponent* pT = pMonster->GetTransform();
+    if (pT)
+    {
+        pT->SetPosition(x, y, z);
+        pT->SetScale(preset.scale, preset.scale, preset.scale);
+        // 서버가 yaw를 도(degree)로 보냄 → 그대로 사용 (이중 변환 버그 제거)
+        pT->SetRotation(0.0f, yaw, 0.0f);
+    }
+
+    // 애니메이션
+    auto* pAnim = pMonster->AddComponent<AnimationComponent>();
+    if (pAnim)
+    {
+        pAnim->LoadAnimation(preset.animPath);
+        pAnim->Play(preset.idleClip, true);
+    }
+
+    // 쉐이더 등록 (렌더링)
+    Shader* pDefaultShader = pScene->GetDefaultShader();
+    if (pDefaultShader)
+    {
+        pScene->AddRenderComponentsToHierarchy(pDevice, pCommandList, pMonster, pDefaultShader, true);
+    }
+
+    // AnimationComponent::BuildBoneCache 호출 포함
+    pMonster->Init(pDevice, pCommandList);
+
+    m_mapServerMonsters[monsterId] = pMonster;
+
+    wchar_t buf[256];
+    swprintf_s(buf, L"[Network] Spawned NetMonster_%llu type=%u at (%.1f,%.1f,%.1f) boss=%d hp=%.1f\n",
+        monsterId, monsterType, x, y, z, isBoss ? 1 : 0, hp);
+    OutputDebugString(buf);
+}
+
+void NetworkManager::ProcessMonsterMove(uint64 monsterId, float x, float y, float z, float yaw)
+{
+    auto it = m_mapServerMonsters.find(monsterId);
+    if (it == m_mapServerMonsters.end())
+        return;
+
+    GameObject* pMonster = it->second;
+    TransformComponent* pT = pMonster->GetTransform();
+    if (pT)
+    {
+        pT->SetPosition(x, y, z);
+        // 서버가 yaw를 도(degree)로 보냄 → 그대로 사용
+        XMFLOAT3 rot = pT->GetRotation();
+        pT->SetRotation(rot.x, yaw, rot.z);
+    }
+
+    // 걷기 애니메이션 부드럽게 전환
+    auto* pAnim = pMonster->GetComponent<AnimationComponent>();
+    if (pAnim)
+    {
+        pAnim->CrossFade("Walk", 0.1f, true);
+    }
+
+    m_mapServerMonsterMoveTime[monsterId] = 0.0f;
+}
+
+void NetworkManager::CheckServerMonsterIdle(float deltaTime)
+{
+    for (auto it = m_mapServerMonsterMoveTime.begin(); it != m_mapServerMonsterMoveTime.end(); )
+    {
+        it->second += deltaTime;
+        if (it->second >= IDLE_TRANSITION_TIME)
+        {
+            auto mIt = m_mapServerMonsters.find(it->first);
+            if (mIt != m_mapServerMonsters.end())
+            {
+                auto* pAnim = mIt->second->GetComponent<AnimationComponent>();
+                if (pAnim)
+                {
+                    // 가능한 Idle 클립 후보 순차 시도 (preset별 이름 다름)
+                    pAnim->CrossFade("Idle", 0.2f, true);
+                }
+            }
+            it = m_mapServerMonsterMoveTime.erase(it);
+        }
+        else ++it;
+    }
+}
+
+void NetworkManager::ProcessMonsterDespawn(Scene* pScene, uint64 monsterId)
+{
+    auto it = m_mapServerMonsters.find(monsterId);
+    if (it == m_mapServerMonsters.end())
+        return;
+
+    GameObject* pMonster = it->second;
+    pScene->MarkForDeletion(pMonster);
+    m_mapServerMonsters.erase(it);
+    m_mapServerMonsterMoveTime.erase(monsterId);
+
+    wchar_t buf[128];
+    swprintf_s(buf, L"[Network] Despawned NetMonster_%llu\n", monsterId);
     OutputDebugString(buf);
 }

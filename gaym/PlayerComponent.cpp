@@ -23,18 +23,55 @@ void PlayerComponent::PlayerUpdate(float deltaTime, InputSystem* pInputSystem, C
 
     // Apply gravity
     XMFLOAT3 pos = pTransform->GetPosition();
+
+    // Fall zone: safe AABB 바깥 = 낙하 허용, 안쪽 = 수면에 뜸(차오르는 물 따라 상승)
+    bool bOutsideSafe = false;
+    float effectiveGroundY = GROUND_Y;  // 기본 바닥(타일 Y=0)
+    if (m_bFallZoneActive)
+    {
+        float dx = pos.x - m_xmf3SafeCenter.x;
+        float dz = pos.z - m_xmf3SafeCenter.z;
+        bOutsideSafe = (fabsf(dx) > m_xmf3SafeExtents.x) || (fabsf(dz) > m_xmf3SafeExtents.z);
+        if (bOutsideSafe)
+        {
+            m_bOnGround = false;  // 물 밖 = 지지 없음
+        }
+        else
+        {
+            // 안전존 내부에서는 수면이 타일 위로 올라오면 수면이 새 바닥
+            effectiveGroundY = fmaxf(GROUND_Y, m_fFallZoneWaterY);
+            if (pos.y < effectiveGroundY)
+            {
+                // 물이 플레이어 발밑을 넘었으니 수면에 띄움
+                pos.y = effectiveGroundY;
+                m_fVelocityY = 0.0f;
+                m_bOnGround = true;
+            }
+        }
+    }
+
     if (!m_bOnGround)
     {
         m_fVelocityY -= GRAVITY * deltaTime;
         pos.y += m_fVelocityY * deltaTime;
 
-        // Check if landed on ground
-        if (pos.y <= GROUND_Y)
+        if (!bOutsideSafe && pos.y <= effectiveGroundY)
         {
-            pos.y = GROUND_Y;
+            pos.y = effectiveGroundY;
             m_fVelocityY = 0.0f;
             m_bOnGround = true;
         }
+        pTransform->SetPosition(pos);
+
+        // 낙사: 안전존 밖에서 사망 Y 이하 → 즉사
+        if (bOutsideSafe && pos.y <= FALL_DEATH_Y && !IsDead())
+        {
+            TakeDamage(m_fMaxHP);
+        }
+    }
+    else
+    {
+        // 수면 상승 반영 (이미 bOnGround=true 상태에서도 Y 업데이트)
         pTransform->SetPosition(pos);
     }
 
@@ -167,6 +204,13 @@ void PlayerComponent::PlayerUpdate(float deltaTime, InputSystem* pInputSystem, C
     }
 
     UpdateAnimation(deltaTime, bMoving, bAttackTriggered);
+}
+
+void PlayerComponent::EnableFallZone(const XMFLOAT3& safeCenter, const XMFLOAT3& safeExtents)
+{
+    m_bFallZoneActive = true;
+    m_xmf3SafeCenter  = safeCenter;
+    m_xmf3SafeExtents = safeExtents;
 }
 
 void PlayerComponent::TakeDamage(float fDamage)

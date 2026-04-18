@@ -21,7 +21,15 @@
       "Bash(\"C:\\\\Program Files\\\\Microsoft Visual Studio\\\\2022\\\\Community\\\\MSBuild\\\\Current\\\\Bin\\\\amd64\\\\MSBuild.exe\" \"C:\\\\Users\\\\tta12\\\\Documents\\\\저장소\\\\gaym\\\\gaym\\\\gaym.sln\" -p:Configuration=Release -p:Platform=x64 -m)",
       "Bash(\"C:\\\\Program Files\\\\Microsoft Visual Studio\\\\2022\\\\Community\\\\MSBuild\\\\Current\\\\Bin\\\\amd64\\\\MSBuild.exe\" \"C:\\\\Users\\\\tta12\\\\Documents\\\\저장소\\\\gaym\\\\gaym\\\\gaym.sln\" -p:Configuration=Release -p:Platform=x64)",
       "Read(//c/Users/khj16/Capstones/Assets/TerrainSampleAssets/Textures/Heightmaps/**)",
-      "Read(//c/Users/khj16/Capstones/Assets/TerrainSampleAssets/Textures/Terrain/**)"
+      "Read(//c/Users/khj16/Capstones/Assets/TerrainSampleAssets/Textures/Terrain/**)",
+      "Bash(cp \"C:/Users/khj16/Downloads/RuneCode_Server/GameServer/Protocol.pb.h\" \"C:/Users/khj16/Downloads/gaym/gaym/Protocol/Protocol.pb.h\")",
+      "Bash(cp \"C:/Users/khj16/Downloads/RuneCode_Server/GameServer/Protocol.pb.cc\" \"C:/Users/khj16/Downloads/gaym/gaym/Protocol/Protocol.pb.cc\")",
+      "Bash(awk '/<Frame>:/{getline; getline name; print NR\": \"name}' \"C:/Users/khj16/Downloads/gaym/gaym/Assets/Enemies/Demon/Demon.txt\")",
+      "Bash(awk '/<Frame>:/{getline; getline name; print NR\": \"name}' \"C:/Users/khj16/Downloads/gaym/gaym/Assets/Enemies/Dragon/Red.txt\")",
+      "Bash(awk '/<Frame>:/{getline; getline fname; frame=fname} /<Vertices>:/{getline; if\\($1+0<20\\) print \"Golem Frame \\\\\"\"frame\"\\\\\" vertices: \"$1}' \"C:/Users/khj16/Downloads/gaym/gaym/Assets/Enemies/Golem/Golem01_Generic_prefab.txt\")",
+      "Bash(grep -rn \"frame=''\\\\|m_pstrFrameName\\\\[0\\\\] = 0\\\\|m_pstrFrameName\\\\[0\\\\] = '\\\\\\\\\\\\\\\\0'\" \"C:/Users/khj16/Downloads/gaym/gaym/\"*.cpp)",
+      "Bash(python *)",
+      "Bash(grep -E \"void set_|clear_|protected|class|public:|{$\")"
     ]
   }
 }

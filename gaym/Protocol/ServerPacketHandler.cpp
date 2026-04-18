@@ -190,6 +190,82 @@ bool Handle_S_MOVE(PacketSessionRef& session, Protocol::S_MOVE& pkt)
     return true;
 }
 
+// 몬스터 스폰 처리
+bool Handle_S_MONSTER_SPAWN(PacketSessionRef& session, Protocol::S_MONSTER_SPAWN& pkt)
+{
+    const Protocol::MonsterInfo& m = pkt.monster();
+
+    char buf[256];
+    sprintf_s(buf, "[Network] S_MONSTER_SPAWN received: id=%llu type=%u pos=(%.1f,%.1f,%.1f) yaw=%.2f hp=%.1f boss=%d",
+        m.monsterid(), m.monstertype(),
+        m.x(), m.y(), m.z(),
+        m.yaw(), m.hp(), m.isboss() ? 1 : 0);
+    WriteNetworkLog(buf);
+
+    NetworkManager* pNetMgr = NetworkManager::GetInstance();
+    if (pNetMgr)
+    {
+        pNetMgr->QueueMonsterSpawn(m.monsterid(), m.monstertype(),
+                                   m.x(), m.y(), m.z(), m.yaw(),
+                                   m.hp(), m.isboss());
+    }
+    return true;
+}
+
+// 몬스터 이동 처리
+bool Handle_S_MONSTER_MOVE(PacketSessionRef& session, Protocol::S_MONSTER_MOVE& pkt)
+{
+    uint64 id = pkt.monsterid();
+    float x = pkt.x(), y = pkt.y(), z = pkt.z();
+    float yaw = pkt.yaw();
+
+    char buf[256];
+    sprintf_s(buf, "[Network] S_MONSTER_MOVE: id=%llu pos=(%.2f,%.2f,%.2f) yaw=%.2f",
+        id, x, y, z, yaw);
+    WriteNetworkLog(buf);
+
+    NetworkManager* pNetMgr = NetworkManager::GetInstance();
+    if (pNetMgr)
+        pNetMgr->QueueMonsterMove(id, x, y, z, yaw);
+    return true;
+}
+
+// 몬스터 디스폰 처리
+bool Handle_S_MONSTER_DESPAWN(PacketSessionRef& session, Protocol::S_MONSTER_DESPAWN& pkt)
+{
+    uint64 id = pkt.monsterid();
+
+    char buf[128];
+    sprintf_s(buf, "[Network] S_MONSTER_DESPAWN: id=%llu", id);
+    WriteNetworkLog(buf);
+
+    NetworkManager* pNetMgr = NetworkManager::GetInstance();
+    if (pNetMgr)
+        pNetMgr->QueueMonsterDespawn(id);
+    return true;
+}
+
+// 방 전환 처리
+bool Handle_S_ROOM_TRANSITION(PacketSessionRef& session, Protocol::S_ROOM_TRANSITION& pkt)
+{
+    uint32 stageIndex = pkt.stageindex();
+    uint32 roomIndex = pkt.roomindex();
+    bool isBossRoom = pkt.isbossroom();
+
+    char buf[256];
+    sprintf_s(buf, "[Network] S_ROOM_TRANSITION received: stage=%u room=%u boss=%d",
+        stageIndex, roomIndex, isBossRoom ? 1 : 0);
+    WriteNetworkLog(buf);
+
+    NetworkManager* pNetMgr = NetworkManager::GetInstance();
+    if (pNetMgr)
+    {
+        pNetMgr->QueueRoomTransition(stageIndex, roomIndex, isBossRoom);
+    }
+
+    return true;
+}
+
 // 플레이어 스킬 처리
 bool Handle_S_SKILL(PacketSessionRef& session, Protocol::S_SKILL& pkt)
 {
