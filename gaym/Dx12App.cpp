@@ -531,11 +531,11 @@ void Dx12App::FrameAdvance()
             XMFLOAT2 mousePos = m_inputSystem.GetMousePosition();
 
             // Check if clicking on one of the 3 rune options
-            float optionLineHeight = 55.0f;  // 렌더링과 동일하게
+            float optionLineHeight = 95.0f;  // 렌더링과 동일하게
             for (int i = 0; i < 3; ++i)
             {
                 float optionY = screenCenterY + i * optionLineHeight;
-                float optionHeight = 45.0f;
+                float optionHeight = 65.0f;
                 float optionWidth = 500.0f;
 
                 if (mousePos.x >= screenCenterX - optionWidth / 2.0f &&
@@ -946,7 +946,7 @@ void Dx12App::RenderText()
 
                         // Rune options (clickable)
                         XMFLOAT2 mousePos = m_inputSystem.GetMousePosition();
-                        float optionLineHeight = 65.0f;
+                        float optionLineHeight = 95.0f;
                         float optionStartX = screenCenterX - 300.0f;
                         for (int i = 0; i < 3; ++i)
                         {
@@ -982,7 +982,7 @@ void Dx12App::RenderText()
                                 // Description on second line
                                 std::wstring desc = BuildRuneDesc(*def);
                                 m_spriteFont->DrawString(m_spriteBatch.get(), desc.c_str(),
-                                    XMFLOAT2(optionStartX + 20.0f, optionY + 22.0f),
+                                    XMFLOAT2(optionStartX + 20.0f, optionY + 45.0f),
                                     DirectX::Colors::Gray);
                             }
                         }
@@ -991,7 +991,7 @@ void Dx12App::RenderText()
                         const wchar_t* cancelText = L"[ESC] Cancel";
                         XMVECTOR cancelSize = m_spriteFont->MeasureString(cancelText);
                         m_spriteFont->DrawString(m_spriteBatch.get(), cancelText,
-                            XMFLOAT2(screenCenterX - XMVectorGetX(cancelSize) / 2.0f, screenCenterY + 180.0f),
+                            XMFLOAT2(screenCenterX - XMVectorGetX(cancelSize) / 2.0f, screenCenterY + 295.0f),
                             DirectX::Colors::Gray);
                     }
                 }

@@ -121,8 +121,7 @@ void SkillComponent::Update(float deltaTime)
             size_t index = static_cast<size_t>(m_ActiveSkillSlot);
             if (index < m_Skills.size() && m_Skills[index])
             {
-                float cooldown = m_Skills[index]->GetSkillData().cooldown;
-                m_CooldownTimers[index] = cooldown;
+                m_CooldownTimers[index] = GetEffectiveCooldown(index);
                 m_SkillStates[index] = SkillState::Cooldown;
                 m_Skills[index]->Reset();
             }
@@ -157,8 +156,7 @@ void SkillComponent::Update(float deltaTime)
 
         if (m_Skills[slotIndex]->IsFinished())
         {
-            float cooldown = m_Skills[slotIndex]->GetSkillData().cooldown;
-            m_CooldownTimers[slotIndex] = cooldown;
+            m_CooldownTimers[slotIndex] = GetEffectiveCooldown(slotIndex);
             m_SkillStates[slotIndex] = SkillState::Cooldown;
             m_Skills[slotIndex]->Reset();
 
@@ -230,9 +228,8 @@ void SkillComponent::ProcessSkillInput(InputSystem* pInputSystem, CCamera* pCame
                 m_SkillStates[index] = SkillState::Casting;
                 m_ActiveSkillSlot = m_ChargingSlot;
 
-                // Start cooldown
-                float cooldown = m_Skills[index]->GetSkillData().cooldown;
-                m_CooldownTimers[index] = cooldown;
+                // Start cooldown (cooldownMult 룬 적용)
+                m_CooldownTimers[index] = GetEffectiveCooldown(index);
             }
 
             m_bIsCharging = false;
@@ -261,8 +258,7 @@ void SkillComponent::ProcessSkillInput(InputSystem* pInputSystem, CCamera* pCame
             size_t index = static_cast<size_t>(m_ActiveSkillSlot);
             if (index < m_Skills.size() && m_Skills[index])
             {
-                float cooldown = m_Skills[index]->GetSkillData().cooldown * 0.5f; // Half cooldown on interrupt
-                m_CooldownTimers[index] = cooldown;
+                m_CooldownTimers[index] = GetEffectiveCooldown(index) * 0.5f; // 채널 중단: 절반 쿨다운
                 m_SkillStates[index] = SkillState::Cooldown;
                 m_Skills[index]->Reset();
             }
@@ -334,6 +330,26 @@ float SkillComponent::GetCooldownRemaining(SkillSlot slot) const
         return m_CooldownTimers[index];
     }
     return 0.0f;
+}
+
+float SkillComponent::GetEffectiveCooldown(size_t slotIndex) const
+{
+    if (slotIndex >= m_Skills.size() || !m_Skills[slotIndex]) return 0.f;
+    float base = m_Skills[slotIndex]->GetSkillData().cooldown;
+    ActivationType defType = m_Skills[slotIndex]->GetSkillData().activationType;
+    SkillStats stats = BuildSkillStats(static_cast<SkillSlot>(slotIndex), defType);
+    return base * stats.cooldownMult;
+}
+
+void SkillComponent::ResetCooldown(SkillSlot slot)
+{
+    size_t index = static_cast<size_t>(slot);
+    if (index < m_CooldownTimers.size())
+    {
+        m_CooldownTimers[index] = 0.0f;
+        if (index < m_SkillStates.size() && m_SkillStates[index] == SkillState::Cooldown)
+            m_SkillStates[index] = SkillState::Ready;
+    }
 }
 
 float SkillComponent::GetCooldownProgress(SkillSlot slot) const
@@ -551,11 +567,33 @@ void SkillComponent::ExecuteOrSplit(size_t index, const XMFLOAT3& target, float 
 {
     using namespace DirectX;
 
-    RuneCombo combo = GetRuneCombo(static_cast<SkillSlot>(index));
-    if (!combo.hasSplit) {
+    SkillSlot slot = static_cast<SkillSlot>(index);
+    ActivationType defType = m_Skills[index] ? m_Skills[index]->GetSkillData().activationType : ActivationType::Instant;
+    SkillStats stats = BuildSkillStats(slot, defType);
+    RuneCombo combo = GetRuneCombo(slot);
+
+    auto invokeOnCast = [&]() {
+        if (!stats.onCastHooks.empty() && m_pOwner)
+        {
+            SkillContext ctx;
+            ctx.caster    = m_pOwner;
+            ctx.targetPos = target;
+            ctx.element   = m_Skills[index] ? m_Skills[index]->GetSkillData().element : ElementType::None;
+            ctx.baseDamage = m_Skills[index] ? m_Skills[index]->GetSkillData().damage * mult : 0.f;
+            for (auto& hook : stats.onCastHooks) hook(ctx);
+        }
+    };
+
+    if (!combo.hasSplit)
+    {
         m_Skills[index]->Execute(m_pOwner, target, mult);
+        invokeOnCast();
+        // 쌍둥이별: 같은 방향으로 즉시 한 번 더 발사 (데미지 50%)
+        if (stats.doublecast)
+            m_Skills[index]->Execute(m_pOwner, target, mult * 0.5f);
         return;
     }
+
     // Split: 2개 투사체 좌우로 퍼뜨림
     XMVECTOR originV = (m_pOwner && m_pOwner->GetTransform())
         ? XMLoadFloat3(&m_pOwner->GetTransform()->GetPosition())
@@ -572,6 +610,12 @@ void SkillComponent::ExecuteOrSplit(size_t index, const XMFLOAT3& target, float 
     XMStoreFloat3(&t2, XMLoadFloat3(&target) - right * SPREAD);
     m_Skills[index]->Execute(m_pOwner, t1, mult);
     m_Skills[index]->Execute(m_pOwner, t2, mult);
+    invokeOnCast();
+    if (stats.doublecast)
+    {
+        m_Skills[index]->Execute(m_pOwner, t1, mult * 0.5f);
+        m_Skills[index]->Execute(m_pOwner, t2, mult * 0.5f);
+    }
 }
 
 void SkillComponent::ExecuteWithActivationType(SkillSlot slot, const DirectX::XMFLOAT3& targetPosition)

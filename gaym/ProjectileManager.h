@@ -58,7 +58,14 @@ public:
         bool isPlayerProjectile = true,
         float scale = 1.0f,
         const RuneCombo& runeCombo = {},
-        float chargeRatio = 0.0f
+        float chargeRatio = 0.0f,
+        float maxDistance = 100.f,
+        bool isPiercing = false,
+        bool isHoming = false,
+        float lifestealRatio = 0.f,
+        float execDamageBonus = 0.f,
+        float cdResetChance = 0.f,
+        SkillSlot skillSlot = SkillSlot::Count
     );
 
     // Update all projectiles (movement + collision)

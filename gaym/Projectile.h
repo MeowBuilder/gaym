@@ -35,6 +35,14 @@ struct Projectile
     RuneCombo runeCombo;         // Rune combo for VFX customization
     bool wasHit = false;         // True if deactivated by collision (not range)
 
+    // Rune-driven runtime flags (set at spawn from SkillStats)
+    bool  isPiercing      = false;  // 관통: 충돌 후에도 계속 진행
+    bool  isHoming        = false;  // 유도: 매 프레임 가장 가까운 적 방향으로 회전
+    float lifestealRatio  = 0.f;    // 흡수: 피해량 * ratio 만큼 시전자 HP 회복
+    float execDamageBonus = 0.f;    // 처형자: 대상 HP 30% 이하 시 추가 배율
+    float cdResetChance   = 0.f;    // 무한: 적중 시 쿨다운 초기화 확률
+    SkillSlot skillSlot   = SkillSlot::Count; // 적중 시 onHit 훅 호출용 슬롯 정보
+
     // Helper to update position
     void Update(float deltaTime)
     {

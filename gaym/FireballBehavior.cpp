@@ -96,19 +96,23 @@ void FireballBehavior::ExecuteInstant(GameObject* caster, const DirectX::XMFLOAT
         m_SkillData.name.c_str(), finalDamage, damageMultiplier, scale);
     OutputDebugString(buffer);
 
-    // Get rune combo for VFX customization
+    // 룬 스탯 및 VFX 콤보 읽기
     RuneCombo combo;
+    SkillStats stats;
     if (caster) {
         auto* pSkillComp = caster->GetComponent<SkillComponent>();
-        if (pSkillComp && m_slot != SkillSlot::Count)
+        if (pSkillComp && m_slot != SkillSlot::Count) {
             combo = pSkillComp->GetRuneCombo(m_slot);
+            stats = pSkillComp->BuildSkillStats(m_slot, m_SkillData.activationType);
+        }
     }
+
+    // radiusMult / rangeMult 룬 적용
+    explosionRadius *= stats.radiusMult;
+    float maxDist = 100.f * stats.rangeMult;
 
     float chargeRatio = fmaxf(0.0f, fminf(1.0f, (damageMultiplier - 1.0f) / 2.0f));
 
-    // Flatten target to launch height so the projectile flies horizontally.
-    // (CalculateTargetPosition returns a ground-plane point; the height difference
-    //  would otherwise give direction a negative Y, making the fireball arc down.)
     DirectX::XMFLOAT3 flatTarget = targetPosition;
     flatTarget.y = m_StartPosition.y;
 
@@ -123,8 +127,15 @@ void FireballBehavior::ExecuteInstant(GameObject* caster, const DirectX::XMFLOAT
         caster,
         true,
         scale,
-        combo,  // Rune combo for VFX customization
-        chargeRatio
+        combo,
+        chargeRatio,
+        maxDist,
+        stats.piercing,
+        stats.homing,
+        stats.lifestealRatio,
+        stats.execDamageBonus,
+        stats.cdResetChance,
+        m_slot
     );
 }
 

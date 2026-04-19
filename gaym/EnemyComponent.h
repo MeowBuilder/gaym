@@ -108,6 +108,7 @@ public:
     void SetStats(const EnemyStats& stats) { m_Stats = stats; }
     EnemyStats& GetStats() { return m_Stats; }
     const EnemyStats& GetStats() const { return m_Stats; }
+    float GetHpRatio() const { return (m_Stats.m_fMaxHP > 0.f) ? m_Stats.m_fCurrentHP / m_Stats.m_fMaxHP : 0.f; }
 
     // Damage handling
     // bTriggerStagger=false: 데미지만 입히고 경직 없음 (다단히트 스킬용)

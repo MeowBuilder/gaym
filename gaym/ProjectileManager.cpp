@@ -8,10 +8,12 @@
 #include "GameObject.h"
 #include "EnemyComponent.h"
 #include "PlayerComponent.h"
+#include "SkillComponent.h"
 #include "TransformComponent.h"
 #include "Mesh.h"
 #include "DescriptorHeap.h"
 #include <DirectXCollision.h>
+#include <random>
 
 ProjectileManager::ProjectileManager()
 {
@@ -166,23 +168,36 @@ void ProjectileManager::SpawnProjectile(
     bool isPlayerProjectile,
     float scale,
     const RuneCombo& runeCombo,
-    float chargeRatio)
+    float chargeRatio,
+    float maxDistance,
+    bool isPiercing,
+    bool isHoming,
+    float lifestealRatio,
+    float execDamageBonus,
+    float cdResetChance,
+    SkillSlot skillSlot)
 {
     Projectile proj;
-    proj.position = startPos;
-    proj.damage = damage;
-    proj.speed = speed;
-    proj.radius = radius;
-    proj.explosionRadius = explosionRadius;
-    proj.element = element;
-    proj.owner = owner;
+    proj.position         = startPos;
+    proj.damage           = damage;
+    proj.speed            = speed;
+    proj.radius           = radius;
+    proj.explosionRadius  = explosionRadius;
+    proj.element          = element;
+    proj.owner            = owner;
     proj.isPlayerProjectile = isPlayerProjectile;
-    proj.maxDistance = 100.0f;
+    proj.maxDistance      = maxDistance;
     proj.distanceTraveled = 0.0f;
-    proj.isActive = true;
-    proj.scale = scale;
-    proj.runeCombo = runeCombo;
-    proj.chargeRatio = chargeRatio;
+    proj.isActive         = true;
+    proj.scale            = scale;
+    proj.runeCombo        = runeCombo;
+    proj.chargeRatio      = chargeRatio;
+    proj.isPiercing       = isPiercing;
+    proj.isHoming         = isHoming;
+    proj.lifestealRatio   = lifestealRatio;
+    proj.execDamageBonus  = execDamageBonus;
+    proj.cdResetChance    = cdResetChance;
+    proj.skillSlot        = skillSlot;
 
     // Calculate direction
     XMVECTOR start = XMLoadFloat3(&startPos);
@@ -203,6 +218,37 @@ void ProjectileManager::Update(float deltaTime)
         {
             inactiveCount++;
             continue;
+        }
+
+        // 유도: 가장 가까운 적 방향으로 방향 벡터를 서서히 회전
+        if (projectile.isHoming && projectile.isPlayerProjectile && m_pScene)
+        {
+            CRoom* pRoom = m_pScene->GetCurrentRoom();
+            if (pRoom)
+            {
+                float bestDist = FLT_MAX;
+                XMFLOAT3 bestPos = projectile.position;
+                for (const auto& obj : pRoom->GetGameObjects())
+                {
+                    if (!obj) continue;
+                    EnemyComponent* pEnemy = obj->GetComponent<EnemyComponent>();
+                    if (!pEnemy || pEnemy->IsDead()) continue;
+                    XMFLOAT3 ePos = obj->GetTransform()->GetPosition();
+                    XMVECTOR diff = XMLoadFloat3(&ePos) - XMLoadFloat3(&projectile.position);
+                    float d = XMVectorGetX(XMVector3Length(diff));
+                    if (d < bestDist) { bestDist = d; bestPos = ePos; }
+                }
+                if (bestDist < FLT_MAX)
+                {
+                    XMVECTOR cur = XMLoadFloat3(&projectile.direction);
+                    XMVECTOR toTarget = XMVector3Normalize(
+                        XMLoadFloat3(&bestPos) - XMLoadFloat3(&projectile.position));
+                    constexpr float TURN_SPEED = 3.5f; // rad/s
+                    XMVECTOR newDir = XMVector3Normalize(
+                        cur + toTarget * (TURN_SPEED * deltaTime));
+                    XMStoreFloat3(&projectile.direction, newDir);
+                }
+            }
         }
 
         // Update position
@@ -302,21 +348,18 @@ void ProjectileManager::CheckProjectileCollisions(Projectile& projectile)
             if (projSphere.Intersects(enemySphere))
             {
                 if (projectile.explosionRadius > 0.0f)
-                {
                     ApplyAoEDamage(projectile, projectile.position);
-                }
                 else
-                {
                     ApplyDamage(projectile, pEnemy);
-                }
 
                 projectile.wasHit = true;
-                projectile.isActive = false;
-
-                wchar_t buffer[128];
-                swprintf_s(buffer, 128, L"[ProjectileManager] Hit enemy! Damage: %.0f\n", projectile.damage);
-                OutputDebugString(buffer);
-                return;
+                if (!projectile.isPiercing)
+                {
+                    projectile.isActive = false;
+                    return;
+                }
+                // 관통: 같은 적에 연속 히트 방지를 위해 잠깐 무적 처리 대신
+                // 단순히 충돌 구체를 통과한 뒤 다음 적을 노림 — 루프 계속
             }
         }
     }
@@ -358,7 +401,53 @@ void ProjectileManager::CheckProjectileCollisions(Projectile& projectile)
 void ProjectileManager::ApplyDamage(Projectile& projectile, EnemyComponent* pEnemy)
 {
     if (!pEnemy) return;
-    pEnemy->TakeDamage(projectile.damage);
+
+    float dmg = projectile.damage;
+
+    // 처형자: 대상 HP 30% 이하일 때 추가 피해
+    if (projectile.execDamageBonus > 0.f && pEnemy->GetHpRatio() < 0.3f)
+        dmg *= (1.f + projectile.execDamageBonus);
+
+    pEnemy->TakeDamage(dmg);
+
+    // 흡수: 피해량 * ratio 만큼 시전자 HP 회복
+    if (projectile.lifestealRatio > 0.f && projectile.owner)
+    {
+        PlayerComponent* pPlayer = projectile.owner->GetComponent<PlayerComponent>();
+        if (pPlayer) pPlayer->Heal(dmg * projectile.lifestealRatio);
+    }
+
+    // 무한: 확률로 시전자 스킬 쿨다운 즉시 초기화
+    if (projectile.cdResetChance > 0.f && projectile.skillSlot != SkillSlot::Count && projectile.owner)
+    {
+        static std::mt19937 rng{ std::random_device{}() };
+        static std::uniform_real_distribution<float> dist(0.f, 1.f);
+        if (dist(rng) < projectile.cdResetChance)
+        {
+            SkillComponent* pSkill = projectile.owner->GetComponent<SkillComponent>();
+            if (pSkill) pSkill->ResetCooldown(projectile.skillSlot);
+        }
+    }
+
+    // onHit 훅 호출
+    if (projectile.skillSlot != SkillSlot::Count && projectile.owner)
+    {
+        SkillComponent* pSkillComp = projectile.owner->GetComponent<SkillComponent>();
+        if (pSkillComp)
+        {
+            ActivationType defaultType = ActivationType::Instant;
+            SkillStats stats = pSkillComp->BuildSkillStats(projectile.skillSlot, defaultType);
+            if (!stats.onHitHooks.empty())
+            {
+                SkillContext ctx;
+                ctx.caster     = projectile.owner;
+                ctx.element    = projectile.element;
+                ctx.baseDamage = projectile.damage;
+                ctx.damageDealt = dmg;
+                for (auto& hook : stats.onHitHooks) hook(ctx);
+            }
+        }
+    }
 }
 
 void ProjectileManager::ApplyAoEDamage(Projectile& projectile, const XMFLOAT3& impactPoint)

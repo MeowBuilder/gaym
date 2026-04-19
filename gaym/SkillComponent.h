@@ -44,6 +44,12 @@ public:
     // Get cooldown progress (0.0 = just used, 1.0 = ready)
     float GetCooldownProgress(SkillSlot slot) const;
 
+    // 무한 룬: 쿨다운 즉시 초기화
+    void ResetCooldown(SkillSlot slot);
+
+    // 룬 cooldownMult 적용한 실제 쿨다운 반환
+    float GetEffectiveCooldown(size_t slotIndex) const;
+
     // Rune/Activation type management (legacy - uses first equipped rune)
     void SetActivationType(ActivationType type);
     ActivationType GetActivationType() const { return m_CurrentActivationType; }
