@@ -28,4 +28,21 @@ public:
 
     // 지면 AoE 인디케이터(빨간 원)를 보여줄지 여부. 투사체/발사형은 false로 표시 억제
     virtual bool ShouldShowHitZone() const { return true; }
+
+    // 이 공격의 지면 인디케이터 반경 override. 0 반환 시 EnemyComponent preset 기본값 사용.
+    // Circle 에서는 반경, ForwardBox 에서는 half-width 로 사용됨
+    virtual float GetIndicatorRadius() const { return 0.0f; }
+
+    // 인디케이터 길이 override (ForwardBox 전용). 0 반환 시 preset 기본값 사용
+    virtual float GetIndicatorLength() const { return 0.0f; }
+
+    // 인디케이터 타입 override. 반환값이 음수이면 preset 기본값 사용 (일반)
+    //   특정 패턴이 preset 과 다른 모양이 필요할 때 override (예: 원형 보스의 직사각형 공격)
+    //   값은 int 로 받아서 IndicatorType 으로 캐스팅 — 헤더 의존성 축소
+    virtual int GetIndicatorTypeOverride() const { return -1; }
+
+    // 공격 애니메이션 루프 여부 override.
+    //   true (default) : m_AnimConfig.m_bLoopAttack 사용
+    //   false          : 애니를 1회만 재생하고 끝 (behavior 가 애니 종료 후 idle 전환 담당)
+    virtual bool ShouldLoopAnim() const { return true; }
 };

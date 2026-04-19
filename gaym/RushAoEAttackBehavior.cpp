@@ -46,8 +46,6 @@ void RushAoEAttackBehavior::Execute(EnemyComponent* pEnemy)
 
     m_ePhase = Phase::Rush;
     m_fPhaseDuration = m_fRushDuration;
-
-    OutputDebugString(L"[RushAoE] Attack started - rush phase\n");
 }
 
 void RushAoEAttackBehavior::Update(float dt, EnemyComponent* pEnemy)
@@ -65,7 +63,6 @@ void RushAoEAttackBehavior::Update(float dt, EnemyComponent* pEnemy)
             m_ePhase = Phase::Windup;
             m_fTimer = 0.0f;
             m_fPhaseDuration = m_fWindupTime;
-            OutputDebugString(L"[RushAoE] Windup phase\n");
         }
         break;
 
@@ -75,7 +72,6 @@ void RushAoEAttackBehavior::Update(float dt, EnemyComponent* pEnemy)
             m_ePhase = Phase::Hit;
             m_fTimer = 0.0f;
             m_fPhaseDuration = m_fHitTime;
-            OutputDebugString(L"[RushAoE] Hit phase\n");
         }
         break;
 
@@ -90,7 +86,6 @@ void RushAoEAttackBehavior::Update(float dt, EnemyComponent* pEnemy)
             m_ePhase = Phase::Recovery;
             m_fTimer = 0.0f;
             m_fPhaseDuration = m_fRecoveryTime;
-            OutputDebugString(L"[RushAoE] Recovery phase\n");
         }
         break;
 
@@ -98,7 +93,6 @@ void RushAoEAttackBehavior::Update(float dt, EnemyComponent* pEnemy)
         if (m_fTimer >= m_fRecoveryTime)
         {
             m_bFinished = true;
-            OutputDebugString(L"[RushAoE] Attack finished\n");
         }
         break;
     }
@@ -150,7 +144,6 @@ void RushAoEAttackBehavior::UpdateRush(float dt, EnemyComponent* pEnemy)
                 {
                     pPlayer->TakeDamage(m_fDamage);
                     m_bRushHitDealt = true;
-                    OutputDebugString(L"[RushAoE] Rush collision HIT!\n");
                 }
             }
         }
@@ -166,21 +159,10 @@ void RushAoEAttackBehavior::DealAoEDamage(EnemyComponent* pEnemy)
 
     // 360-degree AoE: only check distance, no angle check
     float distance = pEnemy->GetDistanceToTarget();
-    if (distance > m_fAoERadius)
-    {
-        OutputDebugString(L"[RushAoE] AoE missed - target out of range\n");
-        return;
-    }
+    if (distance > m_fAoERadius) return;
 
     // Deal damage to player
     PlayerComponent* pPlayer = pTarget->GetComponent<PlayerComponent>();
     if (pPlayer)
-    {
         pPlayer->TakeDamage(m_fDamage);
-
-        wchar_t buffer[128];
-        swprintf_s(buffer, L"[RushAoE] AoE HIT! Dealt %.1f damage (HP: %.1f/%.1f)\n",
-            m_fDamage, pPlayer->GetCurrentHP(), pPlayer->GetMaxHP());
-        OutputDebugString(buffer);
-    }
 }

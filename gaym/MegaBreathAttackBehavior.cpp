@@ -76,7 +76,6 @@ void MegaBreathAttackBehavior::Execute(EnemyComponent* pEnemy)
 
     m_ePhase = Phase::TakeOff;
 
-    OutputDebugString(L"[MegaBreath] Attack started - taking off\n");
 }
 
 void MegaBreathAttackBehavior::Update(float dt, EnemyComponent* pEnemy)
@@ -88,17 +87,6 @@ void MegaBreathAttackBehavior::Update(float dt, EnemyComponent* pEnemy)
 
     // 매 프레임 시네마틱 카메라 업데이트 (페이즈에 맞춰 앵글/타겟 결정 + 부드럽게 블렌드)
     UpdateCinematicCamera(dt, pEnemy);
-
-    // 현재 페이즈 로그 (매 프레임 출력하면 너무 많으니 타이머 기반)
-    static float logTimer = 0.0f;
-    logTimer += dt;
-    if (logTimer >= 0.5f)
-    {
-        wchar_t buf[128];
-        swprintf_s(buf, L"[MegaBreath] Update: Phase=%d, Timer=%.2f\n", (int)m_ePhase, m_fTimer);
-        OutputDebugString(buf);
-        logTimer = 0.0f;
-    }
 
     switch (m_ePhase)
     {
@@ -143,7 +131,6 @@ void MegaBreathAttackBehavior::Update(float dt, EnemyComponent* pEnemy)
                 }
             }
 
-            OutputDebugString(L"[MegaBreath] Flying to wall\n");
         }
         break;
 
@@ -168,7 +155,6 @@ void MegaBreathAttackBehavior::Update(float dt, EnemyComponent* pEnemy)
 
             m_ePhase = Phase::Landing;
             m_fTimer = 0.0f;
-            OutputDebugString(L"[MegaBreath] Landing\n");
         }
         break;
 
@@ -196,7 +182,6 @@ void MegaBreathAttackBehavior::Update(float dt, EnemyComponent* pEnemy)
         {
             m_ePhase = Phase::SpawnCover;
             m_fTimer = 0.0f;
-            OutputDebugString(L"[MegaBreath] Spawning cover objects\n");
         }
         break;
 
@@ -211,7 +196,6 @@ void MegaBreathAttackBehavior::Update(float dt, EnemyComponent* pEnemy)
         {
             m_ePhase = Phase::Windup;
             m_fTimer = 0.0f;
-            OutputDebugString(L"[MegaBreath] Windup phase - preparing breath\n");
         }
         break;
 
@@ -263,7 +247,6 @@ void MegaBreathAttackBehavior::Update(float dt, EnemyComponent* pEnemy)
             DestroyChargeVFX();
             SpawnFireWave(pEnemy);
 
-            OutputDebugString(L"[MegaBreath] Breath phase - FIRE WAVE LAUNCHED!\n");
         }
         break;
 
@@ -283,7 +266,6 @@ void MegaBreathAttackBehavior::Update(float dt, EnemyComponent* pEnemy)
         {
             m_ePhase = Phase::Recovery;
             m_fTimer = 0.0f;
-            OutputDebugString(L"[MegaBreath] Recovery phase\n");
         }
         break;
 
@@ -327,7 +309,6 @@ void MegaBreathAttackBehavior::Update(float dt, EnemyComponent* pEnemy)
 
             m_ePhase = Phase::ReturnTakeOff;
             m_fTimer = 0.0f;
-            OutputDebugString(L"[MegaBreath] Return flight - taking off\n");
         }
         break;
 
@@ -363,7 +344,6 @@ void MegaBreathAttackBehavior::Update(float dt, EnemyComponent* pEnemy)
 
             m_ePhase = Phase::ReturnFly;
             m_fTimer = 0.0f;
-            OutputDebugString(L"[MegaBreath] Return flight - flying back to origin\n");
         }
         break;
 
@@ -413,7 +393,6 @@ void MegaBreathAttackBehavior::Update(float dt, EnemyComponent* pEnemy)
 
             m_ePhase = Phase::ReturnLand;
             m_fTimer = 0.0f;
-            OutputDebugString(L"[MegaBreath] Return flight - landing\n");
         }
         break;
 
@@ -455,7 +434,6 @@ void MegaBreathAttackBehavior::Update(float dt, EnemyComponent* pEnemy)
             }
 
             m_bFinished = true;
-            OutputDebugString(L"[MegaBreath] Return flight complete - attack finished\n");
         }
         break;
     }
@@ -741,11 +719,6 @@ XMFLOAT3 MegaBreathAttackBehavior::CalculateWallPosition()
         break;
     }
 
-    wchar_t buf[128];
-    swprintf_s(buf, L"[MegaBreath] Wall position: (%.1f, %.1f, %.1f) direction=%d\n",
-               wallPos.x, wallPos.y, wallPos.z, m_nWallDirection);
-    OutputDebugString(buf);
-
     return wallPos;
 }
 
@@ -881,11 +854,6 @@ void MegaBreathAttackBehavior::SpawnCoverObjects(EnemyComponent* pEnemy)
 
                 pScene->SetCurrentRoom(pPrevRoom);
             }
-
-            wchar_t buf[128];
-            swprintf_s(buf, L"[MegaBreath] Cover %d at (%.1f, %.1f, %.1f)\n",
-                i, coverPositions[i].x, coverPositions[i].y, coverPositions[i].z);
-            OutputDebugString(buf);
         }
 
         // 방 내 기존 장애물(Wall 레이어)도 장애물 목록에 추가
@@ -906,9 +874,6 @@ void MegaBreathAttackBehavior::SpawnCoverObjects(EnemyComponent* pEnemy)
             }
         }
 
-        wchar_t buf2[64];
-        swprintf_s(buf2, L"[MegaBreath] Total obstacles: %zu\n", m_vObstacles.size());
-        OutputDebugString(buf2);
     }
 }
 void MegaBreathAttackBehavior::DestroyCoverObjects()
@@ -937,7 +902,6 @@ void MegaBreathAttackBehavior::DestroyCoverObjects()
     m_vCoverObjects.clear();
     m_vObstacles.clear();
 
-    OutputDebugString(L"[MegaBreath] Cover objects scheduled for deletion\n");
 }
 
 bool MegaBreathAttackBehavior::IsPlayerBehindCover(const XMFLOAT3& breathOrigin, const XMFLOAT3& playerPos)
@@ -1089,7 +1053,6 @@ void MegaBreathAttackBehavior::ApplyBreathDamage(EnemyComponent* pEnemy)
     XMFLOAT3 mouthForRay = m_xmf3BeamOrigin;
     if (IsPlayerBehindCover(mouthForRay, playerPos))
     {
-        OutputDebugString(L"[MegaBreath] Player behind cover from beam - SAFE\n");
         return;
     }
 
@@ -1098,10 +1061,6 @@ void MegaBreathAttackBehavior::ApplyBreathDamage(EnemyComponent* pEnemy)
     if (pPlayer)
     {
         pPlayer->TakeDamage(m_fDamagePerTick);
-        wchar_t buf[128];
-        swprintf_s(buf, L"[MegaBreath] FireWave HIT! %.1f dmg (HP: %.1f/%.1f)\n",
-                   m_fDamagePerTick, pPlayer->GetCurrentHP(), pPlayer->GetMaxHP());
-        OutputDebugString(buf);
     }
 }
 
@@ -1206,7 +1165,6 @@ void MegaBreathAttackBehavior::SpawnFireWave(EnemyComponent* pEnemy)
             m_xmf3BeamOrigin, dir, beamDef, false); // 적 스킬 — SSF 분리
     }
 
-    OutputDebugString(L"[MegaBreath] SPH Fire Beams spawned (5-fan, tight spacing)\n");
 }
 
 void MegaBreathAttackBehavior::UpdateFireWave(float dt, EnemyComponent* pEnemy)
@@ -1279,7 +1237,6 @@ void MegaBreathAttackBehavior::SpawnChargeVFX(EnemyComponent* pEnemy)
     def.phases.push_back(p);
 
     m_nChargeVFXId = m_pFluidVFXManager->SpawnSequenceEffect(mouth, forward, def, false); // 적 스킬 — SSF 분리
-    OutputDebugString(L"[MegaBreath] Charge VFX spawned at mouth\n");
 }
 
 void MegaBreathAttackBehavior::UpdateChargeVFX(EnemyComponent* /*pEnemy*/)

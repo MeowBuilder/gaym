@@ -72,7 +72,6 @@ void FlyingCircleAttackBehavior::Execute(EnemyComponent* pEnemy)
     }
 
     m_ePhase = Phase::TakeOff;
-    OutputDebugString(L"[FlyingCircle] Starting TakeOff phase\n");
 }
 
 void FlyingCircleAttackBehavior::Update(float dt, EnemyComponent* pEnemy)
@@ -105,8 +104,6 @@ void FlyingCircleAttackBehavior::Update(float dt, EnemyComponent* pEnemy)
             {
                 m_ePhase = Phase::MoveToOrbit;
                 m_fTimer = 0.0f;
-
-                OutputDebugString(L"[FlyingCircle] Moving to orbit position\n");
             }
         }
         break;
@@ -142,8 +139,6 @@ void FlyingCircleAttackBehavior::Update(float dt, EnemyComponent* pEnemy)
                 {
                     pAnimComp->CrossFade("Fly Glide", 0.2f, true);
                 }
-
-                OutputDebugString(L"[FlyingCircle] Circle phase started!\n");
             }
         }
         break;
@@ -186,8 +181,6 @@ void FlyingCircleAttackBehavior::Update(float dt, EnemyComponent* pEnemy)
                 {
                     pAnimComp->CrossFade("Land", 0.15f, false);
                 }
-
-                OutputDebugString(L"[FlyingCircle] Landing phase started\n");
             }
         }
         break;
@@ -211,7 +204,6 @@ void FlyingCircleAttackBehavior::Update(float dt, EnemyComponent* pEnemy)
 
                 pEnemy->SetInvincible(false);
                 m_bFinished = true;
-                OutputDebugString(L"[FlyingCircle] Attack finished\n");
             }
         }
         break;

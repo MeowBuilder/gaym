@@ -57,7 +57,6 @@ void FlyingStrafeAttackBehavior::Execute(EnemyComponent* pEnemy)
     }
 
     m_ePhase = Phase::TakeOff;
-    OutputDebugString(L"[FlyingStrafe] Starting TakeOff phase\n");
 }
 
 void FlyingStrafeAttackBehavior::Update(float dt, EnemyComponent* pEnemy)
@@ -99,8 +98,6 @@ void FlyingStrafeAttackBehavior::Update(float dt, EnemyComponent* pEnemy)
                 {
                     pAnimComp->CrossFade("Fly Glide", 0.2f, true);
                 }
-
-                OutputDebugString(L"[FlyingStrafe] Strafe phase started!\n");
             }
         }
         break;
@@ -135,8 +132,6 @@ void FlyingStrafeAttackBehavior::Update(float dt, EnemyComponent* pEnemy)
                 {
                     pAnimComp->CrossFade("Land", 0.15f, false);
                 }
-
-                OutputDebugString(L"[FlyingStrafe] Landing phase started\n");
             }
         }
         break;
@@ -160,7 +155,6 @@ void FlyingStrafeAttackBehavior::Update(float dt, EnemyComponent* pEnemy)
 
                 pEnemy->SetInvincible(false);
                 m_bFinished = true;
-                OutputDebugString(L"[FlyingStrafe] Attack finished\n");
             }
         }
         break;

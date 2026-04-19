@@ -54,7 +54,6 @@ void DiveBombAttackBehavior::Execute(EnemyComponent* pEnemy)
     }
 
     m_ePhase = Phase::TakeOff;
-    OutputDebugString(L"[DiveBomb] Starting TakeOff phase\n");
 }
 
 void DiveBombAttackBehavior::Update(float dt, EnemyComponent* pEnemy)
@@ -112,7 +111,6 @@ void DiveBombAttackBehavior::Update(float dt, EnemyComponent* pEnemy)
                     pAnimComp->CrossFade("Fly Glide", 0.1f, true);
                 }
 
-                OutputDebugString(L"[DiveBomb] Hover phase - locking target\n");
             }
         }
         break;
@@ -125,8 +123,6 @@ void DiveBombAttackBehavior::Update(float dt, EnemyComponent* pEnemy)
                 m_ePhase = Phase::Dive;
                 m_fTimer = 0.0f;
                 m_fNextFireTime = 0.0f;
-
-                OutputDebugString(L"[DiveBomb] Dive phase started!\n");
             }
         }
         break;
@@ -170,8 +166,6 @@ void DiveBombAttackBehavior::Update(float dt, EnemyComponent* pEnemy)
                 {
                     pAnimComp->CrossFade("Land", 0.1f, false);
                 }
-
-                OutputDebugString(L"[DiveBomb] Recovery phase - impact!\n");
             }
         }
         break;
@@ -182,7 +176,6 @@ void DiveBombAttackBehavior::Update(float dt, EnemyComponent* pEnemy)
             {
                 pEnemy->SetInvincible(false);
                 m_bFinished = true;
-                OutputDebugString(L"[DiveBomb] Attack finished\n");
             }
         }
         break;
@@ -286,6 +279,5 @@ void DiveBombAttackBehavior::DealImpactDamage(EnemyComponent* pEnemy)
     if (pPlayer)
     {
         pPlayer->TakeDamage(m_fImpactDamage);
-        OutputDebugString(L"[DiveBomb] Impact HIT!\n");
     }
 }

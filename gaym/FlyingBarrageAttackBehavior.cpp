@@ -97,8 +97,6 @@ void FlyingBarrageAttackBehavior::Update(float dt, EnemyComponent* pEnemy)
                 {
                     pAnimComp->CrossFade("Fly Glide", 0.2f, true);
                 }
-
-                OutputDebugString(L"[FlyingBarrage] Barrage phase started!\n");
             }
         }
         break;
@@ -116,10 +114,6 @@ void FlyingBarrageAttackBehavior::Update(float dt, EnemyComponent* pEnemy)
 
                 m_nWavesFired++;
                 m_fNextWaveTime += m_fWaveInterval;
-
-                wchar_t buffer[64];
-                swprintf_s(buffer, L"[FlyingBarrage] Fired ring %d/%d\n", m_nWavesFired, m_nTotalWaves);
-                OutputDebugString(buffer);
             }
 
             // Check if barrage is complete
@@ -134,8 +128,6 @@ void FlyingBarrageAttackBehavior::Update(float dt, EnemyComponent* pEnemy)
                 {
                     pAnimComp->CrossFade("Land", 0.15f, false);
                 }
-
-                OutputDebugString(L"[FlyingBarrage] Landing phase started\n");
             }
         }
         break;

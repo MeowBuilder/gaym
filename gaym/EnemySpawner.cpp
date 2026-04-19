@@ -21,6 +21,9 @@
 #include "JumpSlamAttackBehavior.h"
 #include "ComboAttackBehavior.h"
 #include "MegaBreathAttackBehavior.h"
+#include "RockFallAttackBehavior.h"
+#include "RockBarrageAttackBehavior.h"
+#include "GroundRuptureAttackBehavior.h"
 #include "BossPhaseConfig.h"
 #include "BossPhaseController.h"
 #include "Room.h"
@@ -498,42 +501,142 @@ void EnemySpawner::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pComma
 
     RegisterEnemyPreset("Kraken", kraken);
 
-    // Register Golem Boss preset (Earth stage boss - stationary colossus like Mordeum)
+    // Register Golem Boss preset (Earth stage boss — 완전 고정형 거대 석상)
+    //   이동/회전 전부 봉쇄. 방사형 광역 패턴으로만 전장 통제.
+    //   한 방 한 방이 묵직·느림·강함. 애니 재생속도까지 낮춰 "무거운 석상" 체감 확보.
     EnemySpawnData golem;
-    golem.m_strMeshPath      = "Assets/Enemies/golem/Golem01_Generic_prefab.bin";
-    golem.m_strAnimationPath = "Assets/Enemies/golem/Golem01_Generic_prefab_Anim.bin";
-    golem.m_strTexturePath   = "Assets/Enemies/golem/Textures/chr_04_Golem_alb.png";
-    golem.m_xmf3Scale = XMFLOAT3(8.0f, 8.0f, 8.0f);  // 거대 보스
+    golem.m_strMeshPath      = "Assets/Enemies/Golem/Golem01_Generic_prefab.bin";
+    golem.m_strAnimationPath = "Assets/Enemies/Golem/Golem01_Generic_prefab_Anim.bin";
+    golem.m_strTexturePath   = "Assets/Enemies/Golem/Textures/chr_04_Golem_alb.png";
+    golem.m_xmf3Scale = XMFLOAT3(14.0f, 14.0f, 14.0f);  // 10 → 14 (맵 확대 예정 + 제단 위압감)
     golem.m_xmf4Color = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
 
-    golem.m_Stats.m_fMaxHP              = 2000.0f;
-    golem.m_Stats.m_fCurrentHP          = 2000.0f;
-    golem.m_Stats.m_fMoveSpeed          = 1.0f;   // 거의 안 움직임
-    golem.m_Stats.m_fAttackRange        = 22.0f;  // 큰 체구에 맞는 넓은 범위
-    golem.m_Stats.m_fAttackCooldown     = 3.0f;   // 느린 공격
-    golem.m_Stats.m_fLongRangeThreshold = 40.0f;
-    golem.m_Stats.m_fMidRangeThreshold  = 22.0f;
+    golem.m_Stats.m_fMaxHP              = 2500.0f;
+    golem.m_Stats.m_fCurrentHP          = 2500.0f;
+    golem.m_Stats.m_fMoveSpeed          = 0.0f;
+    golem.m_Stats.m_fAttackRange        = 9999.0f;
+    golem.m_Stats.m_fAttackCooldown     = 4.5f;
+    golem.m_Stats.m_fLongRangeThreshold = 0.0f;
+    golem.m_Stats.m_fMidRangeThreshold  = 0.0f;
 
-    golem.m_bIsBoss = true;
-    golem.m_fSpecialAttackCooldown = 8.0f;
-    golem.m_nSpecialAttackChance   = 50;
+    golem.m_bIsBoss        = true;
+    golem.m_bStationary    = true;
+    golem.m_fRotationSpeed = 0.0f;
+    golem.m_fAnimationPlaybackSpeed = 0.7f;
+    golem.m_fColliderXZMultiplier = 0.45f;
 
-    golem.m_AnimConfig.m_strIdleClip    = "Golem_battle_stand_ge";
-    golem.m_AnimConfig.m_strChaseClip   = "Golem_battle_walk_ge";
-    golem.m_AnimConfig.m_strAttackClip  = "Golem_battle_attack01_ge";
-    golem.m_AnimConfig.m_strStaggerClip = "Golem_battle_damage_ge";
+    //  Special 쿨타임 제거 (0). 매 공격마다 특수 롤 시도 → 특수가 훨씬 자주 나옴
+    golem.m_fSpecialAttackCooldown  = 0.0f;
+    golem.m_nSpecialAttackChance    = 75;   // 쿨 제거 대신 확률로만 제어 (75%)
+
+    // 애니메이션 매핑 — 석상 컨셉: 걷기 X, 서 있는 idle 위주
+    //   ★ attack01 = 실제 "주먹 내려찍기" 모션, attack02 = 실제 "팔 휘두르기" 모션
+    //   (클립 이름은 번호로만 구분되고 실제 모션 의미는 이렇게 확인됨)
+    golem.m_AnimConfig.m_strIdleClip    = "Golem_stand_ge";
+    golem.m_AnimConfig.m_strChaseClip   = "Golem_battle_stand_ge";
+    golem.m_AnimConfig.m_strAttackClip  = "Golem_battle_attack01_ge";   // fallback (내려찍기)
+    golem.m_AnimConfig.m_strStaggerClip = "Golem_battle_harddamage_ge";
     golem.m_AnimConfig.m_strDeathClip   = "Golem_battle_die_ge";
 
-    golem.m_IndicatorConfig.m_eType      = IndicatorType::Circle;
-    golem.m_IndicatorConfig.m_fHitRadius = 18.0f;
+    // Loop 설정 — attack freeze 방지 (behavior > anim 시 얼어붙음 회피)
+    golem.m_AnimConfig.m_bLoopAttack  = true;
+    golem.m_AnimConfig.m_bLoopStagger = true;
 
-    // 광역 내려찍기 - 범위 넓고 데미지 강함
+    // 바닥 인디케이터 — Circle 타입 (각 behavior 가 GetIndicatorRadius() 로 실제 반경 제공)
+    //   preset 의 m_fHitRadius 는 fallback 기본값 (override 없을 때만 사용)
+    golem.m_IndicatorConfig.m_eType      = IndicatorType::Circle;
+    golem.m_IndicatorConfig.m_fHitRadius = 30.0f;
+
+    // Primary: "주먹 내려찍기" — attack01 @ 0.7× = 8.1s
+    //   windup 을 애니 slam 피크 (~45% = 3.6s) 에 맞춤 → 찍는 순간에 데미지/파편 동기화
     golem.m_fnCreateAttack = []() {
-        return std::make_unique<JumpSlamAttackBehavior>(80.0f, 0.0f, 0.6f, 12.0f, 0.3f, 0.5f, true);
+        return std::make_unique<JumpSlamAttackBehavior>(
+            160.0f, 0.0f, 0.25f, 50.0f,
+            3.5f, 1.3f,                     // windup 2.0→3.5, recovery 1.6→1.3 (합 5.3s)
+            false,
+            2.5f, 0.5f,
+            "Golem_battle_attack01_ge"
+        );
     };
-    // 특수: 전방 360도 지진 스텝
-    golem.m_fnCreateSpecialAttack = []() {
-        return std::make_unique<TailSweepAttackBehavior>(100.0f, 0.5f, 0.4f, 0.6f, 15.0f, 360.0f, true);
+    // Special: 5개 균등 (각 20%)
+    //   0:점프 진동, 1:광역 내려찍기, 2:바위 발사, 3:바위 낙하, 4:십자 균열
+    //   앞으로 패턴 추가 시에도 균등 분배 유지 (rand() % N 으로 확장)
+    golem.m_fnCreateSpecialAttack = []() -> std::unique_ptr<IAttackBehavior> {
+        int r = rand() % 5;
+        if (r == 0)
+        {
+            // 점프 진동
+            return std::make_unique<JumpSlamAttackBehavior>(
+                140.0f, 6.5f, 1.8f, 60.0f,
+                1.3f, 0.7f,
+                false,
+                3.6f, 0.7f,
+                "Golem_jump_ge",
+                0.5f
+            );
+        }
+        else if (r == 1)
+        {
+            // 광역 내려찍기 (radius 85) — Primary 와 같은 slam 피크 타이밍
+            return std::make_unique<JumpSlamAttackBehavior>(
+                150.0f, 0.0f, 0.3f, 85.0f,
+                3.6f, 1.8f,                 // windup 2.3→3.6 (피크 타이밍), recovery 2.0→1.8
+                false,
+                3.4f, 0.65f,
+                "Golem_battle_attack01_ge"
+            );
+        }
+        else if (r == 2)
+        {
+            // 바위 발사 — 애니 1회 재생 후 idle 자동 전환. 총 시간 자유롭게 설정 가능
+            return std::make_unique<RockBarrageAttackBehavior>(
+                12,      // 바위 개수
+                90.0f,   // 데미지
+                3.0f,    // 투사체 반경
+                38.0f,   // 속도
+                16.0f,   // 궤도 반경
+                16.0f,   // 보스 위 높이
+                2.6f,    // summon
+                0.6f,    // charge
+                0.18f,   // fire 간격
+                3.0f,    // flight timeout
+                2.2f,    // recovery — 바위 비행 + 보스 idle 잠시 대기
+                0.0f, 0.0f,
+                1.1f
+            );
+        }
+        else if (r == 3)
+        {
+            // 바위 낙하 — 애니 1회 재생 후 idle 자동 전환
+            return std::make_unique<RockFallAttackBehavior>(
+                10,      // 바위 개수
+                90.0f,   // 바위 당 데미지
+                10.0f,   // 바위 당 AOE 반경
+                18.0f,   // 최소 스폰 반경
+                65.0f,   // 최대 스폰 반경
+                2.0f,    // windup
+                0.8f,    // drop
+                2.0f,    // recovery
+                2.8f, 0.5f
+            );
+        }
+        else
+        {
+            // 십자/X 바닥 균열 — 애니 1회 재생 후 idle 자동 전환
+            auto shape = (rand() % 2 == 0)
+                ? GroundRuptureAttackBehavior::RuptureShape::Cross
+                : GroundRuptureAttackBehavior::RuptureShape::XDiag;
+            return std::make_unique<GroundRuptureAttackBehavior>(
+                shape,
+                100.0f,  // damage
+                70.0f,   // 균열 길이
+                4.0f,    // 균열 반폭
+                2.2f,    // windup
+                0.6f,    // impact
+                1.8f,    // recovery
+                2.8f, 0.5f
+            );
+        }
     };
 
     RegisterEnemyPreset("Golem", golem);
@@ -796,6 +899,17 @@ void EnemySpawner::SetupEnemyComponents(GameObject* pEnemy, const EnemySpawnData
         pEnemyComp->SetFlying(true, data.m_fFlyHeight);
     }
 
+    // Stationary mode (고정형 보스)
+    if (data.m_bStationary)
+    {
+        pEnemyComp->SetStationary(true);
+    }
+    pEnemyComp->SetRotationSpeed(data.m_fRotationSpeed);
+
+    // 기본 애니 재생속도 전달 (공격 override 후 복원에 사용)
+    pEnemyComp->SetBaseAnimPlaybackSpeed(
+        (data.m_fAnimationPlaybackSpeed > 0.0f) ? data.m_fAnimationPlaybackSpeed : 1.0f);
+
     // Create attack behavior (+ store factory for per-use recreation)
     if (data.m_fnCreateAttack)
     {
@@ -912,6 +1026,9 @@ GameObject* EnemySpawner::CreateMeshEnemy(CRoom* pRoom, const XMFLOAT3& position
         auto* pAnimComp = pEnemy->AddComponent<AnimationComponent>();
         pAnimComp->Init(m_pDevice, m_pCommandList);
         pAnimComp->LoadAnimation(data.m_strAnimationPath.c_str());
+        // 고정형 보스 등은 1.0 보다 낮게 → 무거운 애니메이션 느낌
+        if (data.m_fAnimationPlaybackSpeed > 0.0f && data.m_fAnimationPlaybackSpeed != 1.0f)
+            pAnimComp->SetPlaybackSpeed(data.m_fAnimationPlaybackSpeed);
     }
 
     // Add RenderComponents to hierarchy

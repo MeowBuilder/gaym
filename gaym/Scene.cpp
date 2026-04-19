@@ -109,15 +109,8 @@ void Scene::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList)
         pPlayerCollider->SetCenter(0.0f, 2.0f, 0.0f);   // Center at player's midsection
         pPlayerCollider->SetLayer(CollisionLayer::Player);
         pPlayerCollider->SetCollisionMask(CollisionMask::Player);
-        pPlayerCollider->SetOnCollisionEnter([](ColliderComponent* pOther) {
-            OutputDebugString(L"[Collision] Player ENTER collision!\n");
-        });
-        pPlayerCollider->SetOnCollisionStay([](ColliderComponent* pOther) {
-            OutputDebugString(L"[Collision] Player STAY collision...\n");
-        });
-        pPlayerCollider->SetOnCollisionExit([](ColliderComponent* pOther) {
-            OutputDebugString(L"[Collision] Player EXIT collision!\n");
-        });
+        pPlayerCollider->SetOnCollisionEnter([](ColliderComponent* pOther) {});
+        pPlayerCollider->SetOnCollisionExit([](ColliderComponent* pOther) {});
 
         // Add Skill Component
         auto* pSkillComponent = pPlayer->AddComponent<SkillComponent>();
@@ -3296,20 +3289,13 @@ void Scene::TransitionToEarthBossRoom()
         RoomSpawnConfig emptyConfig;
         m_pCurrentRoom->SetSpawnConfig(emptyConfig);
 
-        OutputDebugString(L"[Scene] Spawning Golem boss\n");
-        XMFLOAT3 golemPos = XMFLOAT3(0.0f, 0.0f, 25.0f);
-        if (m_pPlayerGameObject)
-        {
-            XMFLOAT3 p = m_pPlayerGameObject->GetTransform()->GetPosition();
-            golemPos = XMFLOAT3(p.x, p.y, p.z + 25.0f);
-        }
+        OutputDebugString(L"[Scene] Spawning Golem boss at room center\n");
+        // 골렘은 고정형 → 방 중앙에 바로 배치 (인트로 비행 없음 — "순간이동" 처럼 보이던 이슈 제거)
+        const BoundingBox& roomBB = m_pCurrentRoom->GetBoundingBox();
+        XMFLOAT3 golemPos = { roomBB.Center.x, 0.0f, roomBB.Center.z };  // XZ 중앙, Y=0(지면)
 
         GameObject* pGolem = m_pEnemySpawner->SpawnEnemy(m_pCurrentRoom, "Golem", golemPos, m_pPlayerGameObject);
-        if (pGolem)
-        {
-            EnemyComponent* pEnemy = pGolem->GetComponent<EnemyComponent>();
-            if (pEnemy) pEnemy->StartBossIntro(3.0f);
-        }
+        // 인트로 호출 제거 — 골렘은 제단에 박혀있는 석상 컨셉이라 내려오는 연출 불필요
 
         m_pCurrentRoom->SetState(RoomState::Active);
     }

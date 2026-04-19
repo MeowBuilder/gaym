@@ -57,7 +57,6 @@ void FlyingSweepAttackBehavior::Execute(EnemyComponent* pEnemy)
     }
 
     m_ePhase = Phase::TakeOff;
-    OutputDebugString(L"[FlyingSweep] Starting TakeOff phase\n");
 }
 
 void FlyingSweepAttackBehavior::Update(float dt, EnemyComponent* pEnemy)
@@ -100,8 +99,6 @@ void FlyingSweepAttackBehavior::Update(float dt, EnemyComponent* pEnemy)
                 {
                     pAnimComp->CrossFade("Fly Glide", 0.2f, true);
                 }
-
-                OutputDebugString(L"[FlyingSweep] Sweep phase started!\n");
             }
         }
         break;
@@ -151,8 +148,6 @@ void FlyingSweepAttackBehavior::Update(float dt, EnemyComponent* pEnemy)
                 {
                     pAnimComp->CrossFade("Land", 0.15f, false);
                 }
-
-                OutputDebugString(L"[FlyingSweep] Landing phase started\n");
             }
         }
         break;
@@ -176,7 +171,6 @@ void FlyingSweepAttackBehavior::Update(float dt, EnemyComponent* pEnemy)
 
                 pEnemy->SetInvincible(false);
                 m_bFinished = true;
-                OutputDebugString(L"[FlyingSweep] Attack finished\n");
             }
         }
         break;

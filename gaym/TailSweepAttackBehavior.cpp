@@ -6,6 +6,9 @@
 #include "PlayerComponent.h"
 #include "AnimationComponent.h"
 #include "MathUtils.h"
+#include "Room.h"
+#include "Scene.h"
+#include "Camera.h"
 
 TailSweepAttackBehavior::TailSweepAttackBehavior(float fDamage,
                                                  float fWindupTime,
@@ -16,7 +19,10 @@ TailSweepAttackBehavior::TailSweepAttackBehavior(float fDamage,
                                                  bool bHitBehind,
                                                  const char* pClipOverride,
                                                  float fRectWidthHalf,
-                                                 float fRectLength)
+                                                 float fRectLength,
+                                                 float fCameraShakeIntensity,
+                                                 float fCameraShakeDuration,
+                                                 float fAnimPlaybackSpeed)
     : m_fDamage(fDamage)
     , m_fWindupTime(fWindupTime)
     , m_fSweepTime(fSweepTime)
@@ -26,6 +32,9 @@ TailSweepAttackBehavior::TailSweepAttackBehavior(float fDamage,
     , m_bHitBehind(bHitBehind)
     , m_fRectWidthHalf(fRectWidthHalf)
     , m_fRectLength(fRectLength)
+    , m_fCameraShakeIntensity(fCameraShakeIntensity)
+    , m_fCameraShakeDuration(fCameraShakeDuration)
+    , m_fAnimPlaybackSpeed(fAnimPlaybackSpeed)
 {
     if (pClipOverride && pClipOverride[0] != '\0')
         m_strClipName = pClipOverride;
@@ -37,8 +46,30 @@ void TailSweepAttackBehavior::Execute(EnemyComponent* pEnemy)
 
     if (pEnemy)
     {
-        // Store initial rotation for sweep animation
         GameObject* pOwner = pEnemy->GetOwner();
+        GameObject* pTarget = pEnemy->GetTarget();
+        bool bRectMode = (m_fRectWidthHalf > 0.0f && m_fRectLength > 0.0f);
+
+        // Rect 모드: stationary 보스라도 attack 시작 시 플레이어 방향으로 한 번 회전
+        //   (회전이 완전 봉쇄된 고정형 보스에 "방향성 있는 직사각형 AOE" 를 주기 위함)
+        //   회전 후 m_fInitialRotation 저장하므로 sweep/hit 판정도 올바른 방향으로 수행
+        if (bRectMode && pEnemy->IsStationary() && pOwner && pTarget
+            && pOwner->GetTransform() && pTarget->GetTransform())
+        {
+            XMFLOAT3 myPos  = pOwner->GetTransform()->GetPosition();
+            XMFLOAT3 tgtPos = pTarget->GetTransform()->GetPosition();
+            float dx = tgtPos.x - myPos.x;
+            float dz = tgtPos.z - myPos.z;
+            if (dx != 0.0f || dz != 0.0f)
+            {
+                float yaw = atan2f(dx, dz) * (180.0f / XM_PI);
+                XMFLOAT3 rot = pOwner->GetTransform()->GetRotation();
+                rot.y = yaw;
+                pOwner->GetTransform()->SetRotation(rot);
+            }
+        }
+
+        // Store initial rotation for sweep animation (rect 회전 반영 후)
         if (pOwner && pOwner->GetTransform())
         {
             m_fInitialRotation = pOwner->GetTransform()->GetRotation().y;
@@ -48,11 +79,13 @@ void TailSweepAttackBehavior::Execute(EnemyComponent* pEnemy)
         if (pAnimComp)
         {
             pAnimComp->CrossFade(m_strClipName, 0.1f, false);
+            // 애니 재생속도 override (휘두르기 처럼 느려져야 할 때)
+            if (m_fAnimPlaybackSpeed > 0.0f)
+                pAnimComp->SetPlaybackSpeed(m_fAnimPlaybackSpeed);
         }
     }
 
     m_ePhase = Phase::Windup;
-    OutputDebugString(L"[TailSweep] Attack started - windup phase\n");
 }
 
 void TailSweepAttackBehavior::Update(float dt, EnemyComponent* pEnemy)
@@ -68,7 +101,6 @@ void TailSweepAttackBehavior::Update(float dt, EnemyComponent* pEnemy)
         {
             m_ePhase = Phase::Sweep;
             m_fTimer = 0.0f;
-            OutputDebugString(L"[TailSweep] Sweep phase\n");
         }
         break;
 
@@ -76,7 +108,9 @@ void TailSweepAttackBehavior::Update(float dt, EnemyComponent* pEnemy)
         {
             // 사각형 모드에선 보스 몸을 돌리지 않음 (애니메이션이 촉수 휘두름을 표현 — 몸통 스핀은 어색함)
             bool bRectMode = (m_fRectWidthHalf > 0.0f && m_fRectLength > 0.0f);
-            if (!bRectMode && pEnemy)
+            // Stationary 보스는 회전 금지 — 데미지 판정만 360° 수행
+            bool bStationary = pEnemy && pEnemy->IsStationary();
+            if (!bRectMode && !bStationary && pEnemy)
             {
                 GameObject* pOwner = pEnemy->GetOwner();
                 if (pOwner && pOwner->GetTransform())
@@ -100,13 +134,20 @@ void TailSweepAttackBehavior::Update(float dt, EnemyComponent* pEnemy)
             {
                 DealSweepDamage(pEnemy);
                 m_bHitDealt = true;
+
+                // Hit 순간 카메라 쉐이크 (강도 > 0 일 때만)
+                if (m_fCameraShakeIntensity > 0.0f && pEnemy->GetRoom())
+                {
+                    if (Scene* pScene = pEnemy->GetRoom()->GetScene())
+                        if (CCamera* pCam = pScene->GetCamera())
+                            pCam->StartShake(m_fCameraShakeIntensity, m_fCameraShakeDuration);
+                }
             }
 
             if (m_fTimer >= m_fSweepTime)
             {
                 m_ePhase = Phase::Recovery;
                 m_fTimer = 0.0f;
-                OutputDebugString(L"[TailSweep] Recovery phase\n");
             }
         }
         break;
@@ -115,7 +156,6 @@ void TailSweepAttackBehavior::Update(float dt, EnemyComponent* pEnemy)
         if (m_fTimer >= m_fRecoveryTime)
         {
             m_bFinished = true;
-            OutputDebugString(L"[TailSweep] Attack finished\n");
         }
         break;
     }
@@ -151,17 +191,11 @@ void TailSweepAttackBehavior::DealSweepDamage(EnemyComponent* pEnemy)
     if (m_fRectWidthHalf > 0.0f && m_fRectLength > 0.0f)
     {
         if (!pEnemy->IsTargetInForwardRect(m_fRectWidthHalf, m_fRectLength))
-        {
-            OutputDebugString(L"[TailSweep] Missed - target outside forward rect\n");
             return;
-        }
         // 사각형 내면 통과 → 바로 데미지 적용 (아래 원형 체크 스킵)
         PlayerComponent* pPlayer = pTarget->GetComponent<PlayerComponent>();
         if (pPlayer)
-        {
             pPlayer->TakeDamage(m_fDamage);
-            OutputDebugString(L"[TailSweep] Rect HIT\n");
-        }
         return;
     }
 
@@ -171,11 +205,7 @@ void TailSweepAttackBehavior::DealSweepDamage(EnemyComponent* pEnemy)
     float odx = targetPos.x - origin.x;
     float odz = targetPos.z - origin.z;
     float distance = sqrtf(odx * odx + odz * odz);
-    if (distance > m_fHitRange)
-    {
-        OutputDebugString(L"[TailSweep] Missed - target out of range (from attack origin)\n");
-        return;
-    }
+    if (distance > m_fHitRange) return;
 
     // Check angle - tail sweep hits in a wide arc
     XMFLOAT3 myPos = pMyTransform->GetPosition();
@@ -204,20 +234,10 @@ void TailSweepAttackBehavior::DealSweepDamage(EnemyComponent* pEnemy)
     if (angleDiff > 180.0f) angleDiff = 360.0f - angleDiff;
 
     // Check if within sweep arc
-    if (angleDiff > m_fSweepArc * 0.5f)
-    {
-        OutputDebugString(L"[TailSweep] Missed - target outside sweep arc\n");
-        return;
-    }
+    if (angleDiff > m_fSweepArc * 0.5f) return;
 
     // Deal damage
     PlayerComponent* pPlayer = pTarget->GetComponent<PlayerComponent>();
     if (pPlayer)
-    {
         pPlayer->TakeDamage(m_fDamage);
-
-        wchar_t buffer[128];
-        swprintf_s(buffer, L"[TailSweep] HIT! Dealt %.1f damage\n", m_fDamage);
-        OutputDebugString(buffer);
-    }
 }

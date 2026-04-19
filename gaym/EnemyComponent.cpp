@@ -140,15 +140,10 @@ void EnemyComponent::ChangeState(EnemyState newState)
     if (oldState == EnemyState::Attack)
     {
         HideIndicators();
+        // 공격 behavior 가 일시적으로 재생속도 override 했을 수 있으니 복원
+        if (m_pAnimationComp && m_fBaseAnimPlaybackSpeed > 0.0f)
+            m_pAnimationComp->SetPlaybackSpeed(m_fBaseAnimPlaybackSpeed);
     }
-
-    // Debug output
-    const wchar_t* stateNames[] = { L"Idle", L"Chase", L"Attack", L"Stagger", L"Dead" };
-    wchar_t buffer[128];
-    swprintf_s(buffer, L"[Enemy] State changed: %s -> %s\n",
-        stateNames[static_cast<int>(oldState)],
-        stateNames[static_cast<int>(newState)]);
-    OutputDebugString(buffer);
 
     // Animation transition
     if (m_pAnimationComp)
@@ -159,7 +154,8 @@ void EnemyComponent::ChangeState(EnemyState newState)
             m_pAnimationComp->CrossFade(m_AnimConfig.m_strIdleClip, 0.2f, m_AnimConfig.m_bLoopIdle);
             break;
         case EnemyState::Chase:
-            m_pAnimationComp->CrossFade(m_AnimConfig.m_strChaseClip, 0.2f, m_AnimConfig.m_bLoopChase);
+            // 강제 재시작 — 직전이 non-loop 공격이었다면 m_bIsPlaying=false 로 얼어있을 수 있음
+            m_pAnimationComp->CrossFade(m_AnimConfig.m_strChaseClip, 0.2f, m_AnimConfig.m_bLoopChase, true);
             break;
         case EnemyState::Attack:
         {
@@ -170,7 +166,11 @@ void EnemyComponent::ChangeState(EnemyState newState)
             const char* pClip = (pActiveBehavior && pActiveBehavior->GetAnimClipName()[0] != '\0')
                                ? pActiveBehavior->GetAnimClipName()
                                : m_AnimConfig.m_strAttackClip.c_str();
-            m_pAnimationComp->CrossFade(pClip, 0.15f, m_AnimConfig.m_bLoopAttack);
+            // behavior 가 loop 여부 결정 (default true). preset 이 false 로 막아놓으면 최종 false
+            bool bLoopAttack = pActiveBehavior ? pActiveBehavior->ShouldLoopAnim()
+                                                : m_AnimConfig.m_bLoopAttack;
+            if (!m_AnimConfig.m_bLoopAttack) bLoopAttack = false;
+            m_pAnimationComp->CrossFade(pClip, 0.15f, bLoopAttack, true);
             break;
         }
         case EnemyState::Stagger:
@@ -245,10 +245,6 @@ void EnemyComponent::TakeDamage(float fDamage, bool bTriggerStagger)
         DamageNumberManager::Get().AddNumber(pos, fDamage);
     }
 
-    wchar_t buffer[128];
-    swprintf_s(buffer, L"[Enemy] Took %.1f damage, HP: %.1f/%.1f\n",
-        fDamage, m_Stats.m_fCurrentHP, m_Stats.m_fMaxHP);
-    OutputDebugString(buffer);
 
     // Boss Phase System: HP 변화 알림
     if (m_pPhaseController)
@@ -299,6 +295,9 @@ void EnemyComponent::FaceTarget(float dt, bool bInstant)
 {
     if (!m_pTarget || !m_pOwner) return;
 
+    // Stationary 보스: 회전도 완전 봉쇄 — 스폰 시 방향 그대로 유지, 모든 패턴은 방향 무관(방사형)
+    if (m_bStationary) return;
+
     TransformComponent* pMyTransform = m_pOwner->GetTransform();
     TransformComponent* pTargetTransform = m_pTarget->GetTransform();
 
@@ -323,7 +322,9 @@ void EnemyComponent::FaceTarget(float dt, bool bInstant)
     while (angleDiff > 180.0f) angleDiff -= 360.0f;
     while (angleDiff < -180.0f) angleDiff += 360.0f;
 
-    if (bInstant || dt <= 0.0f)
+    // Stationary 보스는 bInstant 플래그 무시하고 항상 스무스 회전 (무거운 석상 느낌)
+    bool bUseSmooth = (!bInstant || dt > 0.0f) || m_bStationary;
+    if (bInstant && !m_bStationary)
     {
         // Boss: limit instant rotation to prevent sudden 180 degree turns
         // This prevents the jarring "snap" when player moves behind boss
@@ -346,7 +347,9 @@ void EnemyComponent::FaceTarget(float dt, bool bInstant)
     {
         // Smooth rotation
         // Boss has faster rotation speed for better tracking
-        float rotSpeed = m_bIsBoss ? m_fRotationSpeed * 1.5f : m_fRotationSpeed;
+        // Stationary 는 m_fRotationSpeed 그대로 사용 (프리셋에서 낮은 값으로 세팅)
+        float rotSpeed = m_bStationary ? m_fRotationSpeed
+                                        : (m_bIsBoss ? m_fRotationSpeed * 1.5f : m_fRotationSpeed);
         float maxRotation = rotSpeed * dt;
         float rotation = 0.0f;
 
@@ -449,6 +452,53 @@ void EnemyComponent::UpdateChase(float dt)
         return;
     }
 
+    // Stationary 보스: 이동/회전 모두 없음, 거리 무관 — 쿨타임 끝나면 그냥 공격
+    //   모든 패턴은 방사형/고정 지향이어야 함 (추적 공격 X)
+    if (m_bStationary)
+    {
+        // 방어: 애니 재생이 중단돼 있으면 Chase 클립 강제 재시작 (loop anim 이 얼어붙는 케이스 방어)
+        if (m_pAnimationComp && !m_AnimConfig.m_strChaseClip.empty())
+        {
+            if (!m_pAnimationComp->IsPlaying())
+            {
+                m_pAnimationComp->CrossFade(m_AnimConfig.m_strChaseClip, 0.1f, m_AnimConfig.m_bLoopChase, true);
+            }
+        }
+
+        if (m_fAttackCooldownTimer > 0.0f)
+            return;
+
+        // 특수 공격 먼저 시도
+        if (m_fSpecialCooldownTimer <= 0.0f)
+        {
+            if (m_pPhaseController)
+            {
+                const BossPhaseData& phase = m_pPhaseController->GetCurrentPhaseData();
+                if (phase.m_fnSpecialAttack && (rand() % 100) < m_nSpecialAttackChance)
+                {
+                    m_pSpecialAttackBehavior = phase.m_fnSpecialAttack();
+                    m_bUsingSpecialAttack = true;
+                    ChangeState(EnemyState::Attack);
+                    return;
+                }
+            }
+            else if ((m_fnSpecialAttackFactory || m_pSpecialAttackBehavior) && (rand() % 100) < m_nSpecialAttackChance)
+            {
+                if (m_fnSpecialAttackFactory) m_pSpecialAttackBehavior = m_fnSpecialAttackFactory();
+                else m_pSpecialAttackBehavior->Reset();
+                m_bUsingSpecialAttack = true;
+                ChangeState(EnemyState::Attack);
+                return;
+            }
+        }
+
+        // 기본 공격
+        if (m_fnAttackFactory) m_pAttackBehavior = m_fnAttackFactory();
+        else if (m_pAttackBehavior) m_pAttackBehavior->Reset();
+        ChangeState(EnemyState::Attack);
+        return;
+    }
+
     float distance = GetDistanceToTarget();
 
     // Boss: 거리 기반 공격 선택 (카이팅 방지)
@@ -483,7 +533,6 @@ void EnemyComponent::UpdateChase(float dt)
                     if (m_pFlyingAttackBehavior)
                     {
                         m_bUsingFlyingAttack = true;
-                        OutputDebugString(L"[Boss] Long range - Using FLYING attack!\n");
                         ChangeState(EnemyState::Attack);
                         return;
                     }
@@ -493,7 +542,6 @@ void EnemyComponent::UpdateChase(float dt)
             // 비행 불가 시 기본 공격 (팩토리 있으면 새로 생성)
             if (m_fnAttackFactory) m_pAttackBehavior = m_fnAttackFactory();
             else if (m_pAttackBehavior) m_pAttackBehavior->Reset();
-            OutputDebugString(L"[Boss] Long range - Using PRIMARY attack!\n");
             ChangeState(EnemyState::Attack);
             return;
         }
@@ -523,7 +571,6 @@ void EnemyComponent::UpdateChase(float dt)
                     if (m_pFlyingAttackBehavior)
                     {
                         m_bUsingFlyingAttack = true;
-                        OutputDebugString(L"[Boss] Mid range - Using FLYING attack!\n");
                         ChangeState(EnemyState::Attack);
                         return;
                     }
@@ -541,7 +588,6 @@ void EnemyComponent::UpdateChase(float dt)
                     {
                         m_pSpecialAttackBehavior = phase.m_fnSpecialAttack();
                         m_bUsingSpecialAttack = true;
-                        OutputDebugString(L"[Boss] Mid range - Using SPECIAL attack (phase)!\n");
                         ChangeState(EnemyState::Attack);
                         return;
                     }
@@ -553,7 +599,6 @@ void EnemyComponent::UpdateChase(float dt)
                     else
                         m_pSpecialAttackBehavior->Reset();
                     m_bUsingSpecialAttack = true;
-                    OutputDebugString(L"[Boss] Mid range - Using SPECIAL attack!\n");
                     ChangeState(EnemyState::Attack);
                     return;
                 }
@@ -562,7 +607,6 @@ void EnemyComponent::UpdateChase(float dt)
             // 그 외엔 기본 공격 (팩토리 있으면 새로 생성)
             if (m_fnAttackFactory) m_pAttackBehavior = m_fnAttackFactory();
             else if (m_pAttackBehavior) m_pAttackBehavior->Reset();
-            OutputDebugString(L"[Boss] Mid range - Using PRIMARY attack!\n");
             ChangeState(EnemyState::Attack);
             return;
         }
@@ -592,7 +636,6 @@ void EnemyComponent::UpdateChase(float dt)
                     if (m_pFlyingAttackBehavior)
                     {
                         m_bUsingFlyingAttack = true;
-                        OutputDebugString(L"[Boss] Close range - Using FLYING attack!\n");
                         ChangeState(EnemyState::Attack);
                         return;
                     }
@@ -609,7 +652,6 @@ void EnemyComponent::UpdateChase(float dt)
                     {
                         m_pSpecialAttackBehavior = phase.m_fnSpecialAttack();
                         m_bUsingSpecialAttack = true;
-                        OutputDebugString(L"[Boss] Close range - Using SPECIAL attack (phase)!\n");
                         ChangeState(EnemyState::Attack);
                         return;
                     }
@@ -621,7 +663,6 @@ void EnemyComponent::UpdateChase(float dt)
                     else
                         m_pSpecialAttackBehavior->Reset();
                     m_bUsingSpecialAttack = true;
-                    OutputDebugString(L"[Boss] Close range - Using SPECIAL attack!\n");
                     ChangeState(EnemyState::Attack);
                     return;
                 }
@@ -630,7 +671,6 @@ void EnemyComponent::UpdateChase(float dt)
             // 기본 공격 (팩토리 있으면 새로 생성해 패턴 변화)
             if (m_fnAttackFactory) m_pAttackBehavior = m_fnAttackFactory();
             else if (m_pAttackBehavior) m_pAttackBehavior->Reset();
-            OutputDebugString(L"[Boss] Close range - Using PRIMARY attack!\n");
             ChangeState(EnemyState::Attack);
             return;
         }
@@ -696,13 +736,11 @@ void EnemyComponent::UpdateAttack(float dt)
                 {
                     m_pFlyingAttackBehavior->Reset();
                 }
-                OutputDebugString(L"[Boss] Flying attack finished, cooldown started\n");
             }
             else if (m_bUsingSpecialAttack)
             {
                 m_fSpecialCooldownTimer = m_fSpecialAttackCooldown;
                 m_bUsingSpecialAttack = false;
-                OutputDebugString(L"[Boss] Special attack finished, cooldown started\n");
             }
 
             // Return to chase
@@ -814,12 +852,20 @@ void EnemyComponent::ShowIndicators()
     float yawRad = atan2f(dir.x, dir.y);
     float yawDeg = XMConvertToDegrees(yawRad);
 
-    if (m_IndicatorConfig.m_eType == IndicatorType::Circle)
+    // ── 활성 behavior 조회 + type/size override 결정 ──
+    IAttackBehavior* pActive = m_bUsingFlyingAttack  ? m_pFlyingAttackBehavior.get()
+                             : m_bUsingSpecialAttack ? m_pSpecialAttackBehavior.get()
+                             :                          m_pAttackBehavior.get();
+
+    IndicatorType effectiveType = m_IndicatorConfig.m_eType;
+    if (pActive)
     {
-        // 활성 behavior 조회
-        IAttackBehavior* pActive = m_bUsingFlyingAttack  ? m_pFlyingAttackBehavior.get()
-                                 : m_bUsingSpecialAttack ? m_pSpecialAttackBehavior.get()
-                                 :                          m_pAttackBehavior.get();
+        int typeOverride = pActive->GetIndicatorTypeOverride();
+        if (typeOverride >= 0) effectiveType = static_cast<IndicatorType>(typeOverride);
+    }
+
+    if (effectiveType == IndicatorType::Circle)
+    {
 
         // 발사형(Breath 등)은 지면 인디케이터 억제 — 오해 방지
         if (pActive && !pActive->ShouldShowHitZone())
@@ -837,16 +883,20 @@ void EnemyComponent::ShowIndicators()
 
         float baseY = (std::max)(attackOrigin.y, targetPos.y);
         float indY  = baseY + 1.2f;
-        float fullR = m_IndicatorConfig.m_fHitRadius;
+        // 행동별 radius override 가 있으면 그 값 사용 (패턴마다 다른 범위 표시)
+        float fullR = (pActive && pActive->GetIndicatorRadius() > 0.0f)
+                    ? pActive->GetIndicatorRadius()
+                    : m_IndicatorConfig.m_fHitRadius;
 
-        // ─── 테두리 링: 공격 내내 고정 (fill 이 꽉 차도 유지) ───────────────
+        // ─── 테두리 링: 공격 내내 고정. fill 이 fullR 까지 차도 묻히지 않도록 fullR×1.03 으로 외곽에 ─
         if (m_pHitZoneIndicator)
         {
             TransformComponent* pT = m_pHitZoneIndicator->GetTransform();
             if (pT)
             {
                 pT->SetPosition(attackOrigin.x, indY + 0.05f, attackOrigin.z);
-                pT->SetScale(fullR, 1.0f, fullR);
+                float borderR = fullR * 1.03f;
+                pT->SetScale(borderR, 1.0f, borderR);
 
                 MATERIAL mat;
                 mat.m_cAmbient  = XMFLOAT4(0.5f, 0.02f, 0.02f, 1.0f);
@@ -857,13 +907,12 @@ void EnemyComponent::ShowIndicators()
             }
         }
 
-        // ─── 내부 Fill: windup 진행도에 따라 0 → fullR 로 차오름 ───────────
+        // ─── 내부 Fill: 0 → fullR 까지 꽉 차게 (테두리는 fullR×1.03 으로 외곽에 있어 묻히지 않음) ─
         if (m_pHitZoneFillIndicator)
         {
             TransformComponent* pT = m_pHitZoneFillIndicator->GetTransform();
             if (pT)
             {
-                // 테두리보다 약간 낮게 (겹침 방지)
                 pT->SetPosition(attackOrigin.x, indY, attackOrigin.z);
                 float r = fullR * fillProgress;
                 if (r < 0.01f) r = 0.01f;  // 0 스케일 방지
@@ -883,12 +932,8 @@ void EnemyComponent::ShowIndicators()
             }
         }
     }
-    else if (m_IndicatorConfig.m_eType == IndicatorType::ForwardBox)
+    else if (effectiveType == IndicatorType::ForwardBox)
     {
-        // 활성 behavior 조회
-        IAttackBehavior* pActive = m_bUsingFlyingAttack  ? m_pFlyingAttackBehavior.get()
-                                 : m_bUsingSpecialAttack ? m_pSpecialAttackBehavior.get()
-                                 :                          m_pAttackBehavior.get();
         if (pActive && !pActive->ShouldShowHitZone())
         {
             HideIndicators();
@@ -906,8 +951,13 @@ void EnemyComponent::ShowIndicators()
         float bossYawDeg = pMyTransform->GetRotation().y;
 
         XMFLOAT3 bossPos = myPos;
-        float fLen   = m_IndicatorConfig.m_fHitLength;
-        float fHalfW = m_IndicatorConfig.m_fHitRadius;  // half-width
+        // 행동별 length override 반영 (TailSweep rect 모드 등)
+        float fLen   = (pActive && pActive->GetIndicatorLength() > 0.0f)
+                     ? pActive->GetIndicatorLength()
+                     : m_IndicatorConfig.m_fHitLength;
+        float fHalfW = (pActive && pActive->GetIndicatorRadius() > 0.0f)
+                     ? pActive->GetIndicatorRadius()
+                     : m_IndicatorConfig.m_fHitRadius;  // half-width (override 반영)
         float centerX = bossPos.x + fwdX * (fLen * 0.5f);
         float centerZ = bossPos.z + fwdZ * (fLen * 0.5f);
 
@@ -1254,7 +1304,6 @@ void EnemyComponent::ReevaluateTarget()
         m_pTarget = pNewTarget;
 
 #ifdef _DEBUG
-        OutputDebugString(L"[Enemy] Target changed due to threat!\n");
 #endif
     }
 }

@@ -48,8 +48,6 @@ void RushFrontAttackBehavior::Execute(EnemyComponent* pEnemy)
     }
 
     m_ePhase = Phase::Rush;
-
-    OutputDebugString(L"[RushFront] Attack started - rush phase\n");
 }
 
 void RushFrontAttackBehavior::Update(float dt, EnemyComponent* pEnemy)
@@ -66,7 +64,6 @@ void RushFrontAttackBehavior::Update(float dt, EnemyComponent* pEnemy)
         {
             m_ePhase = Phase::Windup;
             m_fTimer = 0.0f;
-            OutputDebugString(L"[RushFront] Windup phase\n");
         }
         break;
 
@@ -75,7 +72,6 @@ void RushFrontAttackBehavior::Update(float dt, EnemyComponent* pEnemy)
         {
             m_ePhase = Phase::Hit;
             m_fTimer = 0.0f;
-            OutputDebugString(L"[RushFront] Hit phase\n");
         }
         break;
 
@@ -89,7 +85,6 @@ void RushFrontAttackBehavior::Update(float dt, EnemyComponent* pEnemy)
         {
             m_ePhase = Phase::Recovery;
             m_fTimer = 0.0f;
-            OutputDebugString(L"[RushFront] Recovery phase\n");
         }
         break;
 
@@ -97,7 +92,6 @@ void RushFrontAttackBehavior::Update(float dt, EnemyComponent* pEnemy)
         if (m_fTimer >= m_fRecoveryTime)
         {
             m_bFinished = true;
-            OutputDebugString(L"[RushFront] Attack finished\n");
         }
         break;
     }
@@ -148,7 +142,6 @@ void RushFrontAttackBehavior::UpdateRush(float dt, EnemyComponent* pEnemy)
                 {
                     pPlayer->TakeDamage(m_fDamage);
                     m_bRushHitDealt = true;
-                    OutputDebugString(L"[RushFront] Rush collision HIT!\n");
                 }
             }
         }
@@ -166,7 +159,6 @@ void RushFrontAttackBehavior::DealConeDamage(EnemyComponent* pEnemy)
     float distance = pEnemy->GetDistanceToTarget();
     if (distance > m_fHitRange)
     {
-        OutputDebugString(L"[RushFront] Cone attack missed - target out of range\n");
         return;
     }
 
@@ -194,7 +186,6 @@ void RushFrontAttackBehavior::DealConeDamage(EnemyComponent* pEnemy)
 
     if (dot < m_fCosHalfCone)
     {
-        OutputDebugString(L"[RushFront] Cone attack missed - target outside cone\n");
         return;
     }
 
@@ -203,10 +194,5 @@ void RushFrontAttackBehavior::DealConeDamage(EnemyComponent* pEnemy)
     if (pPlayer)
     {
         pPlayer->TakeDamage(m_fDamage);
-
-        wchar_t buffer[128];
-        swprintf_s(buffer, L"[RushFront] Cone HIT! Dealt %.1f damage (HP: %.1f/%.1f)\n",
-            m_fDamage, pPlayer->GetCurrentHP(), pPlayer->GetMaxHP());
-        OutputDebugString(buffer);
     }
 }

@@ -207,6 +207,9 @@ xcopy /Y "$(ProjectDir)Libraries\Libs\libprotobuf.dll" "$(OutDir)"</Command>
     <ClInclude Include="JumpSlamAttackBehavior.h" />
     <ClInclude Include="ComboAttackBehavior.h" />
     <ClInclude Include="MegaBreathAttackBehavior.h" />
+    <ClInclude Include="RockFallAttackBehavior.h" />
+    <ClInclude Include="RockBarrageAttackBehavior.h" />
+    <ClInclude Include="GroundRuptureAttackBehavior.h" />
     <ClInclude Include="Mesh.h" />
     <ClInclude Include="MeshLoader.h" />
     <ClInclude Include="MapLoader.h" />
@@ -321,6 +324,9 @@ xcopy /Y "$(ProjectDir)Libraries\Libs\libprotobuf.dll" "$(OutDir)"</Command>
     <ClCompile Include="JumpSlamAttackBehavior.cpp" />
     <ClCompile Include="ComboAttackBehavior.cpp" />
     <ClCompile Include="MegaBreathAttackBehavior.cpp" />
+    <ClCompile Include="RockFallAttackBehavior.cpp" />
+    <ClCompile Include="RockBarrageAttackBehavior.cpp" />
+    <ClCompile Include="GroundRuptureAttackBehavior.cpp" />
     <ClCompile Include="ThreatSystem.cpp" />
     <ClCompile Include="BossPhaseConfig.cpp" />
     <ClCompile Include="BossPhaseController.cpp" />

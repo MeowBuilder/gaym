@@ -36,6 +36,13 @@ struct EnemySpawnData
     bool m_bIsFlying = false;
     float m_fFlyHeight = 15.0f;
 
+    // Stationary mode — 고정형 보스 (이동/회전 모두 봉쇄, 방사형 패턴 전용)
+    bool m_bStationary = false;
+    float m_fRotationSpeed = 180.0f;   // 기본 180 deg/s (Stationary 에선 무시됨)
+
+    // 애니메이션 재생속도 — 1.0 기본, 낮추면 무거운 느낌 (골렘 등), 높이면 빠른 느낌
+    float m_fAnimationPlaybackSpeed = 1.0f;
+
     // Collider override (0이면 scale 기반 자동 계산)
     float m_fColliderXZMultiplier = 0.0f;
 

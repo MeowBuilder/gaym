@@ -27,8 +27,6 @@ void RangedAttackBehavior::Execute(EnemyComponent* pEnemy)
     }
 
     m_ePhase = Phase::Windup;
-
-    OutputDebugString(L"[Ranged] Attack started - windup phase\n");
 }
 
 void RangedAttackBehavior::Update(float dt, EnemyComponent* pEnemy)
@@ -46,7 +44,6 @@ void RangedAttackBehavior::Update(float dt, EnemyComponent* pEnemy)
         {
             m_ePhase = Phase::Shoot;
             m_fTimer = 0.0f;
-            OutputDebugString(L"[Ranged] Shoot phase\n");
         }
         break;
 
@@ -60,7 +57,6 @@ void RangedAttackBehavior::Update(float dt, EnemyComponent* pEnemy)
         {
             m_ePhase = Phase::Recovery;
             m_fTimer = 0.0f;
-            OutputDebugString(L"[Ranged] Recovery phase\n");
         }
         break;
 
@@ -68,7 +64,6 @@ void RangedAttackBehavior::Update(float dt, EnemyComponent* pEnemy)
         if (m_fTimer >= m_fRecoveryTime)
         {
             m_bFinished = true;
-            OutputDebugString(L"[Ranged] Attack finished\n");
         }
         break;
     }
@@ -118,5 +113,4 @@ void RangedAttackBehavior::ShootProjectile(EnemyComponent* pEnemy)
         0.8f            // scale
     );
 
-    OutputDebugString(L"[Ranged] Projectile fired!\n");
 }

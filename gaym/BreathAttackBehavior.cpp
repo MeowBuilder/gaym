@@ -45,8 +45,6 @@ void BreathAttackBehavior::Execute(EnemyComponent* pEnemy)
     }
 
     m_ePhase = Phase::Windup;
-
-    OutputDebugString(L"[Breath] Attack started - windup phase\n");
 }
 
 void BreathAttackBehavior::Update(float dt, EnemyComponent* pEnemy)
@@ -65,7 +63,6 @@ void BreathAttackBehavior::Update(float dt, EnemyComponent* pEnemy)
             m_fTimer = 0.0f;
             m_nProjectilesFired = 0;
             m_fNextFireTime = 0.0f;
-            OutputDebugString(L"[Breath] Breath phase started\n");
         }
         break;
 
@@ -94,7 +91,6 @@ void BreathAttackBehavior::Update(float dt, EnemyComponent* pEnemy)
             {
                 m_ePhase = Phase::Recovery;
                 m_fTimer = 0.0f;
-                OutputDebugString(L"[Breath] Recovery phase\n");
             }
         }
         break;
@@ -103,7 +99,6 @@ void BreathAttackBehavior::Update(float dt, EnemyComponent* pEnemy)
         if (m_fTimer >= m_fRecoveryTime)
         {
             m_bFinished = true;
-            OutputDebugString(L"[Breath] Attack finished\n");
         }
         break;
     }

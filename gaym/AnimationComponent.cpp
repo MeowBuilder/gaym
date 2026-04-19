@@ -90,9 +90,6 @@ void AnimationComponent::CrossFade(const std::string& strClipName, float fBlendD
     m_fBlendDuration = fBlendDuration;
     m_fBlendTimer = 0.0f;
 
-    char buffer[256];
-    sprintf_s(buffer, "CrossFade: %s (Duration: %.2f)\n", strClipName.c_str(), fBlendDuration);
-    OutputDebugStringA(buffer);
 }
 
 void AnimationComponent::Restart()
@@ -269,42 +266,6 @@ void AnimationComponent::Update(float deltaTime)
 
     if (!s_bCastLog)
     {
-        char buf[512];
-        sprintf_s(buf, "AnimComponent: Found %zu SkinnedMesh(es) in hierarchy\n", vSkinnedMeshes.size());
-        OutputDebugStringA(buf);
-        for (const auto& entry : vSkinnedMeshes)
-        {
-            sprintf_s(buf, "  - SkinnedMesh on [%s] with %zu bones\n",
-                entry.pHolder->m_pstrFrameName, entry.pMesh->m_vBoneNames.size());
-            OutputDebugStringA(buf);
-
-            // Check bone matching
-            int matched = 0;
-            for (const auto& boneName : entry.pMesh->m_vBoneNames)
-            {
-                if (m_mapBoneTransforms.find(boneName) != m_mapBoneTransforms.end())
-                    matched++;
-            }
-            sprintf_s(buf, "    Bone cache size: %zu, Matched bones: %d\n",
-                m_mapBoneTransforms.size(), matched);
-            OutputDebugStringA(buf);
-
-            // Print mesh holder world matrix row 0-2 (rotation part) and first bind pose row 0
-            const XMFLOAT4X4& wm = entry.pHolder->GetTransform()->GetWorldMatrix();
-            sprintf_s(buf, "    WorldMat row0=(%.3f,%.3f,%.3f) row1=(%.3f,%.3f,%.3f) row2=(%.3f,%.3f,%.3f)\n",
-                wm._11, wm._12, wm._13,
-                wm._21, wm._22, wm._23,
-                wm._31, wm._32, wm._33);
-            OutputDebugStringA(buf);
-            if (!entry.pMesh->m_vBindPoses.empty())
-            {
-                const XMFLOAT4X4& bp = entry.pMesh->m_vBindPoses[0];
-                sprintf_s(buf, "    BindPose[0] row0=(%.3f,%.3f,%.3f,%.3f) row1=(%.3f,%.3f,%.3f,%.3f)\n",
-                    bp._11, bp._12, bp._13, bp._14,
-                    bp._21, bp._22, bp._23, bp._24);
-                OutputDebugStringA(buf);
-            }
-        }
         m_bBoneLogDone = true;
     }
 

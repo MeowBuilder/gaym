@@ -18,8 +18,6 @@ void MeleeAttackBehavior::Execute(EnemyComponent* pEnemy)
 {
     Reset();
 
-    OutputDebugString(L"[MeleeAttack] Attack started - windup phase\n");
-
     // Face target at start of attack
     if (pEnemy)
     {
@@ -51,7 +49,6 @@ void MeleeAttackBehavior::Update(float dt, EnemyComponent* pEnemy)
     {
         // Attack finished
         m_bFinished = true;
-        OutputDebugString(L"[MeleeAttack] Attack finished\n");
     }
 }
 
@@ -82,21 +79,10 @@ void MeleeAttackBehavior::DealDamage(EnemyComponent* pEnemy)
     XMFLOAT3 tp = pTargetT->GetPosition();
     float dx = tp.x - origin.x, dz = tp.z - origin.z;
     float distance = sqrtf(dx * dx + dz * dz);
-    if (distance > m_fHitRange)
-    {
-        OutputDebugString(L"[MeleeAttack] Attack missed - target out of range (from attack origin)\n");
-        return;
-    }
+    if (distance > m_fHitRange) return;
 
     // Deal damage to player
     PlayerComponent* pPlayer = pTarget->GetComponent<PlayerComponent>();
     if (pPlayer)
-    {
         pPlayer->TakeDamage(m_fDamage);
-
-        wchar_t buffer[128];
-        swprintf_s(buffer, L"[MeleeAttack] HIT! Dealt %.1f damage (HP: %.1f/%.1f)\n",
-            m_fDamage, pPlayer->GetCurrentHP(), pPlayer->GetMaxHP());
-        OutputDebugString(buffer);
-    }
 }

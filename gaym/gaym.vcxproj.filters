@@ -159,6 +159,15 @@
     <ClInclude Include="MegaBreathAttackBehavior.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
+    <ClInclude Include="RockFallAttackBehavior.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="RockBarrageAttackBehavior.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="GroundRuptureAttackBehavior.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
     <ClInclude Include="DebugRenderer.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
@@ -489,6 +498,15 @@
       <Filter>소스 파일</Filter>
     </ClCompile>
     <ClCompile Include="MegaBreathAttackBehavior.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="RockFallAttackBehavior.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="RockBarrageAttackBehavior.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="GroundRuptureAttackBehavior.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
     <ClCompile Include="DebugRenderer.cpp">

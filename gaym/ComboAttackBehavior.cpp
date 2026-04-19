@@ -38,7 +38,6 @@ void ComboAttackBehavior::Execute(EnemyComponent* pEnemy)
     }
 
     m_eHitPhase = HitPhase::Windup;
-    OutputDebugString(L"[Combo] Attack started - hit 1 windup\n");
 }
 
 void ComboAttackBehavior::Update(float dt, EnemyComponent* pEnemy)
@@ -56,10 +55,6 @@ void ComboAttackBehavior::Update(float dt, EnemyComponent* pEnemy)
         {
             m_eHitPhase = HitPhase::Hit;
             m_fTimer = 0.0f;
-
-            wchar_t buffer[64];
-            swprintf_s(buffer, L"[Combo] Hit %d - hit phase\n", m_nCurrentHit + 1);
-            OutputDebugString(buffer);
         }
         break;
 
@@ -74,10 +69,6 @@ void ComboAttackBehavior::Update(float dt, EnemyComponent* pEnemy)
         {
             m_eHitPhase = HitPhase::Recovery;
             m_fTimer = 0.0f;
-
-            wchar_t buffer[64];
-            swprintf_s(buffer, L"[Combo] Hit %d - recovery phase\n", m_nCurrentHit + 1);
-            OutputDebugString(buffer);
         }
         break;
 
@@ -92,7 +83,6 @@ void ComboAttackBehavior::Update(float dt, EnemyComponent* pEnemy)
             if (m_nCurrentHit >= (int)m_vHits.size())
             {
                 m_bFinished = true;
-                OutputDebugString(L"[Combo] Attack finished\n");
             }
             else
             {
@@ -117,10 +107,6 @@ void ComboAttackBehavior::Update(float dt, EnemyComponent* pEnemy)
                         pAnimComp->CrossFade(nextHit.strAnimation, 0.08f, false);
                     }
                 }
-
-                wchar_t buffer[64];
-                swprintf_s(buffer, L"[Combo] Hit %d - windup phase\n", m_nCurrentHit + 1);
-                OutputDebugString(buffer);
             }
         }
         break;
@@ -153,26 +139,15 @@ void ComboAttackBehavior::DealConeDamage(EnemyComponent* pEnemy, const ComboHit&
     if (hit.fRectWidthHalf > 0.0f && hit.fRectLength > 0.0f)
     {
         if (!pEnemy->IsTargetInForwardRect(hit.fRectWidthHalf, hit.fRectLength))
-        {
-            OutputDebugString(L"[Combo] Missed - target outside forward rect\n");
             return;
-        }
         PlayerComponent* pPlayer = pTarget->GetComponent<PlayerComponent>();
-        if (pPlayer)
-        {
-            pPlayer->TakeDamage(hit.fDamage);
-            OutputDebugString(L"[Combo] Rect HIT\n");
-        }
+        if (pPlayer) pPlayer->TakeDamage(hit.fDamage);
         return;
     }
 
     // Check distance
     float distance = pEnemy->GetDistanceToTarget();
-    if (distance > hit.fHitRange)
-    {
-        OutputDebugString(L"[Combo] Missed - target out of range\n");
-        return;
-    }
+    if (distance > hit.fHitRange) return;
 
     // Check angle (cone attack)
     TransformComponent* pMyTransform = pOwner->GetTransform();
@@ -203,22 +178,12 @@ void ComboAttackBehavior::DealConeDamage(EnemyComponent* pEnemy, const ComboHit&
     float halfConeRad = XMConvertToRadians(hit.fConeAngle * 0.5f);
     float cosHalfCone = cosf(halfConeRad);
 
-    if (dot < cosHalfCone)
-    {
-        OutputDebugString(L"[Combo] Missed - target outside cone\n");
-        return;
-    }
+    if (dot < cosHalfCone) return;
 
     // Deal damage
     PlayerComponent* pPlayer = pTarget->GetComponent<PlayerComponent>();
     if (pPlayer)
-    {
         pPlayer->TakeDamage(hit.fDamage);
-
-        wchar_t buffer[128];
-        swprintf_s(buffer, L"[Combo] Hit %d HIT! Dealt %.1f damage\n", m_nCurrentHit + 1, hit.fDamage);
-        OutputDebugString(buffer);
-    }
 }
 
 ComboAttackBehavior* ComboAttackBehavior::CreateLightCombo()

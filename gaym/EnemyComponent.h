@@ -179,6 +179,15 @@ public:
     void SetFlying(bool bFlying, float fHeight = 15.0f) { m_bIsFlying = bFlying; m_fFlyHeight = fHeight; }
     bool IsFlying() const { return m_bIsFlying; }
 
+    // Stationary mode — 고정형 보스 (이동 없음, 회전만 느리게, 거리 무관 공격)
+    void SetStationary(bool bStationary) { m_bStationary = bStationary; }
+    bool IsStationary() const { return m_bStationary; }
+    void SetRotationSpeed(float fDegPerSec) { m_fRotationSpeed = fDegPerSec; }
+
+    // 기본 애니 재생속도 (프리셋에서 설정). 공격 behavior 가 일시적으로 override 할 때 복원용
+    void  SetBaseAnimPlaybackSpeed(float fSpeed) { m_fBaseAnimPlaybackSpeed = fSpeed; }
+    float GetBaseAnimPlaybackSpeed() const       { return m_fBaseAnimPlaybackSpeed; }
+
     // Boss intro cutscene
     void StartBossIntro(float fStartHeight = 30.0f);
     bool IsInIntro() const { return m_eIntroPhase != BossIntroPhase::None && m_eIntroPhase != BossIntroPhase::Done; }
@@ -230,6 +239,7 @@ private:
     // Boss flags
     bool m_bIsBoss = false;
     bool m_bInvincible = false;
+    bool m_bStationary = false;   // 고정형 보스 — Chase 단계에서 이동 안 함
     bool m_bUsingSpecialAttack = false;
     bool m_bUsingFlyingAttack = false;
 
@@ -276,6 +286,9 @@ private:
 
     // Smooth rotation
     float m_fRotationSpeed = 180.0f;     // Degrees per second
+
+    // 애니 재생속도 (프리셋 기본값). 공격 override 후 복원에 사용
+    float m_fBaseAnimPlaybackSpeed = 1.0f;
 
     // Callbacks
     DeathCallback m_OnDeathCallback;
