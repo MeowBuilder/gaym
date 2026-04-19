@@ -284,8 +284,43 @@ struct S_MONSTER_DESPAWNDefaultTypeInternal {
   };
 };
 PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT S_MONSTER_DESPAWNDefaultTypeInternal _S_MONSTER_DESPAWN_default_instance_;
+constexpr S_MONSTER_ATTACK::S_MONSTER_ATTACK(
+  ::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized)
+  : monsterid_(uint64_t{0u})
+  , targetplayerid_(uint64_t{0u})
+  , attacktype_(0u)
+  , x_(0)
+  , y_(0)
+  , z_(0)
+  , yaw_(0)
+  , windupsec_(0){}
+struct S_MONSTER_ATTACKDefaultTypeInternal {
+  constexpr S_MONSTER_ATTACKDefaultTypeInternal()
+    : _instance(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized{}) {}
+  ~S_MONSTER_ATTACKDefaultTypeInternal() {}
+  union {
+    S_MONSTER_ATTACK _instance;
+  };
+};
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT S_MONSTER_ATTACKDefaultTypeInternal _S_MONSTER_ATTACK_default_instance_;
+constexpr S_PLAYER_DAMAGE::S_PLAYER_DAMAGE(
+  ::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized)
+  : playerid_(uint64_t{0u})
+  , damage_(0)
+  , currenthp_(0)
+  , attackermonsterid_(uint64_t{0u})
+  , isdead_(false){}
+struct S_PLAYER_DAMAGEDefaultTypeInternal {
+  constexpr S_PLAYER_DAMAGEDefaultTypeInternal()
+    : _instance(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized{}) {}
+  ~S_PLAYER_DAMAGEDefaultTypeInternal() {}
+  union {
+    S_PLAYER_DAMAGE _instance;
+  };
+};
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT S_PLAYER_DAMAGEDefaultTypeInternal _S_PLAYER_DAMAGE_default_instance_;
 }  // namespace Protocol
-static ::PROTOBUF_NAMESPACE_ID::Metadata file_level_metadata_Protocol_2eproto[19];
+static ::PROTOBUF_NAMESPACE_ID::Metadata file_level_metadata_Protocol_2eproto[21];
 static constexpr ::PROTOBUF_NAMESPACE_ID::EnumDescriptor const** file_level_enum_descriptors_Protocol_2eproto = nullptr;
 static constexpr ::PROTOBUF_NAMESPACE_ID::ServiceDescriptor const** file_level_service_descriptors_Protocol_2eproto = nullptr;
 
@@ -441,6 +476,29 @@ const ::PROTOBUF_NAMESPACE_ID::uint32 TableStruct_Protocol_2eproto::offsets[] PR
   ~0u,  // no _oneof_case_
   ~0u,  // no _weak_field_map_
   PROTOBUF_FIELD_OFFSET(::Protocol::S_MONSTER_DESPAWN, monsterid_),
+  ~0u,  // no _has_bits_
+  PROTOBUF_FIELD_OFFSET(::Protocol::S_MONSTER_ATTACK, _internal_metadata_),
+  ~0u,  // no _extensions_
+  ~0u,  // no _oneof_case_
+  ~0u,  // no _weak_field_map_
+  PROTOBUF_FIELD_OFFSET(::Protocol::S_MONSTER_ATTACK, monsterid_),
+  PROTOBUF_FIELD_OFFSET(::Protocol::S_MONSTER_ATTACK, targetplayerid_),
+  PROTOBUF_FIELD_OFFSET(::Protocol::S_MONSTER_ATTACK, attacktype_),
+  PROTOBUF_FIELD_OFFSET(::Protocol::S_MONSTER_ATTACK, x_),
+  PROTOBUF_FIELD_OFFSET(::Protocol::S_MONSTER_ATTACK, y_),
+  PROTOBUF_FIELD_OFFSET(::Protocol::S_MONSTER_ATTACK, z_),
+  PROTOBUF_FIELD_OFFSET(::Protocol::S_MONSTER_ATTACK, yaw_),
+  PROTOBUF_FIELD_OFFSET(::Protocol::S_MONSTER_ATTACK, windupsec_),
+  ~0u,  // no _has_bits_
+  PROTOBUF_FIELD_OFFSET(::Protocol::S_PLAYER_DAMAGE, _internal_metadata_),
+  ~0u,  // no _extensions_
+  ~0u,  // no _oneof_case_
+  ~0u,  // no _weak_field_map_
+  PROTOBUF_FIELD_OFFSET(::Protocol::S_PLAYER_DAMAGE, playerid_),
+  PROTOBUF_FIELD_OFFSET(::Protocol::S_PLAYER_DAMAGE, damage_),
+  PROTOBUF_FIELD_OFFSET(::Protocol::S_PLAYER_DAMAGE, currenthp_),
+  PROTOBUF_FIELD_OFFSET(::Protocol::S_PLAYER_DAMAGE, isdead_),
+  PROTOBUF_FIELD_OFFSET(::Protocol::S_PLAYER_DAMAGE, attackermonsterid_),
 };
 static const ::PROTOBUF_NAMESPACE_ID::internal::MigrationSchema schemas[] PROTOBUF_SECTION_VARIABLE(protodesc_cold) = {
   { 0, -1, sizeof(::Protocol::C_LOGIN)},
@@ -462,6 +520,8 @@ static const ::PROTOBUF_NAMESPACE_ID::internal::MigrationSchema schemas[] PROTOB
   { 129, -1, sizeof(::Protocol::S_MONSTER_SPAWN)},
   { 135, -1, sizeof(::Protocol::S_MONSTER_MOVE)},
   { 145, -1, sizeof(::Protocol::S_MONSTER_DESPAWN)},
+  { 151, -1, sizeof(::Protocol::S_MONSTER_ATTACK)},
+  { 164, -1, sizeof(::Protocol::S_PLAYER_DAMAGE)},
 };
 
 static ::PROTOBUF_NAMESPACE_ID::Message const * const file_default_instances[] = {
@@ -484,6 +544,8 @@ static ::PROTOBUF_NAMESPACE_ID::Message const * const file_default_instances[] =
   reinterpret_cast<const ::PROTOBUF_NAMESPACE_ID::Message*>(&::Protocol::_S_MONSTER_SPAWN_default_instance_),
   reinterpret_cast<const ::PROTOBUF_NAMESPACE_ID::Message*>(&::Protocol::_S_MONSTER_MOVE_default_instance_),
   reinterpret_cast<const ::PROTOBUF_NAMESPACE_ID::Message*>(&::Protocol::_S_MONSTER_DESPAWN_default_instance_),
+  reinterpret_cast<const ::PROTOBUF_NAMESPACE_ID::Message*>(&::Protocol::_S_MONSTER_ATTACK_default_instance_),
+  reinterpret_cast<const ::PROTOBUF_NAMESPACE_ID::Message*>(&::Protocol::_S_PLAYER_DAMAGE_default_instance_),
 };
 
 const char descriptor_table_protodef_Protocol_2eproto[] PROTOBUF_SECTION_VARIABLE(protodesc_cold) =
@@ -518,7 +580,13 @@ const char descriptor_table_protodef_Protocol_2eproto[] PROTOBUF_SECTION_VARIABL
   "fo\"Q\n\016S_MONSTER_MOVE\022\021\n\tmonsterId\030\001 \001(\004\022"
   "\t\n\001x\030\002 \001(\002\022\t\n\001y\030\003 \001(\002\022\t\n\001z\030\004 \001(\002\022\013\n\003yaw\030"
   "\005 \001(\002\"&\n\021S_MONSTER_DESPAWN\022\021\n\tmonsterId\030"
-  "\001 \001(\004b\006proto3"
+  "\001 \001(\004\"\222\001\n\020S_MONSTER_ATTACK\022\021\n\tmonsterId\030"
+  "\001 \001(\004\022\026\n\016targetPlayerId\030\002 \001(\004\022\022\n\nattackT"
+  "ype\030\003 \001(\r\022\t\n\001x\030\004 \001(\002\022\t\n\001y\030\005 \001(\002\022\t\n\001z\030\006 \001"
+  "(\002\022\013\n\003yaw\030\007 \001(\002\022\021\n\twindupSec\030\010 \001(\002\"q\n\017S_"
+  "PLAYER_DAMAGE\022\020\n\010playerId\030\001 \001(\004\022\016\n\006damag"
+  "e\030\002 \001(\002\022\021\n\tcurrentHp\030\003 \001(\002\022\016\n\006isDead\030\004 \001"
+  "(\010\022\031\n\021attackerMonsterId\030\005 \001(\004b\006proto3"
   ;
 static const ::PROTOBUF_NAMESPACE_ID::internal::DescriptorTable*const descriptor_table_Protocol_2eproto_deps[2] = {
   &::descriptor_table_Enum_2eproto,
@@ -526,8 +594,8 @@ static const ::PROTOBUF_NAMESPACE_ID::internal::DescriptorTable*const descriptor
 };
 static ::PROTOBUF_NAMESPACE_ID::internal::once_flag descriptor_table_Protocol_2eproto_once;
 const ::PROTOBUF_NAMESPACE_ID::internal::DescriptorTable descriptor_table_Protocol_2eproto = {
-  false, false, 1253, descriptor_table_protodef_Protocol_2eproto, "Protocol.proto", 
-  &descriptor_table_Protocol_2eproto_once, descriptor_table_Protocol_2eproto_deps, 2, 19,
+  false, false, 1517, descriptor_table_protodef_Protocol_2eproto, "Protocol.proto", 
+  &descriptor_table_Protocol_2eproto_once, descriptor_table_Protocol_2eproto_deps, 2, 21,
   schemas, file_default_instances, TableStruct_Protocol_2eproto::offsets,
   file_level_metadata_Protocol_2eproto, file_level_enum_descriptors_Protocol_2eproto, file_level_service_descriptors_Protocol_2eproto,
 };
@@ -5079,6 +5147,647 @@ void S_MONSTER_DESPAWN::InternalSwap(S_MONSTER_DESPAWN* other) {
       file_level_metadata_Protocol_2eproto[18]);
 }
 
+// ===================================================================
+
+class S_MONSTER_ATTACK::_Internal {
+ public:
+};
+
+S_MONSTER_ATTACK::S_MONSTER_ATTACK(::PROTOBUF_NAMESPACE_ID::Arena* arena)
+  : ::PROTOBUF_NAMESPACE_ID::Message(arena) {
+  SharedCtor();
+  RegisterArenaDtor(arena);
+  // @@protoc_insertion_point(arena_constructor:Protocol.S_MONSTER_ATTACK)
+}
+S_MONSTER_ATTACK::S_MONSTER_ATTACK(const S_MONSTER_ATTACK& from)
+  : ::PROTOBUF_NAMESPACE_ID::Message() {
+  _internal_metadata_.MergeFrom<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(from._internal_metadata_);
+  ::memcpy(&monsterid_, &from.monsterid_,
+    static_cast<size_t>(reinterpret_cast<char*>(&windupsec_) -
+    reinterpret_cast<char*>(&monsterid_)) + sizeof(windupsec_));
+  // @@protoc_insertion_point(copy_constructor:Protocol.S_MONSTER_ATTACK)
+}
+
+void S_MONSTER_ATTACK::SharedCtor() {
+::memset(reinterpret_cast<char*>(this) + static_cast<size_t>(
+    reinterpret_cast<char*>(&monsterid_) - reinterpret_cast<char*>(this)),
+    0, static_cast<size_t>(reinterpret_cast<char*>(&windupsec_) -
+    reinterpret_cast<char*>(&monsterid_)) + sizeof(windupsec_));
+}
+
+S_MONSTER_ATTACK::~S_MONSTER_ATTACK() {
+  // @@protoc_insertion_point(destructor:Protocol.S_MONSTER_ATTACK)
+  SharedDtor();
+  _internal_metadata_.Delete<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>();
+}
+
+void S_MONSTER_ATTACK::SharedDtor() {
+  GOOGLE_DCHECK(GetArenaForAllocation() == nullptr);
+}
+
+void S_MONSTER_ATTACK::ArenaDtor(void* object) {
+  S_MONSTER_ATTACK* _this = reinterpret_cast< S_MONSTER_ATTACK* >(object);
+  (void)_this;
+}
+void S_MONSTER_ATTACK::RegisterArenaDtor(::PROTOBUF_NAMESPACE_ID::Arena*) {
+}
+void S_MONSTER_ATTACK::SetCachedSize(int size) const {
+  _cached_size_.Set(size);
+}
+
+void S_MONSTER_ATTACK::Clear() {
+// @@protoc_insertion_point(message_clear_start:Protocol.S_MONSTER_ATTACK)
+  ::PROTOBUF_NAMESPACE_ID::uint32 cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  ::memset(&monsterid_, 0, static_cast<size_t>(
+      reinterpret_cast<char*>(&windupsec_) -
+      reinterpret_cast<char*>(&monsterid_)) + sizeof(windupsec_));
+  _internal_metadata_.Clear<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>();
+}
+
+const char* S_MONSTER_ATTACK::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) {
+#define CHK_(x) if (PROTOBUF_PREDICT_FALSE(!(x))) goto failure
+  while (!ctx->Done(&ptr)) {
+    ::PROTOBUF_NAMESPACE_ID::uint32 tag;
+    ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
+    switch (tag >> 3) {
+      // uint64 monsterId = 1;
+      case 1:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<::PROTOBUF_NAMESPACE_ID::uint8>(tag) == 8)) {
+          monsterid_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
+          CHK_(ptr);
+        } else goto handle_unusual;
+        continue;
+      // uint64 targetPlayerId = 2;
+      case 2:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<::PROTOBUF_NAMESPACE_ID::uint8>(tag) == 16)) {
+          targetplayerid_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
+          CHK_(ptr);
+        } else goto handle_unusual;
+        continue;
+      // uint32 attackType = 3;
+      case 3:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<::PROTOBUF_NAMESPACE_ID::uint8>(tag) == 24)) {
+          attacktype_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
+          CHK_(ptr);
+        } else goto handle_unusual;
+        continue;
+      // float x = 4;
+      case 4:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<::PROTOBUF_NAMESPACE_ID::uint8>(tag) == 37)) {
+          x_ = ::PROTOBUF_NAMESPACE_ID::internal::UnalignedLoad<float>(ptr);
+          ptr += sizeof(float);
+        } else goto handle_unusual;
+        continue;
+      // float y = 5;
+      case 5:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<::PROTOBUF_NAMESPACE_ID::uint8>(tag) == 45)) {
+          y_ = ::PROTOBUF_NAMESPACE_ID::internal::UnalignedLoad<float>(ptr);
+          ptr += sizeof(float);
+        } else goto handle_unusual;
+        continue;
+      // float z = 6;
+      case 6:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<::PROTOBUF_NAMESPACE_ID::uint8>(tag) == 53)) {
+          z_ = ::PROTOBUF_NAMESPACE_ID::internal::UnalignedLoad<float>(ptr);
+          ptr += sizeof(float);
+        } else goto handle_unusual;
+        continue;
+      // float yaw = 7;
+      case 7:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<::PROTOBUF_NAMESPACE_ID::uint8>(tag) == 61)) {
+          yaw_ = ::PROTOBUF_NAMESPACE_ID::internal::UnalignedLoad<float>(ptr);
+          ptr += sizeof(float);
+        } else goto handle_unusual;
+        continue;
+      // float windupSec = 8;
+      case 8:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<::PROTOBUF_NAMESPACE_ID::uint8>(tag) == 69)) {
+          windupsec_ = ::PROTOBUF_NAMESPACE_ID::internal::UnalignedLoad<float>(ptr);
+          ptr += sizeof(float);
+        } else goto handle_unusual;
+        continue;
+      default: {
+      handle_unusual:
+        if ((tag == 0) || ((tag & 7) == 4)) {
+          CHK_(ptr);
+          ctx->SetLastTag(tag);
+          goto success;
+        }
+        ptr = UnknownFieldParse(tag,
+            _internal_metadata_.mutable_unknown_fields<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(),
+            ptr, ctx);
+        CHK_(ptr != nullptr);
+        continue;
+      }
+    }  // switch
+  }  // while
+success:
+  return ptr;
+failure:
+  ptr = nullptr;
+  goto success;
+#undef CHK_
+}
+
+::PROTOBUF_NAMESPACE_ID::uint8* S_MONSTER_ATTACK::_InternalSerialize(
+    ::PROTOBUF_NAMESPACE_ID::uint8* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const {
+  // @@protoc_insertion_point(serialize_to_array_start:Protocol.S_MONSTER_ATTACK)
+  ::PROTOBUF_NAMESPACE_ID::uint32 cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  // uint64 monsterId = 1;
+  if (this->monsterid() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteUInt64ToArray(1, this->_internal_monsterid(), target);
+  }
+
+  // uint64 targetPlayerId = 2;
+  if (this->targetplayerid() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteUInt64ToArray(2, this->_internal_targetplayerid(), target);
+  }
+
+  // uint32 attackType = 3;
+  if (this->attacktype() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteUInt32ToArray(3, this->_internal_attacktype(), target);
+  }
+
+  // float x = 4;
+  if (!(this->x() <= 0 && this->x() >= 0)) {
+    target = stream->EnsureSpace(target);
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteFloatToArray(4, this->_internal_x(), target);
+  }
+
+  // float y = 5;
+  if (!(this->y() <= 0 && this->y() >= 0)) {
+    target = stream->EnsureSpace(target);
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteFloatToArray(5, this->_internal_y(), target);
+  }
+
+  // float z = 6;
+  if (!(this->z() <= 0 && this->z() >= 0)) {
+    target = stream->EnsureSpace(target);
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteFloatToArray(6, this->_internal_z(), target);
+  }
+
+  // float yaw = 7;
+  if (!(this->yaw() <= 0 && this->yaw() >= 0)) {
+    target = stream->EnsureSpace(target);
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteFloatToArray(7, this->_internal_yaw(), target);
+  }
+
+  // float windupSec = 8;
+  if (!(this->windupsec() <= 0 && this->windupsec() >= 0)) {
+    target = stream->EnsureSpace(target);
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteFloatToArray(8, this->_internal_windupsec(), target);
+  }
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormat::InternalSerializeUnknownFieldsToArray(
+        _internal_metadata_.unknown_fields<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(::PROTOBUF_NAMESPACE_ID::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:Protocol.S_MONSTER_ATTACK)
+  return target;
+}
+
+size_t S_MONSTER_ATTACK::ByteSizeLong() const {
+// @@protoc_insertion_point(message_byte_size_start:Protocol.S_MONSTER_ATTACK)
+  size_t total_size = 0;
+
+  ::PROTOBUF_NAMESPACE_ID::uint32 cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  // uint64 monsterId = 1;
+  if (this->monsterid() != 0) {
+    total_size += 1 +
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::UInt64Size(
+        this->_internal_monsterid());
+  }
+
+  // uint64 targetPlayerId = 2;
+  if (this->targetplayerid() != 0) {
+    total_size += 1 +
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::UInt64Size(
+        this->_internal_targetplayerid());
+  }
+
+  // uint32 attackType = 3;
+  if (this->attacktype() != 0) {
+    total_size += 1 +
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::UInt32Size(
+        this->_internal_attacktype());
+  }
+
+  // float x = 4;
+  if (!(this->x() <= 0 && this->x() >= 0)) {
+    total_size += 1 + 4;
+  }
+
+  // float y = 5;
+  if (!(this->y() <= 0 && this->y() >= 0)) {
+    total_size += 1 + 4;
+  }
+
+  // float z = 6;
+  if (!(this->z() <= 0 && this->z() >= 0)) {
+    total_size += 1 + 4;
+  }
+
+  // float yaw = 7;
+  if (!(this->yaw() <= 0 && this->yaw() >= 0)) {
+    total_size += 1 + 4;
+  }
+
+  // float windupSec = 8;
+  if (!(this->windupsec() <= 0 && this->windupsec() >= 0)) {
+    total_size += 1 + 4;
+  }
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    return ::PROTOBUF_NAMESPACE_ID::internal::ComputeUnknownFieldsSize(
+        _internal_metadata_, total_size, &_cached_size_);
+  }
+  int cached_size = ::PROTOBUF_NAMESPACE_ID::internal::ToCachedSize(total_size);
+  SetCachedSize(cached_size);
+  return total_size;
+}
+
+void S_MONSTER_ATTACK::MergeFrom(const ::PROTOBUF_NAMESPACE_ID::Message& from) {
+// @@protoc_insertion_point(generalized_merge_from_start:Protocol.S_MONSTER_ATTACK)
+  GOOGLE_DCHECK_NE(&from, this);
+  const S_MONSTER_ATTACK* source =
+      ::PROTOBUF_NAMESPACE_ID::DynamicCastToGenerated<S_MONSTER_ATTACK>(
+          &from);
+  if (source == nullptr) {
+  // @@protoc_insertion_point(generalized_merge_from_cast_fail:Protocol.S_MONSTER_ATTACK)
+    ::PROTOBUF_NAMESPACE_ID::internal::ReflectionOps::Merge(from, this);
+  } else {
+  // @@protoc_insertion_point(generalized_merge_from_cast_success:Protocol.S_MONSTER_ATTACK)
+    MergeFrom(*source);
+  }
+}
+
+void S_MONSTER_ATTACK::MergeFrom(const S_MONSTER_ATTACK& from) {
+// @@protoc_insertion_point(class_specific_merge_from_start:Protocol.S_MONSTER_ATTACK)
+  GOOGLE_DCHECK_NE(&from, this);
+  _internal_metadata_.MergeFrom<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(from._internal_metadata_);
+  ::PROTOBUF_NAMESPACE_ID::uint32 cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  if (from.monsterid() != 0) {
+    _internal_set_monsterid(from._internal_monsterid());
+  }
+  if (from.targetplayerid() != 0) {
+    _internal_set_targetplayerid(from._internal_targetplayerid());
+  }
+  if (from.attacktype() != 0) {
+    _internal_set_attacktype(from._internal_attacktype());
+  }
+  if (!(from.x() <= 0 && from.x() >= 0)) {
+    _internal_set_x(from._internal_x());
+  }
+  if (!(from.y() <= 0 && from.y() >= 0)) {
+    _internal_set_y(from._internal_y());
+  }
+  if (!(from.z() <= 0 && from.z() >= 0)) {
+    _internal_set_z(from._internal_z());
+  }
+  if (!(from.yaw() <= 0 && from.yaw() >= 0)) {
+    _internal_set_yaw(from._internal_yaw());
+  }
+  if (!(from.windupsec() <= 0 && from.windupsec() >= 0)) {
+    _internal_set_windupsec(from._internal_windupsec());
+  }
+}
+
+void S_MONSTER_ATTACK::CopyFrom(const ::PROTOBUF_NAMESPACE_ID::Message& from) {
+// @@protoc_insertion_point(generalized_copy_from_start:Protocol.S_MONSTER_ATTACK)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+void S_MONSTER_ATTACK::CopyFrom(const S_MONSTER_ATTACK& from) {
+// @@protoc_insertion_point(class_specific_copy_from_start:Protocol.S_MONSTER_ATTACK)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+bool S_MONSTER_ATTACK::IsInitialized() const {
+  return true;
+}
+
+void S_MONSTER_ATTACK::InternalSwap(S_MONSTER_ATTACK* other) {
+  using std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  ::PROTOBUF_NAMESPACE_ID::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(S_MONSTER_ATTACK, windupsec_)
+      + sizeof(S_MONSTER_ATTACK::windupsec_)
+      - PROTOBUF_FIELD_OFFSET(S_MONSTER_ATTACK, monsterid_)>(
+          reinterpret_cast<char*>(&monsterid_),
+          reinterpret_cast<char*>(&other->monsterid_));
+}
+
+::PROTOBUF_NAMESPACE_ID::Metadata S_MONSTER_ATTACK::GetMetadata() const {
+  return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
+      &descriptor_table_Protocol_2eproto_getter, &descriptor_table_Protocol_2eproto_once,
+      file_level_metadata_Protocol_2eproto[19]);
+}
+
+// ===================================================================
+
+class S_PLAYER_DAMAGE::_Internal {
+ public:
+};
+
+S_PLAYER_DAMAGE::S_PLAYER_DAMAGE(::PROTOBUF_NAMESPACE_ID::Arena* arena)
+  : ::PROTOBUF_NAMESPACE_ID::Message(arena) {
+  SharedCtor();
+  RegisterArenaDtor(arena);
+  // @@protoc_insertion_point(arena_constructor:Protocol.S_PLAYER_DAMAGE)
+}
+S_PLAYER_DAMAGE::S_PLAYER_DAMAGE(const S_PLAYER_DAMAGE& from)
+  : ::PROTOBUF_NAMESPACE_ID::Message() {
+  _internal_metadata_.MergeFrom<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(from._internal_metadata_);
+  ::memcpy(&playerid_, &from.playerid_,
+    static_cast<size_t>(reinterpret_cast<char*>(&isdead_) -
+    reinterpret_cast<char*>(&playerid_)) + sizeof(isdead_));
+  // @@protoc_insertion_point(copy_constructor:Protocol.S_PLAYER_DAMAGE)
+}
+
+void S_PLAYER_DAMAGE::SharedCtor() {
+::memset(reinterpret_cast<char*>(this) + static_cast<size_t>(
+    reinterpret_cast<char*>(&playerid_) - reinterpret_cast<char*>(this)),
+    0, static_cast<size_t>(reinterpret_cast<char*>(&isdead_) -
+    reinterpret_cast<char*>(&playerid_)) + sizeof(isdead_));
+}
+
+S_PLAYER_DAMAGE::~S_PLAYER_DAMAGE() {
+  // @@protoc_insertion_point(destructor:Protocol.S_PLAYER_DAMAGE)
+  SharedDtor();
+  _internal_metadata_.Delete<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>();
+}
+
+void S_PLAYER_DAMAGE::SharedDtor() {
+  GOOGLE_DCHECK(GetArenaForAllocation() == nullptr);
+}
+
+void S_PLAYER_DAMAGE::ArenaDtor(void* object) {
+  S_PLAYER_DAMAGE* _this = reinterpret_cast< S_PLAYER_DAMAGE* >(object);
+  (void)_this;
+}
+void S_PLAYER_DAMAGE::RegisterArenaDtor(::PROTOBUF_NAMESPACE_ID::Arena*) {
+}
+void S_PLAYER_DAMAGE::SetCachedSize(int size) const {
+  _cached_size_.Set(size);
+}
+
+void S_PLAYER_DAMAGE::Clear() {
+// @@protoc_insertion_point(message_clear_start:Protocol.S_PLAYER_DAMAGE)
+  ::PROTOBUF_NAMESPACE_ID::uint32 cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  ::memset(&playerid_, 0, static_cast<size_t>(
+      reinterpret_cast<char*>(&isdead_) -
+      reinterpret_cast<char*>(&playerid_)) + sizeof(isdead_));
+  _internal_metadata_.Clear<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>();
+}
+
+const char* S_PLAYER_DAMAGE::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) {
+#define CHK_(x) if (PROTOBUF_PREDICT_FALSE(!(x))) goto failure
+  while (!ctx->Done(&ptr)) {
+    ::PROTOBUF_NAMESPACE_ID::uint32 tag;
+    ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
+    switch (tag >> 3) {
+      // uint64 playerId = 1;
+      case 1:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<::PROTOBUF_NAMESPACE_ID::uint8>(tag) == 8)) {
+          playerid_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
+          CHK_(ptr);
+        } else goto handle_unusual;
+        continue;
+      // float damage = 2;
+      case 2:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<::PROTOBUF_NAMESPACE_ID::uint8>(tag) == 21)) {
+          damage_ = ::PROTOBUF_NAMESPACE_ID::internal::UnalignedLoad<float>(ptr);
+          ptr += sizeof(float);
+        } else goto handle_unusual;
+        continue;
+      // float currentHp = 3;
+      case 3:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<::PROTOBUF_NAMESPACE_ID::uint8>(tag) == 29)) {
+          currenthp_ = ::PROTOBUF_NAMESPACE_ID::internal::UnalignedLoad<float>(ptr);
+          ptr += sizeof(float);
+        } else goto handle_unusual;
+        continue;
+      // bool isDead = 4;
+      case 4:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<::PROTOBUF_NAMESPACE_ID::uint8>(tag) == 32)) {
+          isdead_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
+          CHK_(ptr);
+        } else goto handle_unusual;
+        continue;
+      // uint64 attackerMonsterId = 5;
+      case 5:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<::PROTOBUF_NAMESPACE_ID::uint8>(tag) == 40)) {
+          attackermonsterid_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
+          CHK_(ptr);
+        } else goto handle_unusual;
+        continue;
+      default: {
+      handle_unusual:
+        if ((tag == 0) || ((tag & 7) == 4)) {
+          CHK_(ptr);
+          ctx->SetLastTag(tag);
+          goto success;
+        }
+        ptr = UnknownFieldParse(tag,
+            _internal_metadata_.mutable_unknown_fields<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(),
+            ptr, ctx);
+        CHK_(ptr != nullptr);
+        continue;
+      }
+    }  // switch
+  }  // while
+success:
+  return ptr;
+failure:
+  ptr = nullptr;
+  goto success;
+#undef CHK_
+}
+
+::PROTOBUF_NAMESPACE_ID::uint8* S_PLAYER_DAMAGE::_InternalSerialize(
+    ::PROTOBUF_NAMESPACE_ID::uint8* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const {
+  // @@protoc_insertion_point(serialize_to_array_start:Protocol.S_PLAYER_DAMAGE)
+  ::PROTOBUF_NAMESPACE_ID::uint32 cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  // uint64 playerId = 1;
+  if (this->playerid() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteUInt64ToArray(1, this->_internal_playerid(), target);
+  }
+
+  // float damage = 2;
+  if (!(this->damage() <= 0 && this->damage() >= 0)) {
+    target = stream->EnsureSpace(target);
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteFloatToArray(2, this->_internal_damage(), target);
+  }
+
+  // float currentHp = 3;
+  if (!(this->currenthp() <= 0 && this->currenthp() >= 0)) {
+    target = stream->EnsureSpace(target);
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteFloatToArray(3, this->_internal_currenthp(), target);
+  }
+
+  // bool isDead = 4;
+  if (this->isdead() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteBoolToArray(4, this->_internal_isdead(), target);
+  }
+
+  // uint64 attackerMonsterId = 5;
+  if (this->attackermonsterid() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteUInt64ToArray(5, this->_internal_attackermonsterid(), target);
+  }
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormat::InternalSerializeUnknownFieldsToArray(
+        _internal_metadata_.unknown_fields<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(::PROTOBUF_NAMESPACE_ID::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:Protocol.S_PLAYER_DAMAGE)
+  return target;
+}
+
+size_t S_PLAYER_DAMAGE::ByteSizeLong() const {
+// @@protoc_insertion_point(message_byte_size_start:Protocol.S_PLAYER_DAMAGE)
+  size_t total_size = 0;
+
+  ::PROTOBUF_NAMESPACE_ID::uint32 cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  // uint64 playerId = 1;
+  if (this->playerid() != 0) {
+    total_size += 1 +
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::UInt64Size(
+        this->_internal_playerid());
+  }
+
+  // float damage = 2;
+  if (!(this->damage() <= 0 && this->damage() >= 0)) {
+    total_size += 1 + 4;
+  }
+
+  // float currentHp = 3;
+  if (!(this->currenthp() <= 0 && this->currenthp() >= 0)) {
+    total_size += 1 + 4;
+  }
+
+  // uint64 attackerMonsterId = 5;
+  if (this->attackermonsterid() != 0) {
+    total_size += 1 +
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::UInt64Size(
+        this->_internal_attackermonsterid());
+  }
+
+  // bool isDead = 4;
+  if (this->isdead() != 0) {
+    total_size += 1 + 1;
+  }
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    return ::PROTOBUF_NAMESPACE_ID::internal::ComputeUnknownFieldsSize(
+        _internal_metadata_, total_size, &_cached_size_);
+  }
+  int cached_size = ::PROTOBUF_NAMESPACE_ID::internal::ToCachedSize(total_size);
+  SetCachedSize(cached_size);
+  return total_size;
+}
+
+void S_PLAYER_DAMAGE::MergeFrom(const ::PROTOBUF_NAMESPACE_ID::Message& from) {
+// @@protoc_insertion_point(generalized_merge_from_start:Protocol.S_PLAYER_DAMAGE)
+  GOOGLE_DCHECK_NE(&from, this);
+  const S_PLAYER_DAMAGE* source =
+      ::PROTOBUF_NAMESPACE_ID::DynamicCastToGenerated<S_PLAYER_DAMAGE>(
+          &from);
+  if (source == nullptr) {
+  // @@protoc_insertion_point(generalized_merge_from_cast_fail:Protocol.S_PLAYER_DAMAGE)
+    ::PROTOBUF_NAMESPACE_ID::internal::ReflectionOps::Merge(from, this);
+  } else {
+  // @@protoc_insertion_point(generalized_merge_from_cast_success:Protocol.S_PLAYER_DAMAGE)
+    MergeFrom(*source);
+  }
+}
+
+void S_PLAYER_DAMAGE::MergeFrom(const S_PLAYER_DAMAGE& from) {
+// @@protoc_insertion_point(class_specific_merge_from_start:Protocol.S_PLAYER_DAMAGE)
+  GOOGLE_DCHECK_NE(&from, this);
+  _internal_metadata_.MergeFrom<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(from._internal_metadata_);
+  ::PROTOBUF_NAMESPACE_ID::uint32 cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  if (from.playerid() != 0) {
+    _internal_set_playerid(from._internal_playerid());
+  }
+  if (!(from.damage() <= 0 && from.damage() >= 0)) {
+    _internal_set_damage(from._internal_damage());
+  }
+  if (!(from.currenthp() <= 0 && from.currenthp() >= 0)) {
+    _internal_set_currenthp(from._internal_currenthp());
+  }
+  if (from.attackermonsterid() != 0) {
+    _internal_set_attackermonsterid(from._internal_attackermonsterid());
+  }
+  if (from.isdead() != 0) {
+    _internal_set_isdead(from._internal_isdead());
+  }
+}
+
+void S_PLAYER_DAMAGE::CopyFrom(const ::PROTOBUF_NAMESPACE_ID::Message& from) {
+// @@protoc_insertion_point(generalized_copy_from_start:Protocol.S_PLAYER_DAMAGE)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+void S_PLAYER_DAMAGE::CopyFrom(const S_PLAYER_DAMAGE& from) {
+// @@protoc_insertion_point(class_specific_copy_from_start:Protocol.S_PLAYER_DAMAGE)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+bool S_PLAYER_DAMAGE::IsInitialized() const {
+  return true;
+}
+
+void S_PLAYER_DAMAGE::InternalSwap(S_PLAYER_DAMAGE* other) {
+  using std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  ::PROTOBUF_NAMESPACE_ID::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(S_PLAYER_DAMAGE, isdead_)
+      + sizeof(S_PLAYER_DAMAGE::isdead_)
+      - PROTOBUF_FIELD_OFFSET(S_PLAYER_DAMAGE, playerid_)>(
+          reinterpret_cast<char*>(&playerid_),
+          reinterpret_cast<char*>(&other->playerid_));
+}
+
+::PROTOBUF_NAMESPACE_ID::Metadata S_PLAYER_DAMAGE::GetMetadata() const {
+  return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
+      &descriptor_table_Protocol_2eproto_getter, &descriptor_table_Protocol_2eproto_once,
+      file_level_metadata_Protocol_2eproto[20]);
+}
+
 // @@protoc_insertion_point(namespace_scope)
 }  // namespace Protocol
 PROTOBUF_NAMESPACE_OPEN
@@ -5138,6 +5847,12 @@ template<> PROTOBUF_NOINLINE ::Protocol::S_MONSTER_MOVE* Arena::CreateMaybeMessa
 }
 template<> PROTOBUF_NOINLINE ::Protocol::S_MONSTER_DESPAWN* Arena::CreateMaybeMessage< ::Protocol::S_MONSTER_DESPAWN >(Arena* arena) {
   return Arena::CreateMessageInternal< ::Protocol::S_MONSTER_DESPAWN >(arena);
+}
+template<> PROTOBUF_NOINLINE ::Protocol::S_MONSTER_ATTACK* Arena::CreateMaybeMessage< ::Protocol::S_MONSTER_ATTACK >(Arena* arena) {
+  return Arena::CreateMessageInternal< ::Protocol::S_MONSTER_ATTACK >(arena);
+}
+template<> PROTOBUF_NOINLINE ::Protocol::S_PLAYER_DAMAGE* Arena::CreateMaybeMessage< ::Protocol::S_PLAYER_DAMAGE >(Arena* arena) {
+  return Arena::CreateMessageInternal< ::Protocol::S_PLAYER_DAMAGE >(arena);
 }
 PROTOBUF_NAMESPACE_CLOSE
 

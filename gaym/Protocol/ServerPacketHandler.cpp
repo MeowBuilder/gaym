@@ -293,3 +293,44 @@ bool Handle_S_SKILL(PacketSessionRef& session, Protocol::S_SKILL& pkt)
 
     return true;
 }
+
+// 몬스터 공격 처리
+bool Handle_S_MONSTER_ATTACK(PacketSessionRef& session, Protocol::S_MONSTER_ATTACK& pkt)
+{
+    uint64 monsterId = pkt.monsterid();
+    uint64 targetPlayerId = pkt.targetplayerid();
+    uint32 attackType = pkt.attacktype();
+    float x = pkt.x();
+    float y = pkt.y();
+    float z = pkt.z();
+    float yaw = pkt.yaw();
+    float windupSec = pkt.windupsec();
+
+    char buf[256];
+    sprintf_s(buf, "[Network] S_MONSTER_ATTACK received: monsterId=%llu targetPlayerId=%llu attackType=%u pos=(%.2f, %.2f, %.2f) yaw=%.2f windupSec=%.2f",
+        monsterId, targetPlayerId, attackType, x, y, z, yaw, windupSec);
+    WriteNetworkLog(buf);
+
+    // 일단 1차는 로그만 확인
+    // 나중에 필요하면 QueueMonsterAttack(...) 추가해서 메인 스레드 연출 처리
+    return true;
+}
+
+// 플레이어 피격 처리
+bool Handle_S_PLAYER_DAMAGE(PacketSessionRef& session, Protocol::S_PLAYER_DAMAGE& pkt)
+{
+    uint64 playerId = pkt.playerid();
+    float damage = pkt.damage();
+    float currentHp = pkt.currenthp();
+    bool isDead = pkt.isdead();
+    uint64 attackerMonsterId = pkt.attackermonsterid();
+
+    char buf[256];
+    sprintf_s(buf, "[Network] S_PLAYER_DAMAGE received: playerId=%llu damage=%.2f currentHp=%.2f isDead=%d attackerMonsterId=%llu",
+        playerId, damage, currentHp, isDead ? 1 : 0, attackerMonsterId);
+    WriteNetworkLog(buf);
+
+    // 일단 1차는 로그만 확인
+    // 나중에 필요하면 QueuePlayerDamage(...) 추가해서 UI/피격 처리
+    return true;
+}
