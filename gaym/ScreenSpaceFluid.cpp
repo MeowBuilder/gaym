@@ -34,6 +34,7 @@ static const char* g_SphereDepthShader = R"(
         float3 centerVS  : TEXCOORD0;
         float2 uv        : TEXCOORD1;    // [0, 1]
         float  radius    : TEXCOORD2;
+        float4 particleColor : TEXCOORD3;
     };
 
     // billboard offset (TRIANGLE_STRIP)
@@ -68,6 +69,7 @@ static const char* g_SphereDepthShader = R"(
         o.centerVS = centerVS4.xyz;
         o.uv       = offset + 0.5f;    // [0, 1] 텍스처 좌표
         o.radius   = ssfSize * 0.5f;
+        o.particleColor = p.color;
         return o;
     }
 
@@ -96,18 +98,25 @@ static const char* g_SphereDepthShader = R"(
         return o;
     }
 
-    // Pass 1b: 두께(chord)만 출력 — 깊이 테스트 없이 모든 파티클이 기여
-    float Thickness_PS(VSOut input) : SV_TARGET0
+    // Pass 1b: 두께(chord) + 두께 가중 색상 출력 — 깊이 테스트 없이 모든 파티클이 기여
+    struct ThicknessColorOut {
+        float  thickness : SV_TARGET0;
+        float4 colorW    : SV_TARGET1;
+    };
+
+    ThicknessColorOut Thickness_PS(VSOut input)
     {
         float2 offset = (input.uv - float2(0.5f, 0.5f)) * 2.0f;
         if (length(offset) >= 1.0f) discard;
-
         float r      = input.radius;
         float ox     = offset.x * r;
         float oy     = offset.y * r;
         float inside = r * r - ox * ox - oy * oy;
-        // chord = 2*sqrt(inside), 반경 정규화: 중심=2, 가장자리→0
-        return 2.0f * sqrt(inside) / max(r, 0.001f);
+        float t = 2.0f * sqrt(inside) / max(r, 0.001f);
+        ThicknessColorOut o;
+        o.thickness = t;
+        o.colorW    = float4(input.particleColor.rgb * t, t);
+        return o;
     }
 )";
 
@@ -205,6 +214,7 @@ static const char* g_CompositeShader = R"(
     Texture2D<float>  gSmoothedDepth : register(t0);  // 스무딩된 깊이
     Texture2D<float>  gThickness     : register(t1);  // 유체 두께
     Texture2D<float4> gSceneColor    : register(t2);  // 굴절 배경 (유체 전 장면)
+    Texture2D<float4> gFluidColorWeighted : register(t3);  // 두께 가중 색상 누적 (per-effect)
     SamplerState      gPointSamp     : register(s0);  // 포인트 클램프
     SamplerState      gLinearSamp    : register(s1);  // 리니어 클램프 (굴절용)
 
@@ -278,15 +288,23 @@ static const char* g_CompositeShader = R"(
         float rawT    = saturate(thickT * (0.3f + 0.7f * NdotV));
         // [0.2, 0.8]로 리매핑: 얇은 곳도 inner 20%, 두꺼운 곳도 outer 20% 항상 섞임
         float colorT  = lerp(0.2f, 0.8f, rawT);
-        float3 fluidColor = lerp(gFluidColorOuter.rgb, gFluidColorInner.rgb, colorT);
 
-        // ---- 발광: floor 제거, 두꺼울수록 선형 증가 ----
+        // ---- Per-pixel fluid color (thickness-weighted average of particle colors) ----
+        float4 colorWeighted = gFluidColorWeighted.Sample(gPointSamp, uv);
+        float3 perPixelColor = (thickness > 0.001f)
+            ? colorWeighted.rgb / thickness
+            : gFluidColorOuter.rgb;
+
+        // Brightness modulation: edge=dimmer, core=brighter (same gradient feel)
+        float3 fluidColor = perPixelColor * lerp(0.55f, 1.35f, colorT);
+
+        // ---- 발광: 두꺼울수록 선형 증가 ----
         float emitStrength = saturate(thickness * 0.04f) * gFluidColorOuter.a;
         float3 emission = fluidColor * emitStrength;
 
-        // ---- 두꺼운 중심부 foam → inner 색으로 밝게 ----
+        // ---- 두꺼운 중심부 foam ----
         float foamT = saturate((thickness - 15.0f) * 0.06f);
-        float3 foamHighlight = gFluidColorInner.rgb * foamT * 0.4f;
+        float3 foamHighlight = perPixelColor * foamT * 0.4f;
 
         // ---- 스페큘러 반사 (Blinn-Phong) ----
         float3 L = normalize(-gLightDirVS);
@@ -415,6 +433,7 @@ void ScreenSpaceFluid::OnResize(ID3D12Device* pDevice, UINT width, UINT height)
     m_pTempRT.Reset();
     m_pThicknessRT.Reset();
     m_pSceneColorRT.Reset();
+    m_pColorWeightedRT.Reset();
     m_pFluidDSV.Reset();
 
     CreateTextures(pDevice, width, height);
@@ -426,10 +445,10 @@ void ScreenSpaceFluid::OnResize(ID3D12Device* pDevice, UINT width, UINT height)
 // ============================================================================
 void ScreenSpaceFluid::CreateTextures(ID3D12Device* pDevice, UINT width, UINT height)
 {
-    // ---- RTV 디스크립터 힙 (4개): FluidDepth(0), Smoothed(1), Temp(2), Thickness(3) ----
+    // ---- RTV 디스크립터 힙 (5개): FluidDepth(0), Smoothed(1), Temp(2), Thickness(3), ColorWeighted(4) ----
     {
         D3D12_DESCRIPTOR_HEAP_DESC desc = {};
-        desc.NumDescriptors = 4;
+        desc.NumDescriptors = 5;
         desc.Type           = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
         desc.Flags          = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
         pDevice->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&m_pRTVHeap));
@@ -444,11 +463,11 @@ void ScreenSpaceFluid::CreateTextures(ID3D12Device* pDevice, UINT width, UINT he
         pDevice->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&m_pDSVHeap));
     }
 
-    // ---- SRV/UAV 디스크립터 힙 (7개, SHADER_VISIBLE) ----
-    // 레이아웃: FluidDepth(0), Temp(1), Smoothed(2), Thickness(3), SceneColor(4), TempUAV(5), SmoothedUAV(6)
+    // ---- SRV/UAV 디스크립터 힙 (8개, SHADER_VISIBLE) ----
+    // 레이아웃: FluidDepth(0), Temp(1), Smoothed(2), Thickness(3), SceneColor(4), ColorWeighted(5), TempUAV(6), SmoothedUAV(7)
     {
         D3D12_DESCRIPTOR_HEAP_DESC desc = {};
-        desc.NumDescriptors = 7;
+        desc.NumDescriptors = 8;
         desc.Type           = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
         desc.Flags          = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
         pDevice->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&m_pSRVHeap));
@@ -518,11 +537,11 @@ void ScreenSpaceFluid::CreateTextures(ID3D12Device* pDevice, UINT width, UINT he
         }
     };
 
-    // SRV 힙 레이아웃: FluidDepth(0), Temp(1), Smoothed(2), Thickness(3), SceneColor(4), TempUAV(5), SmoothedUAV(6)
-    // RTV 힙 레이아웃: FluidDepth(0), Smoothed(1), Temp(2), Thickness(3)
+    // SRV 힙 레이아웃: FluidDepth(0), Temp(1), Smoothed(2), Thickness(3), SceneColor(4), ColorWeighted(5), TempUAV(6), SmoothedUAV(7)
+    // RTV 힙 레이아웃: FluidDepth(0), Smoothed(1), Temp(2), Thickness(3), ColorWeighted(4)
     CreateR32FloatRT(m_pFluidDepthRT, 0, 0, L"SSF_FluidDepthRT");           // RTV=0, SRV=0, UAV 없음
-    CreateR32FloatRT(m_pTempRT,       2, 1, L"SSF_TempRT",       5);        // RTV=2, SRV=1, UAV=5
-    CreateR32FloatRT(m_pSmoothedRT,   1, 2, L"SSF_SmoothedRT",   6);        // RTV=1, SRV=2, UAV=6
+    CreateR32FloatRT(m_pTempRT,       2, 1, L"SSF_TempRT",       6);        // RTV=2, SRV=1, UAV=6
+    CreateR32FloatRT(m_pSmoothedRT,   1, 2, L"SSF_SmoothedRT",   7);        // RTV=1, SRV=2, UAV=7
 
     // ---- R16_FLOAT ThicknessRT (additive blend) ----
     {
@@ -601,6 +620,47 @@ void ScreenSpaceFluid::CreateTextures(ID3D12Device* pDevice, UINT width, UINT he
         D3D12_CPU_DESCRIPTOR_HANDLE srvHandle = m_pSRVHeap->GetCPUDescriptorHandleForHeapStart();
         srvHandle.ptr += 4 * m_SRVIncrSize;
         pDevice->CreateShaderResourceView(m_pSceneColorRT.Get(), &srvDesc, srvHandle);
+    }
+
+    // ---- R16G16B16A16_FLOAT ColorWeightedRT (thickness-weighted particle color, additive blend) ----
+    {
+        D3D12_RESOURCE_DESC texDesc = {};
+        texDesc.Dimension          = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+        texDesc.Width              = width;
+        texDesc.Height             = height;
+        texDesc.DepthOrArraySize   = 1;
+        texDesc.MipLevels          = 1;
+        texDesc.Format             = DXGI_FORMAT_R16G16B16A16_FLOAT;
+        texDesc.SampleDesc.Count   = 1;
+        texDesc.Layout             = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+        texDesc.Flags              = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+
+        D3D12_CLEAR_VALUE clearVal = {};
+        clearVal.Format   = DXGI_FORMAT_R16G16B16A16_FLOAT;
+
+        HRESULT hr = pDevice->CreateCommittedResource(
+            &defaultHeap, D3D12_HEAP_FLAG_NONE,
+            &texDesc, D3D12_RESOURCE_STATE_RENDER_TARGET,
+            &clearVal, IID_PPV_ARGS(&m_pColorWeightedRT));
+        if (FAILED(hr)) { OutputDebugStringA("[SSF] ColorWeightedRT 생성 실패\n"); return; }
+        m_pColorWeightedRT->SetName(L"SSF_ColorWeightedRT");
+
+        // RTV (index 4)
+        D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = m_pRTVHeap->GetCPUDescriptorHandleForHeapStart();
+        rtvHandle.ptr += 4 * m_RTVIncrSize;
+        pDevice->CreateRenderTargetView(m_pColorWeightedRT.Get(), nullptr, rtvHandle);
+
+        // SRV (index 5)
+        D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+        srvDesc.Format                        = DXGI_FORMAT_R16G16B16A16_FLOAT;
+        srvDesc.ViewDimension                 = D3D12_SRV_DIMENSION_TEXTURE2D;
+        srvDesc.Shader4ComponentMapping       = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+        srvDesc.Texture2D.MipLevels           = 1;
+        srvDesc.Texture2D.MostDetailedMip     = 0;
+
+        D3D12_CPU_DESCRIPTOR_HANDLE srvHandle = m_pSRVHeap->GetCPUDescriptorHandleForHeapStart();
+        srvHandle.ptr += 5 * m_SRVIncrSize;
+        pDevice->CreateShaderResourceView(m_pColorWeightedRT.Get(), &srvDesc, srvHandle);
     }
 
     // ---- D32_FLOAT Depth Stencil ----
@@ -761,7 +821,7 @@ void ScreenSpaceFluid::CreatePipelines(ID3D12Device* pDevice)
             tDesc.InputLayout = { nullptr, 0 };
 
             tDesc.BlendState.AlphaToCoverageEnable  = FALSE;
-            tDesc.BlendState.IndependentBlendEnable = FALSE;
+            tDesc.BlendState.IndependentBlendEnable = TRUE;
             // ThicknessRT: 가산 블렌딩 (모든 구체의 chord 누적)
             auto& rt1 = tDesc.BlendState.RenderTarget[0];
             rt1.BlendEnable           = TRUE;
@@ -773,6 +833,17 @@ void ScreenSpaceFluid::CreatePipelines(ID3D12Device* pDevice)
             rt1.BlendOpAlpha          = D3D12_BLEND_OP_ADD;
             rt1.RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
 
+            // ColorWeightedRT (slot 1): additive blending for color accumulation
+            auto& rt2 = tDesc.BlendState.RenderTarget[1];
+            rt2.BlendEnable           = TRUE;
+            rt2.SrcBlend              = D3D12_BLEND_ONE;
+            rt2.DestBlend             = D3D12_BLEND_ONE;
+            rt2.BlendOp               = D3D12_BLEND_OP_ADD;
+            rt2.SrcBlendAlpha         = D3D12_BLEND_ONE;
+            rt2.DestBlendAlpha        = D3D12_BLEND_ONE;
+            rt2.BlendOpAlpha          = D3D12_BLEND_OP_ADD;
+            rt2.RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
+
             tDesc.RasterizerState.FillMode              = D3D12_FILL_MODE_SOLID;
             tDesc.RasterizerState.CullMode              = D3D12_CULL_MODE_NONE;
             tDesc.RasterizerState.FrontCounterClockwise = FALSE;
@@ -782,8 +853,9 @@ void ScreenSpaceFluid::CreatePipelines(ID3D12Device* pDevice)
 
             tDesc.SampleMask            = UINT_MAX;
             tDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-            tDesc.NumRenderTargets      = 1;
-            tDesc.RTVFormats[0]         = DXGI_FORMAT_R16_FLOAT;   // ThicknessRT
+            tDesc.NumRenderTargets      = 2;
+            tDesc.RTVFormats[0]         = DXGI_FORMAT_R16_FLOAT;            // ThicknessRT
+            tDesc.RTVFormats[1]         = DXGI_FORMAT_R16G16B16A16_FLOAT;   // ColorWeightedRT
             tDesc.DSVFormat             = DXGI_FORMAT_UNKNOWN;
             tDesc.SampleDesc.Count      = 1;
 
@@ -1071,10 +1143,10 @@ void ScreenSpaceFluid::CreatePipelines(ID3D12Device* pDevice)
         rootParams[0].Descriptor.RegisterSpace  = 0;
         rootParams[0].ShaderVisibility          = D3D12_SHADER_VISIBILITY_ALL;
 
-        // 3개 연속 SRV: t0=SmoothedDepth, t1=Thickness, t2=SceneColor
+        // 4개 연속 SRV: t0=SmoothedDepth, t1=Thickness, t2=SceneColor, t3=ColorWeighted
         D3D12_DESCRIPTOR_RANGE srvRange = {};
         srvRange.RangeType                         = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-        srvRange.NumDescriptors                    = 3;
+        srvRange.NumDescriptors                    = 4;  // t0=Smoothed, t1=Thickness, t2=SceneColor, t3=ColorWeighted
         srvRange.BaseShaderRegister                = 0;  // t0
         srvRange.RegisterSpace                     = 0;
         srvRange.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
@@ -1251,6 +1323,12 @@ void ScreenSpaceFluid::BeginDepthPass(ID3D12GraphicsCommandList* pCmdList)
     thicknessRTV.ptr += 3 * m_RTVIncrSize;
     pCmdList->ClearRenderTargetView(thicknessRTV, clearColor, 0, nullptr);
 
+    // ColorWeightedRT 클리어 (RTV index 4)
+    D3D12_CPU_DESCRIPTOR_HANDLE colorRTV = m_pRTVHeap->GetCPUDescriptorHandleForHeapStart();
+    colorRTV.ptr += 4 * m_RTVIncrSize;
+    float clearColor4[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+    pCmdList->ClearRenderTargetView(colorRTV, clearColor4, 0, nullptr);
+
     // FluidDSV 클리어
     D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = m_pDSVHeap->GetCPUDescriptorHandleForHeapStart();
     pCmdList->ClearDepthStencilView(dsvHandle, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
@@ -1271,11 +1349,14 @@ void ScreenSpaceFluid::BeginDepthPass(ID3D12GraphicsCommandList* pCmdList)
 // ============================================================================
 void ScreenSpaceFluid::BeginThicknessPass(ID3D12GraphicsCommandList* pCmdList)
 {
-    // ThicknessRT는 BeginDepthPass에서 이미 클리어됨 (여전히 RENDER_TARGET 상태)
-    // DSV 없이 ThicknessRT만 바인딩 — 깊이 테스트 없이 모든 파티클이 두께에 기여
-    D3D12_CPU_DESCRIPTOR_HANDLE thicknessRTV = m_pRTVHeap->GetCPUDescriptorHandleForHeapStart();
-    thicknessRTV.ptr += 3 * m_RTVIncrSize;
-    pCmdList->OMSetRenderTargets(1, &thicknessRTV, FALSE, nullptr);
+    // ThicknessRT + ColorWeightedRT MRT 바인딩 (깊이 테스트 없음, 가산 블렌딩)
+    // 두 RT 모두 BeginDepthPass에서 이미 클리어됨 (여전히 RENDER_TARGET 상태)
+    D3D12_CPU_DESCRIPTOR_HANDLE rtvs[2];
+    rtvs[0] = m_pRTVHeap->GetCPUDescriptorHandleForHeapStart();
+    rtvs[0].ptr += 3 * m_RTVIncrSize;  // ThicknessRT
+    rtvs[1] = m_pRTVHeap->GetCPUDescriptorHandleForHeapStart();
+    rtvs[1].ptr += 4 * m_RTVIncrSize;  // ColorWeightedRT
+    pCmdList->OMSetRenderTargets(2, rtvs, FALSE, nullptr);
 }
 
 // ============================================================================
@@ -1285,7 +1366,8 @@ void ScreenSpaceFluid::EndDepthPass(ID3D12GraphicsCommandList* pCmdList)
 {
     // FluidDepthRT: RENDER_TARGET -> PIXEL_SHADER_RESOURCE
     // ThicknessRT: RENDER_TARGET -> PIXEL_SHADER_RESOURCE
-    D3D12_RESOURCE_BARRIER barriers[2] = {};
+    // ColorWeightedRT: RENDER_TARGET -> PIXEL_SHADER_RESOURCE
+    D3D12_RESOURCE_BARRIER barriers[3] = {};
 
     barriers[0].Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
     barriers[0].Flags                  = D3D12_RESOURCE_BARRIER_FLAG_NONE;
@@ -1301,7 +1383,14 @@ void ScreenSpaceFluid::EndDepthPass(ID3D12GraphicsCommandList* pCmdList)
     barriers[1].Transition.StateAfter  = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
     barriers[1].Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
 
-    pCmdList->ResourceBarrier(2, barriers);
+    barriers[2].Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    barriers[2].Flags                  = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+    barriers[2].Transition.pResource   = m_pColorWeightedRT.Get();
+    barriers[2].Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
+    barriers[2].Transition.StateAfter  = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+    barriers[2].Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+
+    pCmdList->ResourceBarrier(3, barriers);
 }
 
 // ============================================================================
@@ -1417,9 +1506,9 @@ void ScreenSpaceFluid::SmoothAndComposite(
         D3D12_GPU_DESCRIPTOR_HANDLE srvHandle = m_pSRVHeap->GetGPUDescriptorHandleForHeapStart();
         pCmdList->SetComputeRootDescriptorTable(1, srvHandle);
 
-        // UAV: TempRT (index 5)
+        // UAV: TempRT (index 6)
         D3D12_GPU_DESCRIPTOR_HANDLE uavHandle = m_pSRVHeap->GetGPUDescriptorHandleForHeapStart();
-        uavHandle.ptr += 5 * m_SRVIncrSize;
+        uavHandle.ptr += 6 * m_SRVIncrSize;
         pCmdList->SetComputeRootDescriptorTable(2, uavHandle);
 
         // Dispatch: 수평 = ceil(W/128) groups x H groups
@@ -1464,9 +1553,9 @@ void ScreenSpaceFluid::SmoothAndComposite(
         srvHandle.ptr += 1 * m_SRVIncrSize;
         pCmdList->SetComputeRootDescriptorTable(1, srvHandle);
 
-        // UAV: SmoothedRT (index 6)
+        // UAV: SmoothedRT (index 7)
         D3D12_GPU_DESCRIPTOR_HANDLE uavHandle = m_pSRVHeap->GetGPUDescriptorHandleForHeapStart();
-        uavHandle.ptr += 6 * m_SRVIncrSize;
+        uavHandle.ptr += 7 * m_SRVIncrSize;
         pCmdList->SetComputeRootDescriptorTable(2, uavHandle);
 
         // Dispatch: 수직 = W groups x ceil(H/128) groups
@@ -1539,7 +1628,7 @@ void ScreenSpaceFluid::SmoothAndComposite(
     // 상태 복원: 다음 프레임을 위해 모든 RT를 RENDER_TARGET로 복원
     // ================================================================
     {
-        D3D12_RESOURCE_BARRIER barriers[4] = {};
+        D3D12_RESOURCE_BARRIER barriers[5] = {};
 
         if (m_bEnableBlur && m_pBlurCSRootSig)
         {
@@ -1568,7 +1657,13 @@ void ScreenSpaceFluid::SmoothAndComposite(
             barriers[3].Transition.StateAfter  = D3D12_RESOURCE_STATE_RENDER_TARGET;
             barriers[3].Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
 
-            pCmdList->ResourceBarrier(4, barriers);
+            barriers[4].Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+            barriers[4].Transition.pResource   = m_pColorWeightedRT.Get();
+            barriers[4].Transition.StateBefore = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+            barriers[4].Transition.StateAfter  = D3D12_RESOURCE_STATE_RENDER_TARGET;
+            barriers[4].Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+
+            pCmdList->ResourceBarrier(5, barriers);
         }
         else
         {
@@ -1591,8 +1686,14 @@ void ScreenSpaceFluid::SmoothAndComposite(
             barriers[2].Transition.StateAfter  = D3D12_RESOURCE_STATE_RENDER_TARGET;
             barriers[2].Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
 
+            barriers[3].Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+            barriers[3].Transition.pResource   = m_pColorWeightedRT.Get();
+            barriers[3].Transition.StateBefore = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+            barriers[3].Transition.StateAfter  = D3D12_RESOURCE_STATE_RENDER_TARGET;
+            barriers[3].Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+
             // TempRT은 no-blur 경로에서 미사용, 이미 RENDER_TARGET
-            pCmdList->ResourceBarrier(3, barriers);
+            pCmdList->ResourceBarrier(4, barriers);
         }
     }
     // SceneColorRT는 PIXEL_SHADER_RESOURCE 상태 유지 (다음 CaptureSceneColor에서 전환됨)

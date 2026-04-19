@@ -66,16 +66,17 @@ private:
     ComPtr<ID3D12Resource> m_pThicknessRT;     // R16_FLOAT: 유체 두께 (additive blend)
     ComPtr<ID3D12Resource> m_pSceneColorRT;    // R8G8B8A8_UNORM: 유체 렌더 전 장면 캡처 (굴절 배경)
     ComPtr<ID3D12Resource> m_pFluidDSV;        // D32_FLOAT: 구체 깊이 패스 전용 depth buffer
+    ComPtr<ID3D12Resource> m_pColorWeightedRT; // R16G16B16A16_FLOAT: thickness-weighted color (additive)
 
     // 디스크립터 힙
-    // RTV 힙 레이아웃: FluidDepth(0), Smoothed(1), Temp(2), Thickness(3)
-    ComPtr<ID3D12DescriptorHeap> m_pRTVHeap;  // 4 RTVs
+    // RTV 힙 레이아웃: FluidDepth(0), Smoothed(1), Temp(2), Thickness(3), ColorWeighted(4)
+    ComPtr<ID3D12DescriptorHeap> m_pRTVHeap;  // 5 RTVs
     ComPtr<ID3D12DescriptorHeap> m_pDSVHeap;  // 1 DSV
-    // SRV 힙 레이아웃: FluidDepth(0), Temp(1), Smoothed(2), Thickness(3), SceneColor(4), TempUAV(5), SmoothedUAV(6)
-    // -> CS Blur H-pass: FluidDepth SRV(0) 입력 -> TempRT UAV(5) 출력
-    // -> CS Blur V-pass: Temp SRV(1) 입력 -> SmoothedRT UAV(6) 출력
-    // -> Composite: Smoothed(2) + Thickness(3) + SceneColor(4) 연속 3개
-    ComPtr<ID3D12DescriptorHeap> m_pSRVHeap;  // 7 descriptors (5 SRV + 2 UAV)
+    // SRV 힙 레이아웃: FluidDepth(0), Temp(1), Smoothed(2), Thickness(3), SceneColor(4), ColorWeighted(5), TempUAV(6), SmoothedUAV(7)
+    // -> CS Blur H-pass: FluidDepth SRV(0) 입력 -> TempRT UAV(6) 출력
+    // -> CS Blur V-pass: Temp SRV(1) 입력 -> SmoothedRT UAV(7) 출력
+    // -> Composite: Smoothed(2) + Thickness(3) + SceneColor(4) + ColorWeighted(5) 연속 4개
+    ComPtr<ID3D12DescriptorHeap> m_pSRVHeap;  // 8 descriptors (6 SRV + 2 UAV)
     UINT m_RTVIncrSize = 0;
     UINT m_SRVIncrSize = 0;
 

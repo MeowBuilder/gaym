@@ -585,7 +585,31 @@ bool MapLoader::LoadIntoScene(
         } else {
             // Single-material path
             applyMat(pGO, mo);
-            applyTex(pGO, mo);
+
+            // Floor tile variety: ~20% of grid floor tiles get a lava decoration variant
+            bool usedLavaVariant = false;
+            if (meshRelPath.find("LavaMaze_GridTile_01") != std::string::npos) {
+                const JsonVal& tpos = mo["position"];
+                // Convert to grid indices (tile spacing = 2 units) to avoid alignment bias
+                int gx = (int)roundf(tpos[0].f() * 0.5f);
+                int gz = (int)roundf(tpos[2].f() * 0.5f);
+                unsigned int h = (unsigned int)(gx * 2246822519u) ^ (unsigned int)(gz * 3266489917u);
+                if (h % 5 == 0) {
+                    int variant = (int)((h >> 8u) % 4u) + 1;  // upper bits for variant; low bits correlated with %5
+                    char varTex[128];
+                    sprintf_s(varTex, "meshes/textures/grid_tile_lava/grid_tile_lava (%d).png", variant);
+                    std::string texFullPath = jsonDir + varTex;
+                    pGO->SetTextureName(texFullPath);
+                    D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle;
+                    D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle;
+                    pScene->AllocateDescriptor(&cpuHandle, &gpuHandle);
+                    pGO->LoadTexture(pDevice, pCommandList, cpuHandle);
+                    pGO->SetSrvGpuDescriptorHandle(gpuHandle);
+                    usedLavaVariant = true;
+                }
+            }
+            if (!usedLavaVariant)
+                applyTex(pGO, mo);
         }
 
         // Collider: SetExtents uses LOCAL-space extents; ColliderComponent::Update()

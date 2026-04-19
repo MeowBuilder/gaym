@@ -48,8 +48,8 @@ VFXSequenceDef FireBeamBehavior::BuildSwirlDef()
     def.particleSize  = 0.18f;
 
     def.overrideColors    = true;
-    def.overrideCoreColor = { 0.85f, 0.35f, 0.05f, 0.75f };  // 코어보다 어두운 짙은 오렌지
-    def.overrideEdgeColor = { 0.60f, 0.15f, 0.02f, 0.45f };
+    def.overrideCoreColor = { 0.95f, 0.10f, 0.02f, 0.85f };  // 짙은 크림슨 (코어빔 황금과 대비, 불꽃 계열)
+    def.overrideEdgeColor = { 0.55f, 0.04f, 0.00f, 0.50f };
 
     VFXPhase p;
     p.startTime              = 0.f;
@@ -79,8 +79,8 @@ VFXSequenceDef FireBeamBehavior::BuildBurstDef()
     def.particleSize  = 0.12f;
 
     def.overrideColors    = true;
-    def.overrideCoreColor = { 1.0f, 1.0f, 1.0f, 1.0f };   // 순백 (가장 밝음)
-    def.overrideEdgeColor = { 1.0f, 0.95f, 0.65f, 1.0f };  // 밝은 따뜻한 흰색
+    def.overrideCoreColor = { 1.00f, 0.32f, 0.02f, 1.00f };  // 선명한 적오렌지 (코어빔 황금보다 붉음, 불꽃 계열)
+    def.overrideEdgeColor = { 0.80f, 0.10f, 0.01f, 0.80f };
 
     VFXPhase p;
     p.startTime              = 0.f;
@@ -160,9 +160,9 @@ void FireBeamBehavior::Execute(GameObject* caster, const DirectX::XMFLOAT3& targ
                 XMVectorScale(dirV, 1.3f)));
         }
 
-        m_vfxCoreId  = m_pVFXManager->SpawnSequenceEffect(origin, direction, BuildCoreBeamDef());
-        m_vfxSwirlId = m_pVFXManager->SpawnSequenceEffect(origin, direction, BuildSwirlDef());
-        m_vfxBurstId = m_pVFXManager->SpawnSequenceEffect(origin, direction, BuildBurstDef());
+        m_vfxCoreId  = m_pVFXManager->SpawnSequenceEffect(origin, direction, BuildCoreBeamDef(), true);
+        m_vfxSwirlId = m_pVFXManager->SpawnSequenceEffect(origin, direction, BuildSwirlDef(), true);
+        m_vfxBurstId = m_pVFXManager->SpawnSequenceEffect(origin, direction, BuildBurstDef(), true);
 
         wchar_t buf[96];
         swprintf_s(buf, 96, L"[FireBeam] Started core=%d swirl=%d burst=%d\n",
