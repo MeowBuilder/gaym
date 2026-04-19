@@ -215,10 +215,11 @@ void EnemySpawner::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pComma
         return std::make_unique<BreathAttackBehavior>(pProjMgr, 32.0f, 38.0f, 5, 50.0f, 0.4f, 0.8f, 0.3f, 1.0f, 3.0f);
     };
 
-    // Special attack (fallback if no phase controller, reduced wave count)
+    // Special attack (fallback if no phase controller) — 투사체 수 감소로 렉 완화
     dragon.m_fnCreateSpecialAttack = [pProjMgr]() {
+        // 12→7 per wave, 4→3 waves, damage 26→35 보상
         return std::make_unique<FlyingBarrageAttackBehavior>(
-            pProjMgr, 26.0f, 18.0f, 12, 4, 0.35f, 16.0f, 0.8f, 0.8f);
+            pProjMgr, 35.0f, 18.0f, 7, 3, 0.4f, 16.0f, 0.8f, 0.8f);
     };
 
     // Boss Phase Configuration - 3 phases with varied attack patterns
@@ -238,14 +239,11 @@ void EnemySpawner::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pComma
             return std::make_unique<BreathAttackBehavior>(pProjMgr, 30.0f, 35.0f, 4, 45.0f, 0.4f, 0.8f, 0.3f);
         };
 
-        // Special: Randomly choose between tail sweep and claw combo
+        // Special: 50/50 Jump Slam / Light Combo (Tail Sweep은 "Tail Attack" 애니 부재로 제외)
         phase1.m_fnSpecialAttack = []() -> std::unique_ptr<IAttackBehavior> {
-            int choice = rand() % 3;
+            int choice = rand() % 2;
             if (choice == 0) {
-                // Tail sweep - wide arc behind (상향된 데미지)
-                return std::make_unique<TailSweepAttackBehavior>(35.0f, 0.35f, 0.25f, 0.35f, 8.0f, 180.0f, true);
-            } else if (choice == 1) {
-                // Jump slam (상향된 데미지)
+                // Jump slam
                 return std::make_unique<JumpSlamAttackBehavior>(45.0f, 10.0f, 0.45f, 7.0f, 0.25f, 0.4f, true);
             } else {
                 // Light combo (3-hit)
@@ -283,13 +281,13 @@ void EnemySpawner::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pComma
         phase2.m_fnFlyingAttack = [pProjMgr]() -> std::unique_ptr<IAttackBehavior> {
             int choice = rand() % 2;
             if (choice == 0) {
-                // Strafe - side movement while shooting at player
+                // Strafe - 3→2 shots/burst, 데미지 24→30 보상
                 return std::make_unique<FlyingStrafeAttackBehavior>(
-                    pProjMgr, 24.0f, 22.0f, 18.0f, 22.0f, 0.15f, 3, 12.0f, 0.4f, 0.4f);
+                    pProjMgr, 30.0f, 22.0f, 18.0f, 22.0f, 0.15f, 2, 12.0f, 0.4f, 0.4f);
             } else {
-                // Circle - orbit around player (shorter, faster)
+                // Circle - 3→2 shots/burst, 데미지 22→28 보상
                 return std::make_unique<FlyingCircleAttackBehavior>(
-                    pProjMgr, 22.0f, 22.0f, 18.0f, 100.0f, 280.0f, 0.18f, 3, 12.0f, 0.4f, 0.4f);
+                    pProjMgr, 28.0f, 22.0f, 18.0f, 100.0f, 280.0f, 0.18f, 2, 12.0f, 0.4f, 0.4f);
             }
         };
 
@@ -341,21 +339,21 @@ void EnemySpawner::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pComma
             int choice = rand() % 4;
             switch (choice) {
             case 0:
-                // Dive bomb - dive at player while shooting
+                // Dive bomb - 4→3 shots/burst, 데미지 30→38 보상
                 return std::make_unique<DiveBombAttackBehavior>(
-                    pProjMgr, 30.0f, 32.0f, 36.0f, 40.0f, 7.0f, 4, 0.1f, 18.0f, 0.4f, 0.25f);
+                    pProjMgr, 38.0f, 32.0f, 36.0f, 40.0f, 7.0f, 3, 0.1f, 18.0f, 0.4f, 0.25f);
             case 1:
-                // Sweep - side-to-side fire while moving
+                // Sweep - 2 shots 유지 (가장 적음)
                 return std::make_unique<FlyingSweepAttackBehavior>(
-                    pProjMgr, 26.0f, 28.0f, 18.0f, 28.0f, 100.0f, 200.0f, 0.08f, 2, 10.0f, 0.35f, 0.35f);
+                    pProjMgr, 28.0f, 28.0f, 18.0f, 28.0f, 100.0f, 200.0f, 0.08f, 2, 10.0f, 0.35f, 0.35f);
             case 2:
-                // Barrage - fewer but faster waves
+                // Barrage - 10→6 per wave, 4→3 waves (렉 주범), 데미지 28→42 보상
                 return std::make_unique<FlyingBarrageAttackBehavior>(
-                    pProjMgr, 28.0f, 20.0f, 10, 4, 0.3f, 16.0f, 0.5f, 0.5f);
+                    pProjMgr, 42.0f, 20.0f, 6, 3, 0.35f, 16.0f, 0.5f, 0.5f);
             default:
-                // Fast strafe
+                // Fast strafe - 3→2 shots/burst, 데미지 26→33 보상
                 return std::make_unique<FlyingStrafeAttackBehavior>(
-                    pProjMgr, 26.0f, 26.0f, 22.0f, 25.0f, 0.12f, 3, 12.0f, 0.35f, 0.35f);
+                    pProjMgr, 33.0f, 26.0f, 22.0f, 25.0f, 0.12f, 2, 12.0f, 0.35f, 0.35f);
             }
         };
 

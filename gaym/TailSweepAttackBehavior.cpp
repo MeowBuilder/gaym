@@ -118,8 +118,9 @@ void TailSweepAttackBehavior::Update(float dt, EnemyComponent* pEnemy)
                     float t = m_fTimer / m_fSweepTime;
                     if (t > 1.0f) t = 1.0f;
 
-                    // Rotate through the sweep arc
-                    float sweepProgress = t * m_fSweepArc;
+                    // Ease-in-out (smoothstep): 시작/끝 감속으로 꼬리 휘두름 자연스럽게
+                    float eased = t * t * (3.0f - 2.0f * t);
+                    float sweepProgress = eased * m_fSweepArc;
                     float newRotation = m_fInitialRotation + (m_bHitBehind ? sweepProgress : -sweepProgress);
 
                     XMFLOAT3 rot = pOwner->GetTransform()->GetRotation();

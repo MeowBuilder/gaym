@@ -190,11 +190,12 @@ ComboAttackBehavior* ComboAttackBehavior::CreateLightCombo()
 {
     std::vector<ComboHit> hits;
 
+    // 리듬감 있는 3연타 — 탁 / 탁 / 탁-쾅 (총 ~1.8s, 반응 가능)
     ComboHit hit1;
     hit1.fDamage = 8.0f;
-    hit1.fWindupTime = 0.15f;
+    hit1.fWindupTime = 0.25f;   // 텔레그래프 강화
     hit1.fHitTime = 0.1f;
-    hit1.fRecoveryTime = 0.1f;
+    hit1.fRecoveryTime = 0.2f;  // hit 간 간격
     hit1.fHitRange = 5.0f;
     hit1.fConeAngle = 90.0f;
     hit1.strAnimation = "Basic Attack";
@@ -203,9 +204,9 @@ ComboAttackBehavior* ComboAttackBehavior::CreateLightCombo()
 
     ComboHit hit2;
     hit2.fDamage = 8.0f;
-    hit2.fWindupTime = 0.1f;
+    hit2.fWindupTime = 0.2f;
     hit2.fHitTime = 0.1f;
-    hit2.fRecoveryTime = 0.1f;
+    hit2.fRecoveryTime = 0.2f;
     hit2.fHitRange = 5.0f;
     hit2.fConeAngle = 90.0f;
     hit2.strAnimation = "Claw Attack";
@@ -214,9 +215,9 @@ ComboAttackBehavior* ComboAttackBehavior::CreateLightCombo()
 
     ComboHit hit3;
     hit3.fDamage = 12.0f;
-    hit3.fWindupTime = 0.15f;
+    hit3.fWindupTime = 0.3f;    // 피니셔 크게 예비동작
     hit3.fHitTime = 0.15f;
-    hit3.fRecoveryTime = 0.25f;
+    hit3.fRecoveryTime = 0.3f;
     hit3.fHitRange = 6.0f;
     hit3.fConeAngle = 120.0f;
     hit3.strAnimation = "Basic Attack";

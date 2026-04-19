@@ -1072,7 +1072,10 @@ void MegaBreathAttackBehavior::SpawnFireWave(EnemyComponent* pEnemy)
     Scene* pScene = m_pRoom->GetScene();
     if (!pScene) return;
 
-    m_pFluidVFXManager = pScene->GetEnemyFluidVFXManager();
+    // 플레이어 매니저 사용 — SSF 파이프라인(RenderDepth→Blur→Composite)을 타야 매끈한 빔.
+    //  enemy 매니저는 RenderEnemyEffects(빌보드)만 호출돼 구슬처럼 보임.
+    //  e51dda1 per-pixel 색상 아키텍처로 플레이어 스킬과 색상 충돌 근본 해결됨.
+    m_pFluidVFXManager = pScene->GetFluidVFXManager();
     if (!m_pFluidVFXManager) return;
 
     // 방 바운드 + 벽 방향 기반 파도 경로 계산
@@ -1089,10 +1092,10 @@ void MegaBreathAttackBehavior::SpawnFireWave(EnemyComponent* pEnemy)
     XMFLOAT3 bossRot = pT->GetRotation();
     float yawRad = XMConvertToRadians(bossRot.y);
 
-    // 보스 입 위치 (전방 13u, 머리 높이 6u — charge VFX 와 동일 지점에서 발사)
-    m_xmf3BeamOrigin.x = bossPos.x + sinf(yawRad) * 13.0f;
-    m_xmf3BeamOrigin.y = bossPos.y + 6.0f;
-    m_xmf3BeamOrigin.z = bossPos.z + cosf(yawRad) * 13.0f;
+    // 보스 입 위치 (전방 17u, 머리 높이 7u — charge VFX 와 동일 지점에서 발사)
+    m_xmf3BeamOrigin.x = bossPos.x + sinf(yawRad) * 17.0f;
+    m_xmf3BeamOrigin.y = bossPos.y + 7.0f;
+    m_xmf3BeamOrigin.z = bossPos.z + cosf(yawRad) * 17.0f;
 
     m_xmf3BeamDirection = { sinf(yawRad), 0.0f, cosf(yawRad) };
 
@@ -1109,42 +1112,42 @@ void MegaBreathAttackBehavior::SpawnFireWave(EnemyComponent* pEnemy)
     // 이름 "Dragon_MegaBreath" 매칭 시 enableFlow 자동 + 120m 하드코딩이었으나
     // swirlFadeEnd 를 빔 길이로 쓰도록 수정 완료 — 어떤 이름이든 맵 전체 커버 가능
     VFXSequenceDef def;
-    def.name          = "Dragon_MegaBreath";      // 기존 보스 브레스 시스템 호환 (enableFlow)
+    def.name          = "Dragon_MegaBreath";
     def.element       = ElementType::Fire;
-    def.particleCount = 6000;                     // 끝으로 갈수록 cone 단면 증가 → 밀도 유지 위해 대폭 증가
-    def.spawnRadius   = 3.0f;                     // 입쪽 생성 영역
-    def.particleSize  = 1.8f;                     // 큰 불덩이 입자 (겹침으로 빈칸 상쇄)
+    def.particleCount = 6000;
+    def.spawnRadius   = 3.0f;
+    // 과거 efa81e2 커밋의 검증된 값으로 복원 (smooth flame sheet 느낌)
+    def.particleSize  = 1.8f;
 
     VFXPhase p;
     p.startTime             = 0.f;
     p.duration              = m_fBreathDuration + 0.5f;
     p.motionMode            = ParticleMotionMode::Beam;
-    // 흐름 속도 — 전체 거리를 duration 50~70% 안에 도달 (자연스러운 채움)
     p.beamDesc.speedMin     = m_fBeamLength / (m_fBreathDuration * 0.7f);
     p.beamDesc.speedMax     = p.beamDesc.speedMin * 1.4f;
-    p.beamDesc.spreadRadius = m_fBeamEndRadius;   // cone 최대 반경
-    p.beamDesc.swirlExpand  = true;               // 입에서 좁게 → 끝에서 넓게 (순수 원뿔)
-    p.beamDesc.swirlSpeed   = 0.8f;               // 살짝 회전 (불길 꼬임)
-    p.beamDesc.beamLength   = m_fBeamLength;      // 빔 기하 길이 (endPos 계산용)
-    p.beamDesc.swirlFadeEnd = 0.f;                // 크기 페이드 끄기 (끝 사이즈 증가는 upload 단계에서 처리)
-    p.beamDesc.enableFlow   = true;               // 입에서 계속 새 파티클 분출
-    p.beamDesc.verticalScale = 0.25f;             // 수직 납작 (0.5 → 0.25) — 위로 샘솟는 느낌 제거
+    p.beamDesc.spreadRadius = m_fBeamEndRadius;
+    p.beamDesc.swirlExpand  = true;
+    p.beamDesc.swirlSpeed   = 0.6f;               // 0.8→0.6: 회전 줄여 위로 솟는 느낌 완화
+    p.beamDesc.beamLength   = m_fBeamLength;
+    p.beamDesc.swirlFadeEnd = 0.f;
+    p.beamDesc.enableFlow   = true;
+    p.beamDesc.verticalScale = 0.18f;             // 0.25→0.18: 수직 더 납작하게
     def.phases.push_back(p);
 
-    // 불 색상 오버라이드 — 따뜻한 주황노랑(입, 중심) ↔ 깊은 암적색(끝, 외곽)
-    //  UploadRenderData 에서 beamT + 반경 기반 그라디언트로 보간 → 자연스러운 불길 색 변이
+    // ColorWeightedRT(e51dda1) 아키텍처 하에서 per-particle 색상 변이가 구슬 경계를 드러냄.
+    //  FluidParticleSystem::UploadRenderData 의 edgeWeight 수식(tBeam+rRatio+jitter)이
+    //  파티클마다 다른 lerp(edge, core, t) 색을 만들기 때문.
+    //  → core ≈ edge 로 맞춰 모든 파티클이 거의 동일 색상 → per-pixel 평균도 단일 색.
+    //  그라디언트는 SSF composite의 thickness 기반 brightness lerp(0.55, 1.35) 로 자연스럽게 나옴.
     def.overrideColors    = true;
-    def.overrideCoreColor = { 1.0f, 0.65f, 0.15f, 1.0f };  // 주황노랑 코어 (백열 회피)
-    def.overrideEdgeColor = { 0.55f, 0.08f, 0.02f, 0.9f }; // 어두운 붉은 가장자리
-
+    def.overrideCoreColor = { 1.0f, 0.45f, 0.1f, 1.0f };    // 주황
+    def.overrideEdgeColor = { 0.95f, 0.35f, 0.08f, 0.95f };  // 거의 같은 주황 (변이 최소)
     def.maxParticleSpeed = p.beamDesc.speedMax * 1.2f;
     def.useSSFBlur       = true;
 
     // 5개 빔을 팬-아웃 스폰 — -12°, -6°, 0°, +6°, +12°
-    //  작은 간격으로 촘촘히 배치해 빔 사이 빈틈 제거 (뒤에서 봐도 연속된 부채 모양)
-    //  각 빔 spread 를 main 과 비슷하게 유지해 서로 충분히 겹치게
-    const float kFanAnglesDeg[NUM_BEAMS] = { -12.0f, -6.0f, 0.0f, 6.0f, 12.0f };
-    const int   kParticleCounts[NUM_BEAMS] = { 2800, 3600, 4400, 3600, 2800 };
+    const float kFanAnglesDeg[NUM_BEAMS]   = { -12.0f, -6.0f, 0.0f, 6.0f, 12.0f };
+    const int   kParticleCounts[NUM_BEAMS] = { 2800, 3600, 4400, 3600, 2800 };   // efa81e2 검증값
     const float kSpreadMults[NUM_BEAMS]    = { 0.85f, 0.95f, 1.00f, 0.95f, 0.85f };
 
     for (int i = 0; i < NUM_BEAMS; ++i)
@@ -1157,12 +1160,15 @@ void MegaBreathAttackBehavior::SpawnFireWave(EnemyComponent* pEnemy)
         dir.z = m_xmf3BeamDirection.x * sn + m_xmf3BeamDirection.z * cs;
 
         VFXSequenceDef beamDef = def;
-        beamDef.particleCount                     = kParticleCounts[i];
-        beamDef.spawnRadius                       = (i == NUM_BEAMS / 2) ? 3.0f : 2.5f;
-        beamDef.phases[0].beamDesc.spreadRadius   = m_fBeamEndRadius * kSpreadMults[i];
+        beamDef.particleCount                   = kParticleCounts[i];
+        beamDef.spawnRadius                     = (i == NUM_BEAMS / 2) ? 3.0f : 2.5f;
+        beamDef.phases[0].beamDesc.spreadRadius = m_fBeamEndRadius * kSpreadMults[i];
+        // 빔별 색상 차등화 제거 — 전체 단일 core/edge 로 통일
 
+        // 과거(230dd05)엔 기본값(true=SSF) 썼던 게 매끈한 빔. false는 빌보드 = 구슬.
+        // e51dda1에서 per-pixel 색상 누적으로 스킬 간 충돌 해결됐으니 SSF 복귀 안전.
         m_nFluidVFXIds[i] = m_pFluidVFXManager->SpawnSequenceEffect(
-            m_xmf3BeamOrigin, dir, beamDef, false); // 적 스킬 — SSF 분리
+            m_xmf3BeamOrigin, dir, beamDef, true);
     }
 
 }
@@ -1183,8 +1189,9 @@ void MegaBreathAttackBehavior::SpawnChargeVFX(EnemyComponent* pEnemy)
     Scene* pScene = m_pRoom->GetScene();
     if (!pScene) return;
 
+    // Breath 와 동일 매니저 사용 (player = SSF 파이프라인) — manager mismatch 버그 방지
     if (!m_pFluidVFXManager)
-        m_pFluidVFXManager = pScene->GetEnemyFluidVFXManager();
+        m_pFluidVFXManager = pScene->GetFluidVFXManager();
     if (!m_pFluidVFXManager) return;
 
     GameObject* pOwner = pEnemy->GetOwner();
@@ -1197,30 +1204,30 @@ void MegaBreathAttackBehavior::SpawnChargeVFX(EnemyComponent* pEnemy)
     XMFLOAT3 bossRot = pT->GetRotation();
     float yawRad = XMConvertToRadians(bossRot.y);
 
+    // 입 앞쪽으로 이동 (13→17 전방, 6→7 높이) — beam origin 과 동일
     XMFLOAT3 mouth;
-    mouth.x = bossPos.x + sinf(yawRad) * 13.0f;   // 8 → 13 — 머리 위치까지 더 앞으로
-    mouth.y = bossPos.y + 6.0f;                   // 5 → 6 — 머리 높이 살짝 올림
-    mouth.z = bossPos.z + cosf(yawRad) * 13.0f;
+    mouth.x = bossPos.x + sinf(yawRad) * 17.0f;
+    mouth.y = bossPos.y + 7.0f;
+    mouth.z = bossPos.z + cosf(yawRad) * 17.0f;
     XMFLOAT3 forward = { sinf(yawRad), 0.0f, cosf(yawRad) };
 
     // ControlPoint 모드 — 파티클이 멀리서 천천히 입쪽으로 흘러들어옴
-    //   cardinalSpawnRadius 를 크게 + 내향 속도 낮춰 Windup 전반에 걸쳐 visible 한 이동 궤적 형성
     VFXSequenceDef def;
     def.name          = "Dragon_MegaBreath_Charge";
     def.element       = ElementType::Fire;
-    def.particleCount = 3500;         // 크기를 더 줄인 만큼 개수로 보완
+    def.particleCount = 5500;         // 3500→5500: 빈칸 제거 (밀도 ↑)
     def.spawnRadius   = 0.7f;
-    def.particleSize  = 0.55f;        // 더 작게 — 모래알 같은 불티가 빨려드는 느낌
+    def.particleSize  = 0.8f;         // 0.55→0.8: 겹침 확보 + 존재감
     def.useSSFBlur    = false;
 
-    // cardinal 스폰 — 멀리서(8m) 낮은 속도(2.0)로 발사 → 중심 도달까지 ~4초 걸려 windup 내내 흐름 보임
-    def.cardinalSpawnRadius = 8.0f;
+    // cardinal 스폰 — 6m 반경(8→6)으로 타이트하게 모아 밀도 유지
+    def.cardinalSpawnRadius = 6.0f;
     def.cardinalInwardSpeed = 2.0f;
 
-    // 색상 — 불꽃 집결 느낌
+    // 색상 — core/edge 대비 강화: 노란-흰 코어 ↔ 깊은 적색 에지 (단색 탈피)
     def.overrideColors    = true;
-    def.overrideCoreColor = { 1.0f, 0.7f,  0.18f, 1.0f };
-    def.overrideEdgeColor = { 1.0f, 0.12f, 0.0f,  0.85f };
+    def.overrideCoreColor = { 1.0f, 0.95f, 0.55f, 1.0f };  // 뜨거운 노란-흰 코어
+    def.overrideEdgeColor = { 0.85f, 0.1f, 0.0f, 0.9f };   // 깊은 적색 외곽
 
     // 중심 attractor CP — 약하게: 스폰 초반 관성 손상 없이 천천히 빨려듦
     FluidCPDesc cp;
@@ -1236,7 +1243,8 @@ void MegaBreathAttackBehavior::SpawnChargeVFX(EnemyComponent* pEnemy)
     p.offsetParticlesWithOrigin = true;
     def.phases.push_back(p);
 
-    m_nChargeVFXId = m_pFluidVFXManager->SpawnSequenceEffect(mouth, forward, def, false); // 적 스킬 — SSF 분리
+    // Player manager + SSF 경로 (isPlayerEffect=true 기본값)
+    m_nChargeVFXId = m_pFluidVFXManager->SpawnSequenceEffect(mouth, forward, def, true);
 }
 
 void MegaBreathAttackBehavior::UpdateChargeVFX(EnemyComponent* /*pEnemy*/)
