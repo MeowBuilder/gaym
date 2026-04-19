@@ -47,6 +47,8 @@ public:
     bool IsCinematic() const { return m_bCinematic; }
     // Smoothly adjust cinematic orbit params (call every frame during cutscene)
     void SetCinematicOrbit(float distance, float pitch, float yaw) { m_fCinDist = distance; m_fCinPitch = pitch; m_fCinYaw = yaw; }
+    // Dynamically update cinematic lookAt (e.g. tracking a moving target during cutscene)
+    void SetCinematicLookAt(const DirectX::XMFLOAT3& lookAt) { m_cinLookAt = lookAt; }
 
 private:
     void UpdateViewMatrix();

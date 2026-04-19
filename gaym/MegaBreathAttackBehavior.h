@@ -41,7 +41,10 @@ private:
         SpawnCover,   // 엄폐물 생성
         Windup,       // 브레스 준비
         Breath,       // 브레스 발사
-        Recovery      // 회복
+        Recovery,     // 회복
+        ReturnTakeOff,  // 복귀 이륙
+        ReturnFly,      // 원 위치로 비행
+        ReturnLand      // 원 위치 착륙
     };
 
     // 벽 이동 관련
@@ -74,9 +77,9 @@ private:
     float m_fRecoveryTime = 1.0f;
     float m_fCoverObjectSize = 3.0f;
 
-    // 비행 관련
-    float m_fTakeOffTime = 0.5f;
-    float m_fLandingTime = 0.5f;
+    // 비행 관련 (컷씬 페이싱 감안 — 너무 빠르게 끝나지 않도록)
+    float m_fTakeOffTime = 0.9f;
+    float m_fLandingTime = 0.7f;
     float m_fFlyHeight = 15.0f;
 
     // 런타임 상태
@@ -87,7 +90,8 @@ private:
 
     // 벽 이동
     XMFLOAT3 m_xmf3WallPosition = { 0.0f, 0.0f, 0.0f };
-    XMFLOAT3 m_xmf3StartPosition = { 0.0f, 0.0f, 0.0f };
+    XMFLOAT3 m_xmf3StartPosition = { 0.0f, 0.0f, 0.0f };    // 현재 단계의 시작점 (단계 진입마다 덮어씀)
+    XMFLOAT3 m_xmf3OriginalPosition = { 0.0f, 0.0f, 0.0f }; // 공격 시작 전 원래 위치 (복귀 목표)
     int m_nWallDirection = 0;  // 0: +X, 1: -X, 2: +Z, 3: -Z
 
     // 엄폐물 및 장애물
@@ -97,6 +101,22 @@ private:
     // 애니메이션 플래그
     bool m_bBreathAnimStarted = false;
 
+    // 엄폐물 생성 플래그 + 엄폐물 노출 시간 (카메라가 기둥 세팅 보여주는 동안 유지)
+    //   카메라가 Landing(dragon-follow) → SpawnCover(establishing) → Windup(over-shoulder)로
+    //   크게 전환하는 구간이라 체류 시간을 여유롭게 잡아 블렌드 페이싱 확보
+    bool  m_bCoverSpawned    = false;
+    float m_fCoverRevealTime = 2.0f;
+
+    // ── 시네마틱 카메라 ────────────────────────────────────────────────────
+    //   페이즈마다 목표 orbit/lookAt을 계산하고, 현재 값에서 지수 블렌드로 접근 → 부드러운 전환
+    void UpdateCinematicCamera(float dt, EnemyComponent* pEnemy);
+    bool     m_bCinematicActive = false;
+    bool     m_bCamStateInit    = false;   // 첫 프레임에 목표 = 현재로 초기화
+    XMFLOAT3 m_xmf3CamLookAt    = { 0.0f, 0.0f, 0.0f };
+    float    m_fCamDist         = 30.0f;
+    float    m_fCamPitch        = 25.0f;
+    float    m_fCamYaw          = 0.0f;
+
     // ── Fire Wave 이펙트 ────────────────────────────────────────────────────
     // 거대 파도형 화염 벽 — 보스 벽 위치에서 반대편 벽까지 스윕
     void SpawnFireWave(EnemyComponent* pEnemy);
@@ -104,8 +124,17 @@ private:
     void DestroyFireWave();
 
     // SPH Beam 기반 거대 화염 분사 — 입에서 끝까지 연속 분사 (cone)
+    //  여러 빔을 좌우로 팬-아웃 스폰해 cone 영역을 더 넓고 조밀하게 채움
+    //  5개 빔: -12°, -6°, 0°, +6°, +12° — 사이사이 간격 최소화
     class FluidSkillVFXManager* m_pFluidVFXManager   = nullptr;
-    int                         m_nFluidVFXId        = -1;
+    static constexpr int        NUM_BEAMS            = 5;
+    int                         m_nFluidVFXIds[NUM_BEAMS] = { -1, -1, -1, -1, -1 };
+
+    // Windup 단계 집결 VFX — 보스 입 주변에 파티클이 모여들어 "곧 뭔가 온다" 예고
+    void SpawnChargeVFX(EnemyComponent* pEnemy);
+    void UpdateChargeVFX(EnemyComponent* pEnemy);
+    void DestroyChargeVFX();
+    int  m_nChargeVFXId = -1;
     XMFLOAT3                    m_xmf3BeamOrigin     = { 0.0f, 0.0f, 0.0f };  // 보스 입
     XMFLOAT3                    m_xmf3BeamDirection  = { 0.0f, 0.0f, 1.0f };
     float                       m_fBeamLength        = 0.0f;  // 입 → 맵 반대편

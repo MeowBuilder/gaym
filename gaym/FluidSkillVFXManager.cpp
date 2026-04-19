@@ -657,12 +657,13 @@ void FluidSkillVFXManager::UpdatePhase(FluidVFXSlot& slot, float dt)
         slot.pSystem->SetConfinementBox(phase.boxDesc);
 
         if (phase.motionMode == ParticleMotionMode::Beam) {
-            // 보스 메가브레스는 120m로 밀집 사격 및 흐름 활성화, 나머지는 20m 정적 레이저
-            // phase.beamDesc.swirlFadeEnd 가 설정되어 있으면 그 값을 빔 길이로 사용 (custom beam)
+            // 빔 길이 우선순위: phase.beamDesc.beamLength > swirlFadeEnd(레거시) > 기본값
             bool isBossBreath = (slot.sequenceDef.name == "Dragon_MegaBreath");
-            float beamLen = (phase.beamDesc.swirlFadeEnd > 0.f)
-                          ? phase.beamDesc.swirlFadeEnd
-                          : (isBossBreath ? 120.f : 20.f);
+            float beamLen = (phase.beamDesc.beamLength > 0.f)
+                          ? phase.beamDesc.beamLength
+                          : ((phase.beamDesc.swirlFadeEnd > 0.f)
+                                ? phase.beamDesc.swirlFadeEnd
+                                : (isBossBreath ? 120.f : 20.f));
 
             BeamDesc bd = phase.beamDesc;
             bd.startPos      = slot.origin;
@@ -850,9 +851,11 @@ void FluidSkillVFXManager::UpdatePhase(FluidVFXSlot& slot, float dt)
     // prevDir 보존하면서 startPos/endPos만 업데이트
     if (curPhase.motionMode == ParticleMotionMode::Beam) {
         bool isBossBreath = (slot.sequenceDef.name == "Dragon_MegaBreath");
-        float beamLen = (curPhase.beamDesc.swirlFadeEnd > 0.f)
-                      ? curPhase.beamDesc.swirlFadeEnd
-                      : (isBossBreath ? 120.f : 20.f);
+        float beamLen = (curPhase.beamDesc.beamLength > 0.f)
+                      ? curPhase.beamDesc.beamLength
+                      : ((curPhase.beamDesc.swirlFadeEnd > 0.f)
+                            ? curPhase.beamDesc.swirlFadeEnd
+                            : (isBossBreath ? 120.f : 20.f));
 
         BeamDesc bd = slot.pSystem->GetBeamDesc();  // 현재 빔 상태 (prevDir 포함)
         bd.speedMin     = curPhase.beamDesc.speedMin;

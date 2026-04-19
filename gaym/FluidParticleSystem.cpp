@@ -1115,11 +1115,14 @@ void FluidParticleSystem::Update(float deltaTime)
             if ((m_BeamDesc.swirlSpeed != 0.f || m_BeamDesc.swirlExpand) && totalDist > 0.f) {
                 p.beamAngle += m_BeamDesc.swirlSpeed * dt;
                 float t = p.beamT / totalDist;
+                // baseT: 입 쪽 기본 폭 비율. 입에서 base*spread, 끝에서 spread 까지 선형
+                float baseT = m_BeamDesc.swirlBaseT;
                 float r = m_BeamDesc.swirlExpand
-                    ? m_BeamDesc.spreadRadius * t           // 퍼짐
-                    : m_BeamDesc.spreadRadius * (1.f - t);  // 수렴
+                    ? m_BeamDesc.spreadRadius * (baseT + (1.f - baseT) * t)  // 입=base, 끝=full
+                    : m_BeamDesc.spreadRadius * (1.f - t);                   // 수렴
                 p.beamRx = r * cosf(p.beamAngle);
-                p.beamRy = r * sinf(p.beamAngle);
+                // swirl 모드에서도 verticalScale 적용 — 수직으로 납작한 타원형 cone
+                p.beamRy = r * sinf(p.beamAngle) * m_BeamDesc.verticalScale;
 
                 if (m_BeamDesc.swirlFadeEnd > 0.f) {
                     float ft = p.beamT / m_BeamDesc.swirlFadeEnd;
@@ -1166,19 +1169,57 @@ void FluidParticleSystem::UploadRenderData()
     int renderIdx = 0;
     int n = (int)m_Particles.size();
 
+    // Beam 모드: 입→끝 그라디언트 및 cone 단면 증가 보정을 위해 길이/반경 사전 계산
+    const bool bBeamMode = (m_MotionMode == ParticleMotionMode::Beam);
+    float beamTotalDist = 0.f;
+    float invBeamDist   = 0.f;
+    float invMaxRadius  = 0.f;
+    if (bBeamMode) {
+        XMVECTOR startV = XMLoadFloat3(&m_BeamDesc.startPos);
+        XMVECTOR endV   = XMLoadFloat3(&m_BeamDesc.endPos);
+        beamTotalDist = XMVectorGetX(XMVector3Length(XMVectorSubtract(endV, startV)));
+        if (beamTotalDist > 0.001f) invBeamDist = 1.0f / beamTotalDist;
+        if (m_BeamDesc.spreadRadius > 0.001f) invMaxRadius = 1.0f / m_BeamDesc.spreadRadius;
+    }
+
     for (int i = 0; i < n && renderIdx < MAX_PARTICLES; ++i)
     {
         if (!m_Particles[i].active) continue;
 
-        // Beam 모드 색상: velocity 기반 밝기 (density는 SPH를 거치지 않아 0임)
-        const XMFLOAT3& vel = m_Particles[i].velocity;
-        float speed    = sqrtf(vel.x * vel.x + vel.y * vel.y + vel.z * vel.z);
-        float maxSpd   = m_BeamDesc.speedMax > 0.f ? m_BeamDesc.speedMax : 18.f;
-        float speedT   = (std::min)(speed / (maxSpd * 0.5f + 0.001f), 1.0f);
+        float t;          // core↔edge 혼합 계수 (0=edge, 1=core)
+        float brightness; // 추가 밝기 부스트
 
-        // 빔: 항상 coreColor 가까이 유지, 속도에 따라 더 밝게
-        float t = 0.80f + speedT * 0.15f;
-        t = (std::max)(0.0f, (std::min)(1.0f, t));
+        if (bBeamMode)
+        {
+            // beamT 기반 입→끝 그라디언트 + 반경 기반 외곽 그라디언트
+            float tBeam = (std::min)(m_Particles[i].beamT * invBeamDist, 1.0f);
+            float rx    = m_Particles[i].beamRx;
+            float ry    = m_Particles[i].beamRy;
+            float rRatio = (std::min)(sqrtf(rx * rx + ry * ry) * invMaxRadius, 1.0f);
+
+            // 파티클마다 조금씩 다르게 흔들기 (beamAngle 을 deterministic 시드로 사용)
+            float jitter = sinf(m_Particles[i].beamAngle * 3.1f) * 0.12f
+                         + cosf(m_Particles[i].beamAngle * 7.3f + tBeam * 4.0f) * 0.08f;
+
+            // 입(0) = core 비율 높음, 끝(1) = edge 비율 높음. 반경 큰 것도 edge 쪽
+            // 베이스 0.20 → 순수 코어 구간 축소 (흰/노랑 쏠림 방지)
+            float edgeWeight = 0.20f + tBeam * 0.55f + rRatio * 0.45f + jitter * 0.5f;
+            edgeWeight = (std::max)(0.f, (std::min)(edgeWeight, 1.0f));
+            t = 1.0f - edgeWeight;  // core=1, edge=0
+
+            // 밝기: 입 쪽도 과포화 안되게 억제, 끝은 그대로 어두움
+            brightness = 1.05f - tBeam * 0.25f + jitter * 0.15f;
+        }
+        else
+        {
+            // 기타 모드: velocity 기반 기존 로직 유지
+            const XMFLOAT3& vel = m_Particles[i].velocity;
+            float speed    = sqrtf(vel.x * vel.x + vel.y * vel.y + vel.z * vel.z);
+            float maxSpd   = m_BeamDesc.speedMax > 0.f ? m_BeamDesc.speedMax : 18.f;
+            float speedT   = (std::min)(speed / (maxSpd * 0.5f + 0.001f), 1.0f);
+            t = (std::max)(0.0f, (std::min)(0.80f + speedT * 0.15f, 1.0f));
+            brightness = 1.0f + speedT * 0.35f;
+        }
 
         XMFLOAT4 color;
         color.x = m_Colors.edgeColor.x + (m_Colors.coreColor.x - m_Colors.edgeColor.x) * t;
@@ -1186,13 +1227,18 @@ void FluidParticleSystem::UploadRenderData()
         color.z = m_Colors.edgeColor.z + (m_Colors.coreColor.z - m_Colors.edgeColor.z) * t;
         color.w = m_Colors.edgeColor.w + (m_Colors.coreColor.w - m_Colors.edgeColor.w) * t;
 
-        // 속도 기반 brightness boost
-        float boost = 1.0f + speedT * 0.35f;
-        color.x = (std::min)(color.x * boost, 1.5f);
-        color.y = (std::min)(color.y * boost, 1.5f);
-        color.z = (std::min)(color.z * boost, 1.5f);
+        color.x = (std::min)(color.x * brightness, 1.5f);
+        color.y = (std::min)(color.y * brightness, 1.5f);
+        color.z = (std::min)(color.z * brightness, 1.5f);
 
         float sizeScale = m_Particles[i].beamSizeScale;
+
+        // Beam: cone 단면이 끝으로 갈수록 t² 증가 → 파티클 크기 보정으로 밀도 커버
+        if (bBeamMode && invBeamDist > 0.f) {
+            float tBeam = (std::min)(m_Particles[i].beamT * invBeamDist, 1.0f);
+            sizeScale *= (1.0f + tBeam * 1.0f);  // 시작 1.0배 → 끝 2.0배
+        }
+
         color.w *= sizeScale;
         m_pMappedParticles[renderIdx].position = m_Particles[i].position;
         m_pMappedParticles[renderIdx].size     = m_Config.particleSize * sizeScale;
@@ -1308,11 +1354,12 @@ void FluidParticleSystem::InitBeamParticles()
             p.beamAngle     = Rand01() * XM_2PI;
             p.beamSizeScale = 1.f;
             float t = (totalDist > 0.f) ? p.beamT / totalDist : 0.f;
+            float baseT = m_BeamDesc.swirlBaseT;
             float r = m_BeamDesc.swirlExpand
-                ? m_BeamDesc.spreadRadius * t
+                ? m_BeamDesc.spreadRadius * (baseT + (1.f - baseT) * t)
                 : m_BeamDesc.spreadRadius * (1.f - t);
             p.beamRx = r * cosf(p.beamAngle);
-            p.beamRy = r * sinf(p.beamAngle);
+            p.beamRy = r * sinf(p.beamAngle) * m_BeamDesc.verticalScale;
         } else {
             p.beamRx = (Rand01() - 0.5f) * 2.f * m_BeamDesc.spreadRadius;
             p.beamRy = (Rand01() - 0.5f) * 2.f * (m_BeamDesc.spreadRadius * m_BeamDesc.verticalScale);

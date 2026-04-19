@@ -33,6 +33,8 @@ struct BeamDesc {
     bool  swirlExpand = false; // true = 반경이 beamT에 따라 커짐(퍼짐), false = 작아짐(수렴)
     float swirlFadeEnd   = 0.f;  // 이 beamT 위치에서 크기→0 (0=페이드 없음)
     bool  swirlFadeInOut = false; // true=시작(0)→밝아짐→swirlFadeEnd/2 피크→사라짐 (삼각파)
+    float beamLength     = 0.f;  // 빔 기하 길이(월드 거리). 0 이면 매니저 기본값/스위를페이드엔드 사용
+    float swirlBaseT     = 0.f;  // 입 쪽 기본 폭 비율 (0..1, 0이면 기존 원뿔, 0.3이면 입에서도 30% 폭)
     XMFLOAT3 prevDir = { 0.f, 0.f, 1.f }; // 이전 프레임 방향 (빔 전체 회전 계산용)
 };
 

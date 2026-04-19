@@ -463,9 +463,9 @@ void Scene::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList)
     }
 
     // --------------------------------------------------------------------------
-    // 8. Initialize LavaGeyser Manager for current room (화염 맵 기믹)
+    // 8. Initialize LavaGeyser Manager for current room (화염 맵 전용 기믹)
     // --------------------------------------------------------------------------
-    if (m_pCurrentRoom)
+    if (m_pCurrentRoom && m_eCurrentTheme == StageTheme::Fire)
     {
         UINT nGeyserDescStart = m_nNextDescriptorIndex;
         m_nNextDescriptorIndex += 1;  // FluidParticleSystem uses 1 descriptor slot
@@ -2080,8 +2080,8 @@ void Scene::TransitionToNextRoom()
             pGO->Update(0.0f);
     }
 
-    // ── 7b. LavaGeyser Manager 초기화 (화염 맵 기믹)
-    if (m_pCurrentRoom)
+    // ── 7b. LavaGeyser Manager 초기화 (화염 맵 전용 기믹)
+    if (m_pCurrentRoom && m_eCurrentTheme == StageTheme::Fire)
     {
         UINT nGeyserDescStart = m_nNextDescriptorIndex;
         m_nNextDescriptorIndex += 1;
@@ -2175,11 +2175,14 @@ void Scene::TransitionToRoomByIndex(int index)
         for (const auto& pGO : m_pCurrentRoom->GetGameObjects())
             pGO->Update(0.0f);
 
-        UINT nGeyserDescStart = m_nNextDescriptorIndex;
-        m_nNextDescriptorIndex += 1;
-        m_pCurrentRoom->InitLavaGeyserManager(
-            pDevice, pCommandList, m_vShaders[0].get(),
-            m_pDescriptorHeap.get(), nGeyserDescStart);
+        if (m_eCurrentTheme == StageTheme::Fire)
+        {
+            UINT nGeyserDescStart = m_nNextDescriptorIndex;
+            m_nNextDescriptorIndex += 1;
+            m_pCurrentRoom->InitLavaGeyserManager(
+                pDevice, pCommandList, m_vShaders[0].get(),
+                m_pDescriptorHeap.get(), nGeyserDescStart);
+        }
 
         m_pCurrentRoom->SetState(RoomState::Active);
     }
@@ -2254,8 +2257,8 @@ void Scene::TransitionToBossRoom()
             pGO->Update(0.0f);
     }
 
-    // ── 7. LavaGeyser Manager 초기화 (보스전에서도 기믹 적용)
-    if (m_pCurrentRoom)
+    // ── 7. LavaGeyser Manager 초기화 (화염 보스전 전용)
+    if (m_pCurrentRoom && m_eCurrentTheme == StageTheme::Fire)
     {
         UINT nGeyserDescStart = m_nNextDescriptorIndex;
         m_nNextDescriptorIndex += 1;
