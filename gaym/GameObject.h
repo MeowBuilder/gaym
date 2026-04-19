@@ -77,6 +77,7 @@ public:
 	void SetTransform(const XMFLOAT4X4& transform);
 
 	void SetMaterial(const MATERIAL& material); // New method for setting material
+	const MATERIAL& GetMaterial() const { return m_Material; }
 	void SetTextureName(const std::string& strName) { m_strTextureName = strName; }
 	std::string GetTextureName() const { return m_strTextureName; }
 
@@ -158,6 +159,14 @@ public:
     {
         if (m_pcbMappedGameObject)
             m_pcbMappedGameObject->m_fHitFlash = f;
+    }
+    // 계층 전체에 HitFlash 전파 — 자식 메시들이 별도 CB를 써서 루트 호출만으론 안 먹힘
+    //   (플레이어/PBR 모델처럼 children 트리가 있는 GameObject 전용)
+    void SetHitFlashAll(float f)
+    {
+        SetHitFlash(f);
+        if (m_pChild)   m_pChild->SetHitFlashAll(f);
+        if (m_pSibling) m_pSibling->SetHitFlashAll(f);
     }
 
     // Debug: F4 = force all objects to render without texture (see raw geometry/material)

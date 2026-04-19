@@ -568,14 +568,18 @@ float4 PS(PS_INPUT input) : SV_TARGET
         return float4(finalColor.rgb, waterAlpha);
     }
 
-    // Hit Flash: rim-based white outline flash
+    // Hit Flash: rim-based white outline flash + additive bloom pop
+    //   lerp(→white)은 흰색에서 클램프되므로 림에 추가 additive로 "초과 밝기" 부여
+    //   → 피격/대쉬 플래시가 훨씬 뚜렷하게 보임
     if (g_HitFlash > 0.001f)
     {
         float3 viewDir = normalize(g_CameraPosition - input.worldPosition);
         float rim = 1.0 - saturate(dot(normalize(input.worldNormal), viewDir));
         float outline = saturate(pow(rim, 2.5) * 3.0);
-        float flashMix = g_HitFlash * (outline * 0.7 + 0.3);
+        float flashMix = g_HitFlash * (outline * 0.7 + 0.5); // 내부 기본 0.3 → 0.5
         finalColor.rgb = lerp(finalColor.rgb, float3(1, 1, 1), saturate(flashMix));
+        // Additive 림 부스트 — 흰색 위로 푹 튀어오르게 (HDR pop 느낌)
+        finalColor.rgb += outline * g_HitFlash * 1.2f;
     }
 
     return float4(finalColor.rgb, 1.0f);

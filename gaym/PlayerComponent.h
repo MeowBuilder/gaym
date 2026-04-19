@@ -5,7 +5,7 @@ class InputSystem; // Forward declaration for InputSystem
 class CCamera;     // Forward declaration for CCamera
 class SkillComponent; // Forward declaration for SkillComponent
 
-enum class PlayerAnimState { Idle, Walk, Attack };
+enum class PlayerAnimState { Idle, Walk, Attack, Dash };
 
 class PlayerComponent : public Component
 {
@@ -13,6 +13,10 @@ public:
     PlayerComponent(GameObject* pOwner);
 
     void PlayerUpdate(float deltaTime, InputSystem* pInputSystem, CCamera* pCamera);
+
+    // Dash state query (for VFX / i-frame 판정)
+    bool IsDashing() const { return m_fDashTimer > 0.0f; }
+    float GetDashCooldownRatio() const { return (kDashCooldown > 0.0f) ? (m_fDashCooldownRemain / kDashCooldown) : 0.0f; }
 
     // HP System
     void TakeDamage(float fDamage);
@@ -55,9 +59,21 @@ private:
     float m_fAttackTimer = 0.0f;
     static constexpr float kAttackAnimDuration = 0.92f;  // Attack1 clip duration
 
+    // Dash (Space key) — 짧은 무적 이동기. LevitateStart 애니 재사용 + 이미시브 플래시
+    float m_fDashTimer = 0.0f;           // 대쉬 중 경과 (0이면 대쉬 아님)
+    float m_fDashCooldownRemain = 0.0f;  // 쿨다운 잔여
+    float m_fDashFlashTail = 0.0f;       // 대쉬 종료 후 HitFlash 잔상 타이머
+    XMFLOAT3 m_xmf3DashDir = { 0, 0, 1 };// 대쉬 방향 (시작 시 고정)
+    int   m_nDashEmitterId = -1;         // 플레이어 주변 블루 파티클 이미터 (최초 대쉬에서 지연 생성)
+
+    static constexpr float kDashDuration      = 0.25f;  // 대쉬 지속
+    static constexpr float kDashCooldown      = 1.2f;   // 쿨다운
+    static constexpr float kDashSpeedMult     = 3.2f;   // 평상시 속도 대비 배율
+    static constexpr float kDashFlashTail     = 0.15f;  // 대쉬 후 플래시 잔상 (페이드아웃)
+
     // 네트워크 회전 동기화용 (이전 프레임 Y 회전값)
     float m_fPrevYaw = 0.0f;
     static constexpr float YAW_SYNC_THRESHOLD = 1.0f;  // 1도 이상 변화 시 동기화
 
-    void UpdateAnimation(float deltaTime, bool bMoving, bool bAttackTriggered);
+    void UpdateAnimation(float deltaTime, bool bMoving, bool bAttackTriggered, bool bDashStarted, bool bDashing);
 };

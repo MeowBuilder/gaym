@@ -8,6 +8,9 @@
 #include "AnimationComponent.h"
 #include "Dx12App.h" // For runtime window size
 #include "NetworkManager.h" // For rotation sync
+#include "Scene.h"
+#include "ParticleSystem.h"
+#include "Particle.h"
 
 PlayerComponent::PlayerComponent(GameObject* pOwner)
     : Component(pOwner)
@@ -168,6 +171,112 @@ void PlayerComponent::PlayerUpdate(float deltaTime, InputSystem* pInputSystem, C
     if (bMoving)
     {
         moveDir = XMVector3Normalize(moveDir);
+    }
+
+    // --- Dash (Space) ---
+    //   - Space pressed & cooldown=0 & 살아있음 → 대쉬 시작
+    //   - 대쉬 중: 방향 고정, 속도*kDashSpeedMult, 피격 무시, Levitate 애니
+    //   - 시작 시 이미시브 플래시(푸른빛) → 대쉬 끝날 때 복원
+    if (m_fDashCooldownRemain > 0.0f)
+        m_fDashCooldownRemain = fmaxf(0.0f, m_fDashCooldownRemain - deltaTime);
+
+    // 대쉬 파티클 이미터 — 플레이어 주변 시안-블루 광휘. 최초 대쉬에서 지연 생성, 평상시엔 정지 상태
+    auto GetDashEmitter = [&]() -> ParticleEmitter* {
+        Scene* pScene = Dx12App::GetInstance() ? Dx12App::GetInstance()->GetScene() : nullptr;
+        ParticleSystem* pPS = pScene ? pScene->GetParticleSystem() : nullptr;
+        if (!pPS) return nullptr;
+
+        // ParticleSystem은 Stop + 파티클 0 상태가 되면 슬롯을 자동 반환하므로 매번 유효성 검사
+        ParticleEmitter* pEm = (m_nDashEmitterId >= 0) ? pPS->GetEmitter(m_nDashEmitterId) : nullptr;
+        if (pEm) return pEm;
+
+        // 재생성
+        ParticleEmitterConfig cfg;
+        cfg.emissionRate   = 55.0f;
+        cfg.burstCount     = 0;
+        cfg.minLifetime    = 0.18f;
+        cfg.maxLifetime    = 0.40f;
+        cfg.minStartSize   = 0.35f;
+        cfg.maxStartSize   = 0.75f;
+        cfg.minEndSize     = 0.0f;
+        cfg.maxEndSize     = 0.05f;
+        cfg.minVelocity    = { -1.8f, 0.3f, -1.8f };
+        cfg.maxVelocity    = {  1.8f, 2.8f,  1.8f };
+        cfg.startColor     = { 0.35f, 0.75f, 1.0f, 1.0f };
+        cfg.endColor       = { 0.05f, 0.15f, 0.55f, 0.0f };
+        cfg.gravity        = { 0.0f, 0.4f, 0.0f };
+        cfg.spawnRadius    = 1.6f;
+        m_nDashEmitterId = pPS->CreateEmitter(cfg, pTransform->GetPosition());
+        return pPS->GetEmitter(m_nDashEmitterId);
+    };
+
+    bool bDashStarted = false;
+    if (!IsDead()
+        && pInputSystem->IsKeyPressed(VK_SPACE)
+        && m_fDashTimer <= 0.0f
+        && m_fDashCooldownRemain <= 0.0f)
+    {
+        // 대쉬 방향: WASD 입력 있으면 그 방향, 없으면 캐릭터 정면
+        XMVECTOR dashVec = bMoving ? moveDir : pTransform->GetLook();
+        dashVec = XMVectorSetY(dashVec, 0.0f);
+        if (XMVectorGetX(XMVector3LengthSq(dashVec)) > 0.001f)
+        {
+            dashVec = XMVector3Normalize(dashVec);
+            XMStoreFloat3(&m_xmf3DashDir, dashVec);
+            m_fDashTimer = kDashDuration;
+            bDashStarted = true;
+
+            // 시작 시 폭발적 버스트 + 연속 방출 시작
+            if (ParticleEmitter* pEm = GetDashEmitter())
+            {
+                pEm->SetPosition(pTransform->GetPosition());
+                pEm->Burst(18);   // 즉시 18개 팡
+                pEm->Start();
+            }
+        }
+    }
+
+    bool bDashing = (m_fDashTimer > 0.0f);
+    if (bDashing)
+    {
+        // 대쉬 진행: 방향 고정 + 부스트 속도
+        m_fDashTimer -= deltaTime;
+        XMVECTOR dashVec = XMLoadFloat3(&m_xmf3DashDir);
+        displacement = dashVec * (moveSpeed * kDashSpeedMult) * deltaTime;
+
+        // HitFlash 림 아웃라인으로 "블러/스피드" 연출 — 시작 즉시 풀 강도, 끝 직전에만 페이드
+        //   t: 0 시작 → 1 끝. 80% 구간 1.0 유지, 마지막 20% easeOut
+        float t = 1.0f - fmaxf(0.0f, m_fDashTimer) / kDashDuration;
+        float flash = (t < 0.8f) ? 1.0f : (1.0f - (t - 0.8f) / 0.2f);
+        m_pOwner->SetHitFlashAll(flash);
+
+        // 파티클 이미터 위치 갱신 — 플레이어 몸 중앙 근처(살짝 올려서 허리~가슴 높이)
+        if (ParticleEmitter* pEm = GetDashEmitter())
+        {
+            XMFLOAT3 p = pTransform->GetPosition();
+            p.y += 2.0f;
+            pEm->SetPosition(p);
+        }
+
+        // 대쉬 끝난 프레임: 쿨다운 시작 + 잔상 타이머 시작 + 이미터 정지
+        if (m_fDashTimer <= 0.0f)
+        {
+            m_fDashTimer = 0.0f;
+            m_fDashCooldownRemain = kDashCooldown;
+            m_fDashFlashTail = kDashFlashTail;
+            if (ParticleEmitter* pEm = GetDashEmitter()) pEm->Stop();
+        }
+    }
+    else if (m_fDashFlashTail > 0.0f)
+    {
+        // 대쉬 끝난 후 잔상 페이드 (0.15s 추가)
+        m_fDashFlashTail = fmaxf(0.0f, m_fDashFlashTail - deltaTime);
+        float tailFlash = m_fDashFlashTail / kDashFlashTail;
+        m_pOwner->SetHitFlashAll(tailFlash * 0.5f);
+        if (m_fDashFlashTail <= 0.0f) m_pOwner->SetHitFlashAll(0.0f);
+    }
+    else if (bMoving)
+    {
         displacement = moveDir * moveSpeed * deltaTime;
     }
 
@@ -203,7 +312,7 @@ void PlayerComponent::PlayerUpdate(float deltaTime, InputSystem* pInputSystem, C
         pSkillComponent->ProcessSkillInput(pInputSystem, pCamera);
     }
 
-    UpdateAnimation(deltaTime, bMoving, bAttackTriggered);
+    UpdateAnimation(deltaTime, bMoving, bAttackTriggered, bDashStarted, bDashing);
 }
 
 void PlayerComponent::EnableFallZone(const XMFLOAT3& safeCenter, const XMFLOAT3& safeExtents)
@@ -216,6 +325,7 @@ void PlayerComponent::EnableFallZone(const XMFLOAT3& safeCenter, const XMFLOAT3&
 void PlayerComponent::TakeDamage(float fDamage)
 {
     if (fDamage <= 0.0f || IsDead()) return;
+    if (IsDashing()) return;  // 대쉬 중 i-frame — 피격 무시
 
     m_fCurrentHP -= fDamage;
     if (m_fCurrentHP < 0.0f)
@@ -235,7 +345,7 @@ void PlayerComponent::Heal(float fAmount)
     }
 }
 
-void PlayerComponent::UpdateAnimation(float deltaTime, bool bMoving, bool bAttackTriggered)
+void PlayerComponent::UpdateAnimation(float deltaTime, bool bMoving, bool bAttackTriggered, bool bDashStarted, bool bDashing)
 {
     AnimationComponent* pAnim = m_pOwner->GetComponent<AnimationComponent>();
     if (!pAnim) return;
@@ -243,6 +353,19 @@ void PlayerComponent::UpdateAnimation(float deltaTime, bool bMoving, bool bAttac
     // Tick down attack timer
     if (m_fAttackTimer > 0.0f)
         m_fAttackTimer -= deltaTime;
+
+    // 대쉬 시작: LevitateStart 1회 재생. 대쉬 중엔 상태 유지 (중간에 공격/이동 애니로 튀지 않게)
+    if (bDashStarted)
+    {
+        m_eAnimState = PlayerAnimState::Dash;
+        pAnim->CrossFade("Run", 0.05f, true, true);
+        return;
+    }
+    if (bDashing)
+    {
+        m_eAnimState = PlayerAnimState::Dash;
+        return;  // 대쉬 중엔 다른 애니로 전환 안 함
+    }
 
     // If attack triggered, always restart attack animation
     if (bAttackTriggered)
@@ -281,6 +404,9 @@ void PlayerComponent::UpdateAnimation(float deltaTime, bool bMoving, bool bAttac
         break;
     case PlayerAnimState::Attack:
         pAnim->CrossFade("Attack1", 0.1f, false);
+        break;
+    case PlayerAnimState::Dash:
+        // 대쉬는 bDashStarted 분기에서 이미 처리됨
         break;
     }
 }
