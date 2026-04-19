@@ -106,3 +106,30 @@ EquippedRune DropItemComponent::GetRuneOption(int index) const
     if (index < 0 || index >= 3) return {};
     return m_RuneOptions[index];
 }
+
+RuneGrade DropItemComponent::GetHighestGrade() const
+{
+    RuneGrade highest = RuneGrade::Normal;
+    const RuneRegistry& reg = RuneRegistry::Get();
+    for (const auto& rune : m_RuneOptions)
+    {
+        if (rune.IsEmpty()) continue;
+        const RuneDef* def = reg.Find(rune.runeId);
+        if (def && def->grade > highest)
+            highest = def->grade;
+    }
+    return highest;
+}
+
+XMFLOAT4 DropItemComponent::GetGradeColor(RuneGrade grade)
+{
+    switch (grade)
+    {
+    case RuneGrade::Normal:    return { 0.80f, 0.80f, 0.80f, 1.f }; // 회백
+    case RuneGrade::Rare:      return { 0.20f, 0.45f, 1.00f, 1.f }; // 파랑
+    case RuneGrade::Epic:      return { 0.60f, 0.05f, 1.00f, 1.f }; // 보라
+    case RuneGrade::Unique:    return { 1.00f, 0.50f, 0.05f, 1.f }; // 주황
+    case RuneGrade::Legendary: return { 1.00f, 0.85f, 0.00f, 1.f }; // 황금
+    default:                   return { 1.00f, 1.00f, 1.00f, 1.f };
+    }
+}

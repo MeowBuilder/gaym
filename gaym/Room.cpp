@@ -249,18 +249,20 @@ void CRoom::SpawnDropItem()
                                         1.0f, 1.0f, 1.0f);
     m_pDropItem->SetMesh(pCubeMesh);
 
-    MATERIAL whiteMaterial;
-    whiteMaterial.m_cAmbient = XMFLOAT4(0.3f, 0.3f, 0.3f, 1.0f);
-    whiteMaterial.m_cDiffuse = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
-    whiteMaterial.m_cSpecular = XMFLOAT4(1.0f, 1.0f, 1.0f, 64.0f);
-    whiteMaterial.m_cEmissive = XMFLOAT4(0.5f, 0.5f, 0.5f, 1.0f);
-    m_pDropItem->SetMaterial(whiteMaterial);
-
     // Add RenderComponent for visibility
     m_pDropItem->AddComponent<RenderComponent>()->SetMesh(pCubeMesh);
 
-    // Add DropItemComponent
-    m_pDropItem->AddComponent<DropItemComponent>();
+    // Add DropItemComponent first — 룬 생성 후 등급을 알 수 있음
+    DropItemComponent* pDropComp = m_pDropItem->AddComponent<DropItemComponent>();
+
+    // 드랍 룬의 최고 등급에 따라 픽업 색상 결정
+    XMFLOAT4 gc = DropItemComponent::GetGradeColor(pDropComp->GetHighestGrade());
+    MATERIAL gradeMaterial;
+    gradeMaterial.m_cAmbient  = XMFLOAT4(gc.x * 0.25f, gc.y * 0.25f, gc.z * 0.25f, 1.f);
+    gradeMaterial.m_cDiffuse  = gc;
+    gradeMaterial.m_cSpecular = XMFLOAT4(1.0f, 1.0f, 1.0f, 64.0f);
+    gradeMaterial.m_cEmissive = XMFLOAT4(gc.x * 0.6f,  gc.y * 0.6f,  gc.z * 0.6f,  1.f);
+    m_pDropItem->SetMaterial(gradeMaterial);
 
     OutputDebugString(L"[Room] Drop item spawned successfully!\n");
 }

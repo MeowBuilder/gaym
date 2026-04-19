@@ -33,6 +33,10 @@ void RuneDef::ApplyTo(SkillStats& stats, int stackCount) const
     stats.vfxMod.sizeScaleMult     *= vfxMod.sizeScaleMult;
     stats.vfxMod.speedMult         *= vfxMod.speedMult;
 
+    // Element override — 원소가 지정된 룬은 스킬 속성을 해당 원소로 전환
+    if (element != ElementType::None)
+        stats.elementOverride = element;
+
     // Behavioral flags
     stats.extraProjectiles += extraProjectiles * stackCount;
     if (piercing)       stats.piercing       = true;
@@ -42,6 +46,8 @@ void RuneDef::ApplyTo(SkillStats& stats, int stackCount) const
     stats.lifestealRatio   += lifestealRatio   * static_cast<float>(stackCount);
     stats.execDamageBonus  += execDamageBonus  * static_cast<float>(stackCount);
     stats.cdResetChance    += cdResetChance    * static_cast<float>(stackCount);
+    stats.orbitalCount     += orbitalCount     * stackCount;
+    stats.spawnOnHitCount  += spawnOnHitCount  * stackCount;
 
     // Hooks
     if (onCast) stats.onCastHooks.push_back(onCast);
@@ -158,6 +164,20 @@ RuneRegistry::RuneRegistry()
     Register({ .id="A05", .name="폭풍",     .grade=RuneGrade::Unique,  .element=ElementType::Wind,  .damageMult=1.35f });
     Register({ .id="S04", .name="연쇄",     .grade=RuneGrade::Unique,  .activationOverride=ActivationType::Place,
                .onHit=[](SkillContext& ctx){ (void)ctx; /* TODO: 설치물 간 연쇄 번개 */ } });
+
+    // ─── 추가타 계열 (4종) ───────────────────────────────────────────────────
+    // 궤도 파티클 다단히트
+    Register({ .id="O01", .name="선회",     .grade=RuneGrade::Rare,   .orbitalCount=2 });
+    Register({ .id="O02", .name="성좌",     .grade=RuneGrade::Epic,   .orbitalCount=4 });
+    // 적중 시 추가 투사체 생성
+    Register({ .id="H01", .name="반향",     .grade=RuneGrade::Rare,   .spawnOnHitCount=1 });
+    Register({ .id="H02", .name="폭발반향", .grade=RuneGrade::Epic,   .damageMult=0.85f, .spawnOnHitCount=2 });
+
+    // ─── 범용 크기/데미지 계열 (4종) ─────────────────────────────────────────
+    Register({ .id="G01", .name="확대",     .grade=RuneGrade::Normal, .radiusMult=1.20f });
+    Register({ .id="G02", .name="광역",     .grade=RuneGrade::Rare,   .damageMult=0.92f, .radiusMult=1.35f });
+    Register({ .id="X02", .name="강타",     .grade=RuneGrade::Normal, .damageMult=1.15f });
+    Register({ .id="X03", .name="파괴",     .grade=RuneGrade::Rare,   .damageMult=1.25f, .cooldownMult=1.15f });
 
     // ─── 레전더리 등급 (10종) ────────────────────────────────────────────────
     Register({ .id="L01", .name="쌍둥이별", .grade=RuneGrade::Legendary, .doublecast=true });

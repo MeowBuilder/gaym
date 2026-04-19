@@ -42,7 +42,8 @@ Scene::Scene()
     m_pParticleSystem = std::make_unique<ParticleSystem>();
     m_pFluidParticleSystem = std::make_unique<FluidParticleSystem>();
     m_pFluidSkillEffect    = std::make_unique<FluidSkillEffect>();
-    m_pFluidVFXManager     = std::make_unique<FluidSkillVFXManager>();
+    m_pFluidVFXManager        = std::make_unique<FluidSkillVFXManager>();
+    m_pEnemyFluidVFXManager   = std::make_unique<FluidSkillVFXManager>();
     m_pSSF                 = std::make_unique<ScreenSpaceFluid>();
     m_pDebugRenderer = std::make_unique<DebugRenderer>();
     m_pTorchSystem = std::make_unique<TorchSystem>();
@@ -191,11 +192,17 @@ void Scene::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList)
     m_pFluidParticleSystem->Init(pDevice, pCommandList, m_pDescriptorHeap.get(), nFluidParticleDescriptorStart);
     OutputDebugString(L"[Scene] Fluid particle system initialized\n");
 
-    // FluidSkillVFXManager (최대 8개 동시 이펙트)
+    // FluidSkillVFXManager — 플레이어 전용 (SSF 파이프라인)
     UINT nFluidVFXDescStart = m_nNextDescriptorIndex;
     m_nNextDescriptorIndex += FluidSkillVFXManager::MAX_EFFECTS;
     m_pFluidVFXManager->Init(pDevice, pCommandList, m_pDescriptorHeap.get(), nFluidVFXDescStart);
-    OutputDebugString(L"[Scene] FluidSkillVFXManager initialized\n");
+    OutputDebugString(L"[Scene] FluidSkillVFXManager (player) initialized\n");
+
+    // FluidSkillVFXManager — 적 전용 (빌보드 렌더, SSF 완전 분리)
+    UINT nEnemyVFXDescStart = m_nNextDescriptorIndex;
+    m_nNextDescriptorIndex += FluidSkillVFXManager::MAX_EFFECTS;
+    m_pEnemyFluidVFXManager->Init(pDevice, pCommandList, m_pDescriptorHeap.get(), nEnemyVFXDescStart);
+    OutputDebugString(L"[Scene] FluidSkillVFXManager (enemy) initialized\n");
 
     // TorchSystem (횃불 조명 및 불꽃 빌보드)
     UINT nTorchDescStart = m_nNextDescriptorIndex;
@@ -1241,9 +1248,9 @@ void Scene::Update(float deltaTime, InputSystem* pInputSystem)
 
     // Update Fluid Skill VFX Manager
     if (m_pFluidVFXManager)
-    {
         m_pFluidVFXManager->Update(deltaTime);
-    }
+    if (m_pEnemyFluidVFXManager)
+        m_pEnemyFluidVFXManager->Update(deltaTime);
 
     // Update Fluid Skill Effect (제어점을 플레이어 위치에 맞게 갱신)
     if (m_pFluidSkillEffect && m_pPlayerGameObject)
@@ -1432,6 +1439,8 @@ void Scene::Render(ID3D12GraphicsCommandList* pCommandList, D3D12_GPU_DESCRIPTOR
         // GPU SPH dispatch (BeginDepthPass 전에)
         if (m_pFluidVFXManager)
             m_pFluidVFXManager->DispatchSPH(pCommandList, m_fLastDeltaTime);
+        if (m_pEnemyFluidVFXManager)
+            m_pEnemyFluidVFXManager->DispatchSPH(pCommandList, m_fLastDeltaTime);
         if (m_pFluidParticleSystem && m_pFluidParticleSystem->IsActive())
             m_pFluidParticleSystem->DispatchSPH(pCommandList, m_fLastDeltaTime);
 
@@ -1458,7 +1467,7 @@ void Scene::Render(ID3D12GraphicsCommandList* pCommandList, D3D12_GPU_DESCRIPTOR
             return { outer, inner };
         };
 
-        // ── 패스 A: blur 없는 이펙트 (파이어 트레일, E빔, R메테오, 적 투사체 등) ──
+        // ── 패스 A: blur 없는 플레이어 이펙트 (파이어 트레일, E빔, R메테오 등) ──
         bool bHasNonBlur = (m_pFluidParticleSystem && m_pFluidParticleSystem->IsActive())
                          || (m_pFluidVFXManager && m_pFluidVFXManager->HasActiveSlots(false));
         if (bHasNonBlur)
@@ -1523,9 +1532,9 @@ void Scene::Render(ID3D12GraphicsCommandList* pCommandList, D3D12_GPU_DESCRIPTOR
             pCommandList->OMSetRenderTargets(1, &mainRTV, FALSE, &mainDSV);
         }
 
-        // ── 적 투사체 빌보드 렌더 (SSF 완료 후, 색상 오염 없이 별도 렌더) ──
-        if (m_pFluidVFXManager)
-            m_pFluidVFXManager->RenderEnemyEffects(pCommandList, viewProjT, camRight, camUp);
+        // ── 적 투사체 빌보드 렌더 (SSF 완료 후, 전용 매니저로 완전 분리) ──
+        if (m_pEnemyFluidVFXManager)
+            m_pEnemyFluidVFXManager->RenderEnemyEffects(pCommandList, viewProjT, camRight, camUp);
     }
     else
     {
@@ -1543,7 +1552,6 @@ void Scene::Render(ID3D12GraphicsCommandList* pCommandList, D3D12_GPU_DESCRIPTOR
             m_pFluidParticleSystem->Render(pCommandList, viewProj, camRight, camUp);
         }
 
-        if (m_pFluidVFXManager)
         {
             XMMATRIX mView2 = XMLoadFloat4x4(&m_pCamera->GetViewMatrix());
             XMFLOAT3 camRight2 = { XMVectorGetX(mView2.r[0]), XMVectorGetX(mView2.r[1]), XMVectorGetX(mView2.r[2]) };
@@ -1553,7 +1561,10 @@ void Scene::Render(ID3D12GraphicsCommandList* pCommandList, D3D12_GPU_DESCRIPTOR
             XMFLOAT4X4 viewProj2;
             XMStoreFloat4x4(&viewProj2, XMMatrixTranspose(mViewProj2));
 
-            m_pFluidVFXManager->Render(pCommandList, viewProj2, camRight2, camUp2);
+            if (m_pFluidVFXManager)
+                m_pFluidVFXManager->Render(pCommandList, viewProj2, camRight2, camUp2);
+            if (m_pEnemyFluidVFXManager)
+                m_pEnemyFluidVFXManager->Render(pCommandList, viewProj2, camRight2, camUp2);
         }
     }
 

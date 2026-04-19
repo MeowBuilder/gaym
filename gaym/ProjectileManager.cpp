@@ -36,7 +36,8 @@ void ProjectileManager::Init(Scene* pScene, ID3D12Device* pDevice, ID3D12Graphic
 
     // Get particle system from scene
     m_pParticleSystem = pScene->GetParticleSystem();
-    m_pFluidVFXManager = pScene->GetFluidVFXManager();
+    m_pFluidVFXManager      = pScene->GetFluidVFXManager();
+    m_pEnemyFluidVFXManager = pScene->GetEnemyFluidVFXManager();
 
     // Create projectile mesh (small cube)
     m_pProjectileMesh = std::make_unique<CubeMesh>(pDevice, pCommandList, 0.5f, 0.5f, 0.5f);
@@ -79,20 +80,19 @@ void ProjectileManager::SpawnProjectile(const Projectile& projectile)
     m_Projectiles.push_back(projectile);
 
     // Create fluid VFX trail for this projectile
-    if (m_pFluidVFXManager)
     {
         auto& proj = m_Projectiles.back();
 
-        if (proj.isPlayerProjectile)
+        if (proj.isPlayerProjectile && m_pFluidVFXManager)
         {
-            // 플레이어 투사체: VFXLibrary 경로 (일관된 룬 조합 처리)
+            // 플레이어 투사체: 플레이어 전용 매니저 → SSF 파이프라인
             uint32_t runeFlags = ToRuneFlags(proj.runeCombo);
             VFXSequenceDef seqDef = VFXLibrary::Get().GetDef(
                 SkillSlot::RightClick, runeFlags, proj.element);
             proj.fluidVFXId = m_pFluidVFXManager->SpawnSequenceEffect(
                 proj.position, proj.direction, seqDef);
         }
-        else
+        else if (!proj.isPlayerProjectile && m_pEnemyFluidVFXManager)
         {
             // 적 투사체: 레거시 경로 유지, 파티클 수 축소
             FluidSkillVFXDef vfxDef = FluidSkillVFXManager::GetVFXDef(
@@ -142,7 +142,7 @@ void ProjectileManager::SpawnProjectile(const Projectile& projectile)
                 vfxDef.restDensity = 11.0f;
             }
 
-            proj.fluidVFXId = m_pFluidVFXManager->SpawnEffect(
+            proj.fluidVFXId = m_pEnemyFluidVFXManager->SpawnEffect(
                 proj.position, proj.direction, vfxDef);
         }
     }
@@ -208,9 +208,14 @@ void ProjectileManager::Update(float deltaTime)
         // Update position
         projectile.Update(deltaTime);
 
+        // 투사체 소유 매니저 선택 (플레이어↔적 완전 분리)
+        FluidSkillVFXManager* pVFX = projectile.isPlayerProjectile
+                                   ? m_pFluidVFXManager
+                                   : m_pEnemyFluidVFXManager;
+
         // Update fluid VFX position
-        if (m_pFluidVFXManager && projectile.fluidVFXId >= 0)
-            m_pFluidVFXManager->TrackEffect(projectile.fluidVFXId, projectile.position, projectile.direction);
+        if (pVFX && projectile.fluidVFXId >= 0)
+            pVFX->TrackEffect(projectile.fluidVFXId, projectile.position, projectile.direction);
 
         // Check collisions
         if (projectile.isActive)
@@ -221,20 +226,17 @@ void ProjectileManager::Update(float deltaTime)
         // If projectile became inactive (hit something or expired), handle fluid VFX and spawn explosion
         if (!projectile.isActive)
         {
-            if (m_pFluidVFXManager && projectile.fluidVFXId >= 0)
+            if (pVFX && projectile.fluidVFXId >= 0)
             {
                 if (projectile.wasHit)
                 {
                     if (projectile.isPlayerProjectile)
-                        // 플레이어 투사체(R/우클릭): CP 제거 + 방사형 폭발
-                        m_pFluidVFXManager->ExplodeEffect(projectile.fluidVFXId, projectile.position);
+                        pVFX->ExplodeEffect(projectile.fluidVFXId, projectile.position);
                     else
-                        // 적 투사체: 기존 수렴 소멸
-                        m_pFluidVFXManager->ImpactEffect(projectile.fluidVFXId, projectile.position);
+                        pVFX->ImpactEffect(projectile.fluidVFXId, projectile.position);
                 }
                 else
-                    // 사거리 초과: 즉시 소멸
-                    m_pFluidVFXManager->StopEffect(projectile.fluidVFXId);
+                    pVFX->StopEffect(projectile.fluidVFXId);
             }
             // Spawn explosion particles
             SpawnExplosionParticles(projectile.position, projectile.element);

@@ -1113,7 +1113,7 @@ void MegaBreathAttackBehavior::SpawnFireWave(EnemyComponent* pEnemy)
     Scene* pScene = m_pRoom->GetScene();
     if (!pScene) return;
 
-    m_pFluidVFXManager = pScene->GetFluidVFXManager();
+    m_pFluidVFXManager = pScene->GetEnemyFluidVFXManager();
     if (!m_pFluidVFXManager) return;
 
     // 방 바운드 + 벽 방향 기반 파도 경로 계산
@@ -1203,7 +1203,7 @@ void MegaBreathAttackBehavior::SpawnFireWave(EnemyComponent* pEnemy)
         beamDef.phases[0].beamDesc.spreadRadius   = m_fBeamEndRadius * kSpreadMults[i];
 
         m_nFluidVFXIds[i] = m_pFluidVFXManager->SpawnSequenceEffect(
-            m_xmf3BeamOrigin, dir, beamDef);
+            m_xmf3BeamOrigin, dir, beamDef, false); // 적 스킬 — SSF 분리
     }
 
     OutputDebugString(L"[MegaBreath] SPH Fire Beams spawned (5-fan, tight spacing)\n");
@@ -1226,7 +1226,7 @@ void MegaBreathAttackBehavior::SpawnChargeVFX(EnemyComponent* pEnemy)
     if (!pScene) return;
 
     if (!m_pFluidVFXManager)
-        m_pFluidVFXManager = pScene->GetFluidVFXManager();
+        m_pFluidVFXManager = pScene->GetEnemyFluidVFXManager();
     if (!m_pFluidVFXManager) return;
 
     GameObject* pOwner = pEnemy->GetOwner();
@@ -1278,7 +1278,7 @@ void MegaBreathAttackBehavior::SpawnChargeVFX(EnemyComponent* pEnemy)
     p.offsetParticlesWithOrigin = true;
     def.phases.push_back(p);
 
-    m_nChargeVFXId = m_pFluidVFXManager->SpawnSequenceEffect(mouth, forward, def);
+    m_nChargeVFXId = m_pFluidVFXManager->SpawnSequenceEffect(mouth, forward, def, false); // 적 스킬 — SSF 분리
     OutputDebugString(L"[MegaBreath] Charge VFX spawned at mouth\n");
 }
 

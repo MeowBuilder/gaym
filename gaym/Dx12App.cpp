@@ -29,6 +29,69 @@ static std::wstring Utf8ToWide(const std::string& s)
     return w;
 }
 
+// ─── 룬 UI 헬퍼 ──────────────────────────────────────────────────────────────
+static const wchar_t* GetRuneGradeLabel(RuneGrade grade)
+{
+    switch (grade) {
+    case RuneGrade::Normal:    return L"[노멀]";
+    case RuneGrade::Rare:      return L"[레어]";
+    case RuneGrade::Epic:      return L"[에픽]";
+    case RuneGrade::Unique:    return L"[유니크]";
+    case RuneGrade::Legendary: return L"[레전더리]";
+    default:                   return L"";
+    }
+}
+
+static XMVECTORF32 GetRuneGradeUIColor(RuneGrade grade)
+{
+    switch (grade) {
+    case RuneGrade::Normal:    return DirectX::Colors::White;
+    case RuneGrade::Rare:      return DirectX::Colors::CornflowerBlue;
+    case RuneGrade::Epic:      return DirectX::Colors::MediumPurple;
+    case RuneGrade::Unique:    return DirectX::Colors::Orange;
+    case RuneGrade::Legendary: return DirectX::Colors::Gold;
+    default:                   return DirectX::Colors::White;
+    }
+}
+
+static std::wstring BuildRuneDesc(const RuneDef& def)
+{
+    std::wstringstream ss;
+    auto pct = [](float m) { return (int)((m - 1.f) * 100.f + 0.5f); };
+
+    if (def.damageMult    != 1.f) ss << L"데미지 " << (pct(def.damageMult) >= 0 ? L"+" : L"") << pct(def.damageMult) << L"%  ";
+    if (def.radiusMult    != 1.f) ss << L"범위 "   << (pct(def.radiusMult) >= 0 ? L"+" : L"") << pct(def.radiusMult) << L"%  ";
+    if (def.cooldownMult  != 1.f) ss << L"쿨다운 " << (pct(def.cooldownMult) >= 0 ? L"+" : L"") << pct(def.cooldownMult) << L"%  ";
+    if (def.castTimeMult  != 1.f) ss << L"시전 "   << (pct(def.castTimeMult) >= 0 ? L"+" : L"") << pct(def.castTimeMult) << L"%  ";
+    if (def.durationMult  != 1.f) ss << L"지속 "   << (pct(def.durationMult) >= 0 ? L"+" : L"") << pct(def.durationMult) << L"%  ";
+    if (def.knockbackMult != 1.f) ss << L"넉백 "   << (pct(def.knockbackMult) >= 0 ? L"+" : L"") << pct(def.knockbackMult) << L"%  ";
+    if (def.statusDurationMult != 1.f) ss << L"상태이상지속 " << (pct(def.statusDurationMult) >= 0 ? L"+" : L"") << pct(def.statusDurationMult) << L"%  ";
+    if (def.statusChanceMult   != 1.f) ss << L"상태이상확률 " << (pct(def.statusChanceMult) >= 0 ? L"+" : L"") << pct(def.statusChanceMult) << L"%  ";
+    if (def.extraProjectiles > 0) ss << L"투사체 +" << def.extraProjectiles << L"  ";
+    if (def.orbitalCount     > 0) ss << L"궤도탄 " << def.orbitalCount << L"  ";
+    if (def.spawnOnHitCount  > 0) ss << L"반향 +"  << def.spawnOnHitCount << L"  ";
+    if (def.lifestealRatio   > 0.f) ss << L"흡수 " << (int)(def.lifestealRatio * 100.f + 0.5f) << L"%  ";
+    if (def.execDamageBonus  > 0.f) ss << L"처형 +" << (int)(def.execDamageBonus * 100.f + 0.5f) << L"%  ";
+    if (def.cdResetChance    > 0.f) ss << L"무한 " << (int)(def.cdResetChance * 100.f + 0.5f) << L"%  ";
+    if (def.piercing)    ss << L"관통  ";
+    if (def.homing)      ss << L"유도  ";
+    if (def.doublecast)  ss << L"쌍발  ";
+    if (def.echoOnCast)  ss << L"잔상  ";
+    if (def.activationOverride.has_value()) {
+        switch (def.activationOverride.value()) {
+        case ActivationType::Charge:  ss << L"차지형  ";  break;
+        case ActivationType::Channel: ss << L"채널형  ";  break;
+        case ActivationType::Place:   ss << L"설치형  ";  break;
+        case ActivationType::Enhance: ss << L"버프형  ";  break;
+        case ActivationType::Split:   ss << L"분열형  ";  break;
+        default: break;
+        }
+    }
+    std::wstring r = ss.str();
+    if (r.empty()) r = L"효과 없음";
+    return r;
+}
+
 Dx12App* Dx12App::s_pInstance = nullptr;
 
 Dx12App::Dx12App()
@@ -883,7 +946,8 @@ void Dx12App::RenderText()
 
                         // Rune options (clickable)
                         XMFLOAT2 mousePos = m_inputSystem.GetMousePosition();
-                        float optionLineHeight = 55.0f;
+                        float optionLineHeight = 65.0f;
+                        float optionStartX = screenCenterX - 300.0f;
                         for (int i = 0; i < 3; ++i)
                         {
                             EquippedRune er = pDropComp->GetRuneOption(i);
@@ -892,22 +956,35 @@ void Dx12App::RenderText()
                                 ? Utf8ToWide(def->name)
                                 : Utf8ToWide(er.runeId);
 
-                            std::wstringstream optionText;
-                            optionText << L"> " << wname;
-
                             float optionY = screenCenterY + i * optionLineHeight;
-                            XMVECTOR optionSize = m_spriteFont->MeasureString(optionText.str().c_str());
-                            float optionWidth = XMVectorGetX(optionSize);
 
-                            // Check if mouse is hovering
-                            bool isHovered = (mousePos.x >= screenCenterX - optionWidth / 2.0f &&
-                                              mousePos.x <= screenCenterX + optionWidth / 2.0f &&
+                            // Hover detection (fixed-width region)
+                            bool isHovered = (mousePos.x >= optionStartX &&
+                                              mousePos.x <= optionStartX + 600.0f &&
                                               mousePos.y >= optionY - 4.0f &&
-                                              mousePos.y <= optionY + 32.0f);
+                                              mousePos.y <= optionY + 44.0f);
 
-                            m_spriteFont->DrawString(m_spriteBatch.get(), optionText.str().c_str(),
-                                XMFLOAT2(screenCenterX - optionWidth / 2.0f, optionY),
+                            // Draw "> 룬이름"
+                            std::wstring nameText = L"> " + wname;
+                            m_spriteFont->DrawString(m_spriteBatch.get(), nameText.c_str(),
+                                XMFLOAT2(optionStartX, optionY),
                                 isHovered ? DirectX::Colors::Yellow : DirectX::Colors::White);
+
+                            if (def)
+                            {
+                                // Grade label in grade color, right after name
+                                XMVECTOR nameSize = m_spriteFont->MeasureString(nameText.c_str());
+                                const wchar_t* gradeLabel = GetRuneGradeLabel(def->grade);
+                                m_spriteFont->DrawString(m_spriteBatch.get(), gradeLabel,
+                                    XMFLOAT2(optionStartX + XMVectorGetX(nameSize) + 10.0f, optionY),
+                                    GetRuneGradeUIColor(def->grade));
+
+                                // Description on second line
+                                std::wstring desc = BuildRuneDesc(*def);
+                                m_spriteFont->DrawString(m_spriteBatch.get(), desc.c_str(),
+                                    XMFLOAT2(optionStartX + 20.0f, optionY + 22.0f),
+                                    DirectX::Colors::Gray);
+                            }
                         }
 
                         // Cancel hint
@@ -938,9 +1015,18 @@ void Dx12App::RenderText()
             std::wstringstream selectedText;
             selectedText << L"Selected Rune: " << wselName;
             XMVECTOR selectedSize = m_spriteFont->MeasureString(selectedText.str().c_str());
+            float selTextX = screenCenterX - XMVectorGetX(selectedSize) / 2.0f;
             m_spriteFont->DrawString(m_spriteBatch.get(), selectedText.str().c_str(),
-                XMFLOAT2(screenCenterX - XMVectorGetX(selectedSize) / 2.0f, screenCenterY - 60.0f),
+                XMFLOAT2(selTextX, screenCenterY - 60.0f),
                 DirectX::Colors::Cyan);
+            // Grade label of selected rune
+            if (selDef)
+            {
+                const wchar_t* selGrade = GetRuneGradeLabel(selDef->grade);
+                m_spriteFont->DrawString(m_spriteBatch.get(), selGrade,
+                    XMFLOAT2(selTextX + XMVectorGetX(selectedSize) + 8.0f, screenCenterY - 60.0f),
+                    GetRuneGradeUIColor(selDef->grade));
+            }
 
             // Show skill slots with rune slots (click on empty slot to assign)
             const wchar_t* slotNames[] = { L"Q", L"E", L"R", L"RMB" };
@@ -979,9 +1065,13 @@ void Dx12App::RenderText()
                     bool isHovered = (mousePos.x >= runeX && mousePos.x <= runeX + runeWidth &&
                                       mousePos.y >= slotY && mousePos.y <= slotY + runeHeight);
 
-                    XMVECTORF32 color = er.IsEmpty()
-                        ? (isHovered ? DirectX::Colors::Yellow : DirectX::Colors::DarkGray)
-                        : DirectX::Colors::Cyan;
+                    XMVECTORF32 color;
+                    if (er.IsEmpty())
+                        color = isHovered ? DirectX::Colors::Yellow : DirectX::Colors::DarkGray;
+                    else if (rDef)
+                        color = GetRuneGradeUIColor(rDef->grade);
+                    else
+                        color = DirectX::Colors::Cyan;
 
                     m_spriteFont->DrawString(m_spriteBatch.get(), wRuneName.c_str(), XMFLOAT2(runeX, slotY), color);
                 }

@@ -4,6 +4,8 @@
 #include "SkillTypes.h"
 #include "RuneDef.h"
 #include <array>
+#include <DirectXMath.h>
+using namespace DirectX;
 
 class DropItemComponent : public Component
 {
@@ -23,6 +25,10 @@ public:
     // Check if drop is active (can be picked up)
     bool IsActive() const { return m_bIsActive; }
     void SetActive(bool active) { m_bIsActive = active; }
+
+    // Grade/color helpers
+    RuneGrade GetHighestGrade() const;
+    static XMFLOAT4 GetGradeColor(RuneGrade grade);
 
     // Animation helpers
     float GetBobOffset() const { return m_fBobOffset; }

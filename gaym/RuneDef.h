@@ -60,6 +60,8 @@ struct SkillStats
     bool  doublecast       = false; // 쌍둥이별 (L01)
     bool  echoOnCast       = false; // 잔상 (L09)
     float cdResetChance    = 0.f;  // 무한 (L10): % chance to reset cooldown
+    int   orbitalCount     = 0;    // 선회/성좌: 궤도 파티클 다단히트 수
+    int   spawnOnHitCount  = 0;    // 반향/폭발반향: 적중 시 생성할 추가 투사체 수
 
     // Hooks accumulated from all equipped runes
     std::vector<std::function<void(SkillContext&)>> onCastHooks;
@@ -137,6 +139,8 @@ struct RuneDef
     bool  doublecast       = false;
     bool  echoOnCast       = false;
     float cdResetChance    = 0.f;
+    int   orbitalCount     = 0;    // 선회/성좌: 궤도 파티클 다단히트 수
+    int   spawnOnHitCount  = 0;    // 반향/폭발반향: 적중 시 추가 투사체 수
 
     // Complex behavior hooks (nullptr for simple runes)
     std::function<void(SkillContext&)> onCast;

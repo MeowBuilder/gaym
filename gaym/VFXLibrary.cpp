@@ -136,14 +136,14 @@ void VFXLibrary::Initialize() {
         p1.triggerExplodeFadeOnEnter   = false;
         def.phases.push_back(p1);
 
-        // Phase 2: 바닥 화염 확산 — 퍼진 파티클들이 낮게 깔리며 서서히 소멸
+        // Phase 2: 바닥 화염 확산 — 퍼진 파티클들이 낮게 깔리며 서서히 소멸 (버스트 없음)
         VFXPhase p2;
         p2.startTime  = 3.7f;
         p2.duration   = 1.8f;
         p2.motionMode = ParticleMotionMode::Gravity;
         p2.gravityDesc.gravity         = { 0.f, -38.f, 0.f };
-        p2.gravityDesc.initialSpeedMin = 4.f;
-        p2.gravityDesc.initialSpeedMax = 14.f;
+        p2.gravityDesc.initialSpeedMin = 0.f;
+        p2.gravityDesc.initialSpeedMax = 0.f;
         p2.phaseMaxSpeed               = 80.f;
         p2.triggerExplodeFadeOnEnter   = true;
         def.phases.push_back(p2);

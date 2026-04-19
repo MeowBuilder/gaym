@@ -32,7 +32,9 @@ int FluidSkillVFXManager::SpawnEffect(const XMFLOAT3& origin, const XMFLOAT3& di
             slot.direction      = direction;
             slot.def            = def;
             slot.useSequence    = false; // 기존 모드
-            slot.isPlayerEffect = false; // 적 투사체 — SSF 파이프라인 제외
+            slot.isPlayerEffect    = false; // 적 투사체 — SSF 파이프라인 제외
+            slot.useBlur           = false; // 적 투사체는 블러 없음 (이전 슬롯 잔류값 초기화)
+            slot.spawnGeneration   = ++m_nextSpawnGeneration;
 
             FluidParticleConfig cfg;
             cfg.element           = def.element;
@@ -63,7 +65,7 @@ int FluidSkillVFXManager::SpawnEffect(const XMFLOAT3& origin, const XMFLOAT3& di
 }
 
 int FluidSkillVFXManager::SpawnSequenceEffect(const XMFLOAT3& origin, const XMFLOAT3& direction,
-                                               const VFXSequenceDef& seqDef)
+                                               const VFXSequenceDef& seqDef, bool isPlayerEffect)
 {
     for (int i = 0; i < MAX_EFFECTS; ++i)
     {
@@ -78,9 +80,10 @@ int FluidSkillVFXManager::SpawnSequenceEffect(const XMFLOAT3& origin, const XMFL
             slot.direction        = direction;
             slot.useSequence      = true;
             slot.sequenceDef      = seqDef;
-            slot.useBlur          = seqDef.useSSFBlur;  // SSF 블러 플래그 전달
-            slot.isPlayerEffect   = true;               // 플레이어 스킬 — SSF 파이프라인 포함
-            slot.currentPhaseIndex = -1; // 아직 페이즈 시작 전 (UpdatePhase에서 0으로 전환)
+            slot.isPlayerEffect    = isPlayerEffect;
+            slot.useBlur           = isPlayerEffect ? seqDef.useSSFBlur : false;
+            slot.currentPhaseIndex = -1;
+            slot.spawnGeneration   = ++m_nextSpawnGeneration;
 
             // 메테오용 마스터 CP 초기 위치: origin 그대로 사용
             // (MeteorBehavior에서 이미 상공 위치를 origin으로 전달)
@@ -688,18 +691,20 @@ void FluidSkillVFXManager::UpdatePhase(FluidVFXSlot& slot, float dt)
                 slot.pSystem->SetMaxParticleSpeed(phase.phaseMaxSpeed);
 
             slot.pSystem->SetGravityDesc(phase.gravityDesc);
-            XMFLOAT3 burstOrigin;
-            if (slot.masterCPFallSpeed > 0.f) {
-                // 낙하 메테오: 폭발 중심을 타겟 지면 바로 아래(-1m)로 고정
-                // origin.y = targetPos.y + METEOR_SPAWN_HEIGHT(50), groundY = origin.y - 50
-                float groundY = slot.origin.y - 50.0f;
-                burstOrigin = { slot.masterCPPos.x, groundY - 1.0f, slot.masterCPPos.z };
-            } else {
-                burstOrigin = slot.origin;
+            if (phase.gravityDesc.initialSpeedMax > 0.f) {
+                XMFLOAT3 burstOrigin;
+                if (slot.masterCPFallSpeed > 0.f) {
+                    // 낙하 메테오: 폭발 중심을 타겟 지면 바로 아래(-1m)로 고정
+                    // origin.y = targetPos.y + METEOR_SPAWN_HEIGHT(50), groundY = origin.y - 50
+                    float groundY = slot.origin.y - 50.0f;
+                    burstOrigin = { slot.masterCPPos.x, groundY - 1.0f, slot.masterCPPos.z };
+                } else {
+                    burstOrigin = slot.origin;
+                }
+                slot.pSystem->ApplyRadialBurst(burstOrigin,
+                    phase.gravityDesc.initialSpeedMin,
+                    phase.gravityDesc.initialSpeedMax);
             }
-            slot.pSystem->ApplyRadialBurst(burstOrigin,
-                phase.gravityDesc.initialSpeedMin,
-                phase.gravityDesc.initialSpeedMax);
 
             // 폭발 페이드 트리거: 파티클이 즉시 작아지며 사라짐
             // SSF 모드 유지 — RenderDepth에서 smoothingRadius*fadeMult로 SSF 구체 자체를 축소
@@ -1225,40 +1230,50 @@ static FluidElementColor GetSlotColors(const FluidVFXSlot& slot)
     return FluidElementColors::Get(elem);
 }
 
-XMFLOAT4 FluidSkillVFXManager::GetDominantFluidColor() const
+// 가장 최근에 스폰된 non-fading 슬롯 우선, 없으면 fading 중 최신 슬롯 반환
+static const FluidVFXSlot* PickDominantSlot(
+    const std::array<FluidVFXSlot, FluidSkillVFXManager::MAX_EFFECTS>& slots,
+    bool playerOnly, bool useBlurFilter, bool blurOnly)
 {
-    for (const auto& slot : m_Slots)
+    const FluidVFXSlot* best = nullptr;
+    bool bestIsAlive = false; // true = non-fading
+
+    for (const auto& slot : slots)
     {
         if (!slot.isActive) continue;
-        return GetSlotColors(slot).coreColor;
+        if (playerOnly && !slot.isPlayerEffect) continue;
+        if (useBlurFilter && slot.useBlur != blurOnly) continue;
+
+        bool alive = !slot.isFadingOut && !slot.isExplodeMode;
+
+        // 우선순위: alive > fading, 같은 우선순위면 더 최근(spawnGeneration 큰 것)
+        if (!best
+            || (alive && !bestIsAlive)
+            || (alive == bestIsAlive && slot.spawnGeneration > best->spawnGeneration))
+        {
+            best = &slot;
+            bestIsAlive = alive;
+        }
     }
-    return { 0.15f, 0.55f, 1.0f, 0.85f };
+    return best;
+}
+
+XMFLOAT4 FluidSkillVFXManager::GetDominantFluidColor() const
+{
+    const auto* s = PickDominantSlot(m_Slots, true, false, false);
+    return s ? GetSlotColors(*s).coreColor : XMFLOAT4{ 0.15f, 0.55f, 1.0f, 0.85f };
 }
 
 FluidElementColor FluidSkillVFXManager::GetDominantFluidColors() const
 {
-    // 시퀀스 모드(플레이어 스킬) 슬롯 우선 — 적 투사체(SpawnEffect)가 색상 덮지 않도록
-    for (const auto& slot : m_Slots)
-    {
-        if (!slot.isActive || !slot.useSequence) continue;
-        return GetSlotColors(slot);
-    }
-    for (const auto& slot : m_Slots)
-    {
-        if (!slot.isActive) continue;
-        return GetSlotColors(slot);
-    }
-    return FluidElementColors::Get(ElementType::None);
+    const auto* s = PickDominantSlot(m_Slots, true, false, false);
+    return s ? GetSlotColors(*s) : FluidElementColors::Get(ElementType::None);
 }
 
 FluidElementColor FluidSkillVFXManager::GetDominantFluidColors(bool blurOnly) const
 {
-    for (const auto& slot : m_Slots)
-    {
-        if (!slot.isActive || !slot.isPlayerEffect || slot.useBlur != blurOnly) continue;
-        return GetSlotColors(slot);
-    }
-    return FluidElementColors::Get(ElementType::None);
+    const auto* s = PickDominantSlot(m_Slots, true, true, blurOnly);
+    return s ? GetSlotColors(*s) : FluidElementColors::Get(ElementType::None);
 }
 
 void FluidSkillVFXManager::StopWave(int id)

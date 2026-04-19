@@ -96,7 +96,8 @@ private:
     std::vector<Projectile> m_Projectiles;
     Scene* m_pScene = nullptr;
     ParticleSystem* m_pParticleSystem = nullptr;
-    FluidSkillVFXManager* m_pFluidVFXManager = nullptr;
+    FluidSkillVFXManager* m_pFluidVFXManager = nullptr;       // 플레이어 전용
+    FluidSkillVFXManager* m_pEnemyFluidVFXManager = nullptr;  // 적 전용
 
     // Rendering resources
     std::unique_ptr<Mesh> m_pProjectileMesh;

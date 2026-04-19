@@ -120,6 +120,7 @@ public:
     ParticleSystem* GetParticleSystem() { return m_pParticleSystem.get(); }
     FluidParticleSystem* GetFluidParticleSystem() { return m_pFluidParticleSystem.get(); }
     FluidSkillVFXManager* GetFluidVFXManager() { return m_pFluidVFXManager.get(); }
+    FluidSkillVFXManager* GetEnemyFluidVFXManager() { return m_pEnemyFluidVFXManager.get(); }
     TorchSystem* GetTorchSystem() { return m_pTorchSystem.get(); }
     GameObject* GetPlayer() const { return m_pPlayerGameObject; }
     std::vector<GameObject*> GetAllPlayers() const;  // 로컬 + 원격 플레이어 목록 반환
@@ -325,8 +326,10 @@ private:
     // Fluid Skill Effect (connects SkillComponent to FluidParticleSystem)
     std::unique_ptr<FluidSkillEffect> m_pFluidSkillEffect;
 
-    // Fluid Skill VFX Manager (투사체 유체 이펙트, 최대 8개 동시)
+    // Fluid Skill VFX Manager — 플레이어 전용 (SSF 파이프라인)
     std::unique_ptr<FluidSkillVFXManager> m_pFluidVFXManager;
+    // 적 전용 VFX Manager — SSF와 완전 분리, 빌보드 렌더만
+    std::unique_ptr<FluidSkillVFXManager> m_pEnemyFluidVFXManager;
 
     // Screen-Space Fluid Renderer
     std::unique_ptr<ScreenSpaceFluid> m_pSSF;
