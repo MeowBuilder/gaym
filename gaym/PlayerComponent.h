@@ -24,7 +24,14 @@ public:
     float GetHPRatio() const { return m_fCurrentHP / m_fMaxHP; }
     float GetCurrentHP() const { return m_fCurrentHP; }
     float GetMaxHP() const { return m_fMaxHP; }
-    bool IsDead() const { return m_fCurrentHP <= 0.0f; }
+    bool IsDead() const { return m_fCurrentHP <= 0.0f || m_bNetworkDead; }
+
+    // 네트워크 권위 HP 세팅 — 서버에서 S_PLAYER_DAMAGE 받아 호출. 로컬 TakeDamage 우회.
+    void SetCurrentHP(float fHP);
+    // 서버 데미지 알림 — HP 갱신은 SetCurrentHP 로 별도. 이건 피격 연출만 트리거.
+    void TriggerHitFlash();
+    // 서버 사망 알림 — 데스 애니 + 입력 차단
+    void OnServerDeath();
 
     // Reset velocity when teleported — 중력이 플레이어를 바닥까지 끌어내리도록 onGround=false
     // (텔레포트 Y가 바닥보다 높으면 gravity가 자연스럽게 스냅; Y=0이면 즉시 ground 판정)
@@ -53,6 +60,13 @@ private:
     XMFLOAT3 m_xmf3SafeExtents = {};
     float m_fFallZoneWaterY = -1e9f;  // 현재 수면 Y (Scene이 매 프레임 갱신)
     static constexpr float FALL_DEATH_Y = -10.0f;  // 맵 바닥(-4) 훨씬 아래로 떨어지면 즉사
+
+    // Hit flash (서버 피격 이벤트 시 시각 피드백) — EnemyComponent 패턴 참고
+    float m_fHitFlashTimer = 0.0f;
+    static constexpr float kHitFlashDuration = 0.15f;
+
+    // 서버가 전달한 사망 상태 (로컬 HP 가 아직 남아있어도 서버 권위 따름)
+    bool m_bNetworkDead = false;
 
     // Animation state machine
     PlayerAnimState m_eAnimState = PlayerAnimState::Idle;

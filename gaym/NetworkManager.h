@@ -7,6 +7,7 @@
 #include "Protocol/ServerPacketHandler.h"
 
 #include <unordered_map>
+#include <unordered_set>
 #include <mutex>
 #include <DirectXMath.h>
 
@@ -36,7 +37,9 @@ enum class NetworkCommand
     RoomTransition,
     MonsterSpawn,
     MonsterMove,
-    MonsterDespawn
+    MonsterDespawn,
+    MonsterAttack,
+    PlayerDamage
 };
 
 // 네트워크 명령 구조체
@@ -61,6 +64,15 @@ struct NetworkCommandData
     float monsterYaw;
     float monsterHp;
     bool monsterIsBoss;
+
+    // Combat fields
+    uint32 attackType;
+    float windupSec;
+    uint64 targetPlayerId;
+    float damage;
+    float currentHp;
+    bool  isDead;
+    uint64 attackerMonsterId;
 };
 
 // =============================================================================
@@ -143,6 +155,11 @@ public:
     void QueueMonsterMove(uint64 monsterId, float x, float y, float z, float yaw);
     void QueueMonsterDespawn(uint64 monsterId);
 
+    // 전투 큐잉 (S_MONSTER_ATTACK / S_PLAYER_DAMAGE)
+    void QueueMonsterAttack(uint64 monsterId, uint64 targetPlayerId, uint32 attackType,
+                            float x, float y, float z, float yaw, float windupSec);
+    void QueuePlayerDamage(uint64 playerId, float damage, float currentHp, bool isDead, uint64 attackerMonsterId);
+
     // 서버 몬스터 조회
     GameObject* GetServerMonster(uint64 monsterId);
     bool HasServerMonsters() const { return !m_mapServerMonsters.empty(); }
@@ -190,12 +207,20 @@ private:
     void ProcessMonsterMove(uint64 monsterId, float x, float y, float z, float yaw);
     void ProcessMonsterDespawn(Scene* pScene, uint64 monsterId);
 
+    // 전투 처리 (메인 스레드)
+    void ProcessMonsterAttack(Scene* pScene, uint64 monsterId, uint32 attackType, float windupSec);
+    void ProcessPlayerDamage(Scene* pScene, uint64 playerId, float damage, float currentHp, bool isDead, uint64 attackerMonsterId);
+
     // 서버 몬스터 관리 (메인 스레드에서만 접근)
     std::unordered_map<uint64, GameObject*> m_mapServerMonsters;
 
-    // 몬스터별 preset 클립 이름 (Idle/Walk 각 모델별로 다름)
-    struct ServerMonsterClips { std::string idle; std::string walk; };
+    // 몬스터별 preset 클립 이름 (Idle/Walk/Attack/Death 각 모델별로 다름)
+    struct ServerMonsterClips { std::string idle; std::string walk; std::string attack; std::string death; };
     std::unordered_map<uint64, ServerMonsterClips> m_mapServerMonsterClips;
+
+    // 공격 애니 재생 중인 몬스터 — 이 시간 동안은 Move 와서도 Walk 로 덮어쓰지 않음
+    std::unordered_map<uint64, float> m_mapServerMonsterAttackTimer;
+    static constexpr float ATTACK_ANIM_LOCK = 0.6f;  // 공격 애니 지속 (대략)
 
     // 서버 MOVE 패킷 간격이 띄엄띄엄해서 직접 SetPosition하면 순간이동처럼 보임.
     // 타겟 pos/yaw 저장 → 매 프레임 exponential smoothing으로 접근.
@@ -216,6 +241,13 @@ private:
 
     // 원격 플레이어 마지막 이동 시간 (idle 전환용)
     std::unordered_map<uint64, float> m_mapRemotePlayerMoveTime;
+
+    // 사망한 원격 플레이어 ID — 데스 애니 유지용 (move/idle 전환 skip)
+    std::unordered_set<uint64> m_setDeadRemotePlayers;
+
+    // 원격 플레이어 hit flash 타이머 — 피격 시 glow 가 남지 않도록 페이드아웃
+    std::unordered_map<uint64, float> m_mapRemotePlayerHitFlashTimer;
+    static constexpr float REMOTE_HIT_FLASH_DURATION = 0.15f;
 
     // idle 전환까지 대기 시간 (초)
     static constexpr float IDLE_TRANSITION_TIME = 0.15f;

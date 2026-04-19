@@ -24,6 +24,38 @@ void PlayerComponent::PlayerUpdate(float deltaTime, InputSystem* pInputSystem, C
     TransformComponent* pTransform = m_pOwner->GetTransform();
     if (!pTransform) return;
 
+    // Hit flash 페이드 — 대쉬 중이 아닐 때만 (대쉬는 자기 플래시 적용)
+    if (m_fHitFlashTimer > 0.0f)
+    {
+        m_fHitFlashTimer = fmaxf(0.0f, m_fHitFlashTimer - deltaTime);
+        if (!IsDashing() && m_fDashFlashTail <= 0.0f)
+        {
+            float f = m_fHitFlashTimer / kHitFlashDuration;
+            m_pOwner->SetHitFlashAll(f);
+            if (m_fHitFlashTimer <= 0.0f)
+                m_pOwner->SetHitFlashAll(0.0f);
+        }
+    }
+
+    // 사망 상태: 중력/수면은 유지하되 입력·스킬·전송 모두 차단 (데스 애니만 재생 중)
+    if (m_bNetworkDead)
+    {
+        XMFLOAT3 deadPos = pTransform->GetPosition();
+        if (!m_bOnGround)
+        {
+            m_fVelocityY -= GRAVITY * deltaTime;
+            deadPos.y += m_fVelocityY * deltaTime;
+            if (deadPos.y <= GROUND_Y)
+            {
+                deadPos.y = GROUND_Y;
+                m_fVelocityY = 0.0f;
+                m_bOnGround = true;
+            }
+            pTransform->SetPosition(deadPos);
+        }
+        return;
+    }
+
     // Apply gravity
     XMFLOAT3 pos = pTransform->GetPosition();
 
@@ -332,6 +364,30 @@ void PlayerComponent::TakeDamage(float fDamage)
     {
         m_fCurrentHP = 0.0f;
     }
+}
+
+void PlayerComponent::SetCurrentHP(float fHP)
+{
+    m_fCurrentHP = (fHP < 0.0f) ? 0.0f : (fHP > m_fMaxHP ? m_fMaxHP : fHP);
+}
+
+void PlayerComponent::TriggerHitFlash()
+{
+    m_fHitFlashTimer = kHitFlashDuration;
+}
+
+void PlayerComponent::OnServerDeath()
+{
+    if (m_bNetworkDead) return;
+    m_bNetworkDead = true;
+    m_fCurrentHP = 0.0f;
+
+    // 데스 애니메이션 — 클립 이름은 MageBlue_Anim.bin 목록 기준("Death1"/"Death2" 존재)
+    if (AnimationComponent* pAnim = m_pOwner->GetComponent<AnimationComponent>())
+    {
+        pAnim->CrossFade("Death1", 0.15f, false, true);
+    }
+    OutputDebugString(L"[Player] OnServerDeath\n");
 }
 
 void PlayerComponent::Heal(float fAmount)

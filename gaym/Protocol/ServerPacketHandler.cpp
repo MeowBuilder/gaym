@@ -311,8 +311,12 @@ bool Handle_S_MONSTER_ATTACK(PacketSessionRef& session, Protocol::S_MONSTER_ATTA
         monsterId, targetPlayerId, attackType, x, y, z, yaw, windupSec);
     WriteNetworkLog(buf);
 
-    // 일단 1차는 로그만 확인
-    // 나중에 필요하면 QueueMonsterAttack(...) 추가해서 메인 스레드 연출 처리
+    // 메인 스레드에서 공격 애니 재생 (Process 경로)
+    NetworkManager* pNetMgr = NetworkManager::GetInstance();
+    if (pNetMgr)
+    {
+        pNetMgr->QueueMonsterAttack(monsterId, targetPlayerId, attackType, x, y, z, yaw, windupSec);
+    }
     return true;
 }
 
@@ -330,7 +334,11 @@ bool Handle_S_PLAYER_DAMAGE(PacketSessionRef& session, Protocol::S_PLAYER_DAMAGE
         playerId, damage, currentHp, isDead ? 1 : 0, attackerMonsterId);
     WriteNetworkLog(buf);
 
-    // 일단 1차는 로그만 확인
-    // 나중에 필요하면 QueuePlayerDamage(...) 추가해서 UI/피격 처리
+    // 메인 스레드에서 HP 반영 + 피격 연출 (Process 경로)
+    NetworkManager* pNetMgr = NetworkManager::GetInstance();
+    if (pNetMgr)
+    {
+        pNetMgr->QueuePlayerDamage(playerId, damage, currentHp, isDead, attackerMonsterId);
+    }
     return true;
 }

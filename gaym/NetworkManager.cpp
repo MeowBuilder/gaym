@@ -12,6 +12,9 @@
 #include "VFXLibrary.h"
 #include "SkillTypes.h"
 #include "ProjectileManager.h"
+#include "PlayerComponent.h"
+#include "Camera.h"
+#include "DamageNumberManager.h"
 
 // ServerPacketHandler.cpp에 정의된 파일 로그 함수 — network_log.txt에 append
 extern void WriteNetworkLog(const std::string& msg);
@@ -281,6 +284,14 @@ void NetworkManager::Update(Scene* pScene, ID3D12Device* pDevice, ID3D12Graphics
         case NetworkCommand::MonsterDespawn:
             ProcessMonsterDespawn(pScene, cmd.monsterId);
             break;
+
+        case NetworkCommand::MonsterAttack:
+            ProcessMonsterAttack(pScene, cmd.monsterId, cmd.attackType, cmd.windupSec);
+            break;
+
+        case NetworkCommand::PlayerDamage:
+            ProcessPlayerDamage(pScene, cmd.playerId, cmd.damage, cmd.currentHp, cmd.isDead, cmd.attackerMonsterId);
+            break;
         }
     }
 }
@@ -399,6 +410,35 @@ void NetworkManager::QueueMonsterDespawn(uint64 monsterId)
     NetworkCommandData cmd{};
     cmd.type = NetworkCommand::MonsterDespawn;
     cmd.monsterId = monsterId;
+    m_vCommandQueue.push_back(cmd);
+}
+
+void NetworkManager::QueueMonsterAttack(uint64 monsterId, uint64 targetPlayerId, uint32 attackType,
+                                        float x, float y, float z, float yaw, float windupSec)
+{
+    std::lock_guard<std::mutex> lock(m_queueMutex);
+    NetworkCommandData cmd{};
+    cmd.type = NetworkCommand::MonsterAttack;
+    cmd.monsterId = monsterId;
+    cmd.targetPlayerId = targetPlayerId;
+    cmd.attackType = attackType;
+    cmd.x = x; cmd.y = y; cmd.z = z;
+    cmd.monsterYaw = yaw;
+    cmd.windupSec = windupSec;
+    m_vCommandQueue.push_back(cmd);
+}
+
+void NetworkManager::QueuePlayerDamage(uint64 playerId, float damage, float currentHp,
+                                        bool isDead, uint64 attackerMonsterId)
+{
+    std::lock_guard<std::mutex> lock(m_queueMutex);
+    NetworkCommandData cmd{};
+    cmd.type = NetworkCommand::PlayerDamage;
+    cmd.playerId = playerId;
+    cmd.damage = damage;
+    cmd.currentHp = currentHp;
+    cmd.isDead = isDead;
+    cmd.attackerMonsterId = attackerMonsterId;
     m_vCommandQueue.push_back(cmd);
 }
 
@@ -622,6 +662,9 @@ void NetworkManager::ProcessDespawnPlayer(Scene* pScene, uint64 playerId)
 
     // 맵에서 제거
     m_mapRemotePlayers.erase(it);
+    m_mapRemotePlayerMoveTime.erase(playerId);
+    m_setDeadRemotePlayers.erase(playerId);
+    m_mapRemotePlayerHitFlashTimer.erase(playerId);
 
     wchar_t buf[128];
     swprintf_s(buf, L"[Network] Despawned remote player %llu\n", playerId);
@@ -660,20 +703,45 @@ void NetworkManager::ProcessMovePlayer(uint64 playerId, float x, float y, float 
         }
     }
 
+    // 죽은 원격 플레이어는 데스 애니 유지 — walk/idle 로 덮지 않음
+    bool bDead = (m_setDeadRemotePlayers.find(playerId) != m_setDeadRemotePlayers.end());
+
     // 걷기 애니메이션 활성화
     AnimationComponent* pAnim = pRemotePlayer->GetComponent<AnimationComponent>();
-    if (pAnim)
+    if (pAnim && !bDead)
     {
         // CrossFade로 부드럽게 전환 (이미 걷기 중이면 무시)
         pAnim->CrossFade("Walk", 0.1f, true);
     }
 
     // 마지막 이동 시간 기록 (idle 전환용)
-    m_mapRemotePlayerMoveTime[playerId] = 0.0f;
+    if (!bDead)
+        m_mapRemotePlayerMoveTime[playerId] = 0.0f;
 }
 
 void NetworkManager::CheckRemotePlayerIdle(float deltaTime)
 {
+    // (0) 원격 플레이어 hit flash 페이드 — 피격 직후 glow 가 남지 않도록 0 까지 감소
+    for (auto it = m_mapRemotePlayerHitFlashTimer.begin(); it != m_mapRemotePlayerHitFlashTimer.end(); )
+    {
+        it->second -= deltaTime;
+        auto playerIt = m_mapRemotePlayers.find(it->first);
+        if (playerIt != m_mapRemotePlayers.end())
+        {
+            if (it->second > 0.0f)
+            {
+                float f = it->second / REMOTE_HIT_FLASH_DURATION;
+                playerIt->second->SetHitFlashAll(f);
+            }
+            else
+            {
+                playerIt->second->SetHitFlashAll(0.0f);
+            }
+        }
+        if (it->second <= 0.0f) it = m_mapRemotePlayerHitFlashTimer.erase(it);
+        else ++it;
+    }
+
     // 원격 플레이어들의 마지막 이동 시간 업데이트
     for (auto it = m_mapRemotePlayerMoveTime.begin(); it != m_mapRemotePlayerMoveTime.end(); )
     {
@@ -681,11 +749,12 @@ void NetworkManager::CheckRemotePlayerIdle(float deltaTime)
         float& timeSinceMove = it->second;
         timeSinceMove += deltaTime;
 
-        // 일정 시간 동안 이동 패킷이 없으면 idle로 전환
+        // 일정 시간 동안 이동 패킷이 없으면 idle로 전환 (단, 죽은 플레이어는 skip)
         if (timeSinceMove >= IDLE_TRANSITION_TIME)
         {
+            bool bDead = (m_setDeadRemotePlayers.find(playerId) != m_setDeadRemotePlayers.end());
             auto playerIt = m_mapRemotePlayers.find(playerId);
-            if (playerIt != m_mapRemotePlayers.end())
+            if (!bDead && playerIt != m_mapRemotePlayers.end())
             {
                 AnimationComponent* pAnim = playerIt->second->GetComponent<AnimationComponent>();
                 if (pAnim)
@@ -934,6 +1003,8 @@ struct MonsterPreset
     const char* idleClip;
     const char* walkClip;
     const char* texturePath;  // 명시적 텍스처 경로 — .bin에 <AlbedoMap> 없을 때 필수
+    const char* attackClip;   // 공격 애니메이션 (S_MONSTER_ATTACK 수신 시 재생)
+    const char* deathClip;    // 사망 애니메이션
 };
 
 static MonsterPreset GetMonsterPresetByType(uint32 monsterType)
@@ -949,52 +1020,63 @@ static MonsterPreset GetMonsterPresetByType(uint32 monsterType)
     //   Demon: idle="Idle1", chase="Run"
     switch (monsterType)
     {
+    // attackClip/deathClip 는 EnemySpawner.cpp 의 m_AnimConfig.m_strAttackClip / m_strDeathClip 과 일치해야 함
     case 2: // AirElemental
         return { "Assets/Enemies/Elementals/AirElemental_Bl/AirElemental_Bl.bin",
                  "Assets/Enemies/Elementals/AirElemental_Bl/AirElemental_Bl_Anim.bin",
                  2.0f, "idle", "Run_Forward",
-                 "Assets/Enemies/Elementals/AirElemental_Bl/Textures/T_AirElemental_Body_Bl_D.png" };
+                 "Assets/Enemies/Elementals/AirElemental_Bl/Textures/T_AirElemental_Body_Bl_D.png",
+                 "Combat_Unarmed_Attack", "Death" };
     case 3: // RangedEnemy (StormElemental)
         return { "Assets/Enemies/Elementals/StormElemental_Bl/StormElemental_Bl.bin",
                  "Assets/Enemies/Elementals/StormElemental_Bl/StormElemental_Bl_Anim.bin",
                  2.0f, "idle", "Run_Forward",
-                 "Assets/Enemies/Elementals/StormElemental_Bl/Textures/T_StormElemental_Bl_D.png" };
+                 "Assets/Enemies/Elementals/StormElemental_Bl/Textures/T_StormElemental_Bl_D.png",
+                 "Combat_Unarmed_Attack", "Death" };
     case 4: // RushAoEEnemy (FireGolem)
         return { "Assets/Enemies/Elementals/FireGolem_Rd/FireGolem_Rd.bin",
                  "Assets/Enemies/Elementals/FireGolem_Rd/FireGolem_Rd_Anim.bin",
                  2.0f, "idle", "Run_Forward",
-                 "Assets/Enemies/Elementals/FireGolem_Rd/Textures/T_FireGolem_Rd_D.png" };
+                 "Assets/Enemies/Elementals/FireGolem_Rd/Textures/T_FireGolem_Rd_D.png",
+                 "Combat_Unarmed_Attack", "Death" };
     case 5: // RushFrontEnemy (EarthElemental)
         return { "Assets/Enemies/Elementals/EarthElemental_Gn/EarthElemental_Gn.bin",
                  "Assets/Enemies/Elementals/EarthElemental_Gn/EarthElemental_Gn_Anim.bin",
                  2.0f, "idle", "Run_Forward",
-                 "Assets/Enemies/Elementals/EarthElemental_Gn/Textures/T_EarthElemental_Gn_D.png" };
+                 "Assets/Enemies/Elementals/EarthElemental_Gn/Textures/T_EarthElemental_Gn_D.png",
+                 "Combat_Unarmed_Attack", "Death" };
     case 6: // Dragon (Red)
         return { "Assets/Enemies/Dragon/Red.bin",
                  "Assets/Enemies/Dragon/Red_Anim.bin",
-                 3.0f, "Idle01", "Walk", "" };
+                 3.0f, "Idle01", "Walk", "",
+                 "Flame Attack", "Die" };
     case 7: // Kraken
         return { "Assets/Enemies/Kraken/KRAKEN.bin",
                  "Assets/Enemies/Kraken/KRAKEN_Anim.bin",
-                 3.0f, "Idle", "Walk", "" };
+                 3.0f, "Idle", "Walk", "",
+                 "Attack_Forward_RM", "Death" };
     case 8: // Golem
         return { "Assets/Enemies/golem/Golem01_Generic_prefab.bin",
                  "Assets/Enemies/golem/Golem01_Generic_prefab_Anim.bin",
-                 8.0f, "Golem_battle_stand_ge", "Golem_battle_walk_ge", "" };
+                 8.0f, "Golem_battle_stand_ge", "Golem_battle_walk_ge", "",
+                 "Golem_battle_attack01_ge", "Golem_battle_die_ge" };
     case 9: // Demon
         return { "Assets/Enemies/demon/Demon.bin",
                  "Assets/Enemies/demon/Demon_Anim.bin",
-                 3.5f, "Idle1", "Run", "" };
+                 3.5f, "Idle1", "Run", "",
+                 "attack1", "Death1" };
     case 10: // BlueDragon (EnemySpawner: idle="Idle", chase="Walk")
         return { "Assets/Enemies/Dragon_blue/Blue.bin",
                  "Assets/Enemies/Dragon_blue/Blue_Anim.bin",
-                 3.0f, "Idle", "Walk", "" };
+                 3.0f, "Idle", "Walk", "",
+                 "Fireball Shoot", "Die" };
     case 1: // TestEnemy — 메쉬 없음, 큐브 fallback 생략하고 air 대체
     default:
         return { "Assets/Enemies/Elementals/AirElemental_Bl/AirElemental_Bl.bin",
                  "Assets/Enemies/Elementals/AirElemental_Bl/AirElemental_Bl_Anim.bin",
                  2.0f, "idle", "Run_Forward",
-                 "Assets/Enemies/Elementals/AirElemental_Bl/Textures/T_AirElemental_Body_Bl_D.png" };
+                 "Assets/Enemies/Elementals/AirElemental_Bl/Textures/T_AirElemental_Body_Bl_D.png",
+                 "Combat_Unarmed_Attack", "Death" };
     }
 }
 
@@ -1121,7 +1203,9 @@ void NetworkManager::ProcessMonsterSpawn(Scene* pScene, ID3D12Device* pDevice,
     pMonster->Init(pDevice, pCommandList);
 
     m_mapServerMonsters[monsterId] = pMonster;
-    m_mapServerMonsterClips[monsterId] = { preset.idleClip, preset.walkClip };
+    m_mapServerMonsterClips[monsterId] = {
+        preset.idleClip, preset.walkClip, preset.attackClip, preset.deathClip
+    };
 
     // 보간 타겟 초기값 = 스폰 위치 (첫 MOVE 전까진 제자리)
     ServerMonsterTarget initTgt;
@@ -1180,9 +1264,17 @@ void NetworkManager::ProcessMonsterMove(uint64 monsterId, float x, float y, floa
         tgt.hasTarget = true;
     }
 
+    // 공격 애니 재생 중이면 walk 로 덮어쓰지 않음 — 자연스러운 전환
+    bool bAttackLocked = false;
+    {
+        auto atkIt = m_mapServerMonsterAttackTimer.find(monsterId);
+        if (atkIt != m_mapServerMonsterAttackTimer.end() && atkIt->second > 0.0f)
+            bAttackLocked = true;
+    }
+
     // 걷기 애니메이션 부드럽게 전환 — preset별 walk 클립 이름 사용
     auto* pAnim = pMonster->GetComponent<AnimationComponent>();
-    if (pAnim)
+    if (pAnim && !bAttackLocked)
     {
         auto clipIt = m_mapServerMonsterClips.find(monsterId);
         const char* walkClip = (clipIt != m_mapServerMonsterClips.end())
@@ -1195,6 +1287,30 @@ void NetworkManager::ProcessMonsterMove(uint64 monsterId, float x, float y, floa
 
 void NetworkManager::CheckServerMonsterIdle(float deltaTime)
 {
+    // (1) 공격 애니 타이머 감소 — 0 되면 idle 로 자동 복귀 (Move 안 오고 공격만 끝난 경우)
+    for (auto it = m_mapServerMonsterAttackTimer.begin(); it != m_mapServerMonsterAttackTimer.end(); )
+    {
+        it->second -= deltaTime;
+        if (it->second <= 0.0f)
+        {
+            auto mIt = m_mapServerMonsters.find(it->first);
+            if (mIt != m_mapServerMonsters.end())
+            {
+                auto* pAnim = mIt->second->GetComponent<AnimationComponent>();
+                if (pAnim)
+                {
+                    auto clipIt = m_mapServerMonsterClips.find(it->first);
+                    const char* idleClip = (clipIt != m_mapServerMonsterClips.end())
+                        ? clipIt->second.idle.c_str() : "Idle";
+                    pAnim->CrossFade(idleClip, 0.15f, true);
+                }
+            }
+            it = m_mapServerMonsterAttackTimer.erase(it);
+        }
+        else ++it;
+    }
+
+    // (2) 기존: Move 후 일정 시간 idle 전환
     for (auto it = m_mapServerMonsterMoveTime.begin(); it != m_mapServerMonsterMoveTime.end(); )
     {
         it->second += deltaTime;
@@ -1203,8 +1319,12 @@ void NetworkManager::CheckServerMonsterIdle(float deltaTime)
             auto mIt = m_mapServerMonsters.find(it->first);
             if (mIt != m_mapServerMonsters.end())
             {
+                // 공격 애니 재생 중이면 건드리지 않음 (공격 타이머 쪽이 마무리함)
+                auto atkIt = m_mapServerMonsterAttackTimer.find(it->first);
+                bool bAttackLocked = (atkIt != m_mapServerMonsterAttackTimer.end() && atkIt->second > 0.0f);
+
                 auto* pAnim = mIt->second->GetComponent<AnimationComponent>();
-                if (pAnim)
+                if (pAnim && !bAttackLocked)
                 {
                     auto clipIt = m_mapServerMonsterClips.find(it->first);
                     const char* idleClip = (clipIt != m_mapServerMonsterClips.end())
@@ -1216,6 +1336,119 @@ void NetworkManager::CheckServerMonsterIdle(float deltaTime)
         }
         else ++it;
     }
+}
+
+void NetworkManager::ProcessMonsterAttack(Scene* pScene, uint64 monsterId, uint32 attackType, float windupSec)
+{
+    auto it = m_mapServerMonsters.find(monsterId);
+    if (it == m_mapServerMonsters.end())
+    {
+        char buf[128];
+        sprintf_s(buf, "[Network] ProcessMonsterAttack: unknown monsterId=%llu", monsterId);
+        WriteNetworkLog(buf);
+        return;
+    }
+
+    GameObject* pMonster = it->second;
+    auto* pAnim = pMonster->GetComponent<AnimationComponent>();
+    if (!pAnim) return;
+
+    // preset 기본 attack 클립 (attackType 별 세분화는 추후 확장 포인트)
+    auto clipIt = m_mapServerMonsterClips.find(monsterId);
+    const char* attackClip = (clipIt != m_mapServerMonsterClips.end() && !clipIt->second.attack.empty())
+        ? clipIt->second.attack.c_str() : "Attack";
+
+    pAnim->CrossFade(attackClip, 0.1f, false, true);  // forceRestart — 연속 공격도 처음부터
+
+    // 공격 애니 지속 시간 등록 — 이 기간 Move 왔을 때 walk 로 덮지 않음
+    //  서버 windupSec(예고) + 추정 재생시간. 짧은 windup 공격도 최소 ATTACK_ANIM_LOCK 은 유지
+    float lockDur = fmaxf(windupSec + 0.4f, ATTACK_ANIM_LOCK);
+    m_mapServerMonsterAttackTimer[monsterId] = lockDur;
+    // 공격 중엔 idle 전환 억제
+    m_mapServerMonsterMoveTime.erase(monsterId);
+
+    char buf[128];
+    sprintf_s(buf, "[Network] MonsterAttack applied: monsterId=%llu clip=%s lock=%.2fs",
+              monsterId, attackClip, lockDur);
+    WriteNetworkLog(buf);
+}
+
+void NetworkManager::ProcessPlayerDamage(Scene* pScene, uint64 playerId, float damage,
+                                          float currentHp, bool isDead, uint64 attackerMonsterId)
+{
+    if (!pScene) return;
+
+    uint64 localId = GetLocalPlayerId();
+    bool bIsLocal = (playerId == localId);
+
+    if (bIsLocal)
+    {
+        // ── 로컬 플레이어: HP UI + 화면 쉐이크 + hit flash + 데미지 넘버 + 사망 ──
+        GameObject* pPlayerGO = pScene->GetPlayer();
+        if (!pPlayerGO) return;
+
+        auto* pPC = pPlayerGO->GetComponent<PlayerComponent>();
+        if (!pPC) return;
+
+        pPC->SetCurrentHP(currentHp);
+        pPC->TriggerHitFlash();
+
+        if (damage > 0.0f)
+        {
+            XMFLOAT3 pos = pPlayerGO->GetTransform()->GetPosition();
+            pos.y += 3.0f;
+            DamageNumberManager::Get().AddNumber(pos, damage);
+        }
+
+        if (CCamera* pCam = pScene->GetCamera())
+            pCam->StartShake(2.0f, 0.18f);
+
+        if (isDead)
+            pPC->OnServerDeath();
+    }
+    else
+    {
+        // ── 원격 플레이어: 데미지 넘버 + hit flash + 사망 애니 ──
+        auto it = m_mapRemotePlayers.find(playerId);
+        if (it == m_mapRemotePlayers.end())
+        {
+            char buf[128];
+            sprintf_s(buf, "[Network] PlayerDamage: remote player %llu not found in map", playerId);
+            WriteNetworkLog(buf);
+            return;
+        }
+        GameObject* pRemoteGO = it->second;
+        if (!pRemoteGO) return;
+
+        // 데미지 넘버 — 맞은 사람 머리 위 (화면 쉐이크는 로컬에게만)
+        if (damage > 0.0f)
+        {
+            XMFLOAT3 pos = pRemoteGO->GetTransform()->GetPosition();
+            pos.y += 3.0f;
+            DamageNumberManager::Get().AddNumber(pos, damage);
+        }
+
+        // Hit flash — 0.15s 동안 1.0→0 페이드. CheckRemotePlayerIdle 에서 매 프레임 tick
+        m_mapRemotePlayerHitFlashTimer[playerId] = REMOTE_HIT_FLASH_DURATION;
+        pRemoteGO->SetHitFlashAll(1.0f);
+
+        if (isDead)
+        {
+            // 데스 애니 (MageBlue_Anim.bin 의 "Death1" 사용)
+            AnimationComponent* pAnim = pRemoteGO->GetComponent<AnimationComponent>();
+            if (pAnim)
+                pAnim->CrossFade("Death1", 0.15f, false, true);
+
+            // 사망 리스트 등록 — 이후 MOVE/Idle 전환 skip
+            m_setDeadRemotePlayers.insert(playerId);
+            m_mapRemotePlayerMoveTime.erase(playerId);
+        }
+    }
+
+    char buf[192];
+    sprintf_s(buf, "[Network] PlayerDamage applied: id=%llu local=%d dmg=%.1f hp=%.1f dead=%d attacker=%llu",
+              playerId, bIsLocal ? 1 : 0, damage, currentHp, isDead ? 1 : 0, attackerMonsterId);
+    WriteNetworkLog(buf);
 }
 
 void NetworkManager::ProcessMonsterDespawn(Scene* pScene, uint64 monsterId)
@@ -1230,6 +1463,7 @@ void NetworkManager::ProcessMonsterDespawn(Scene* pScene, uint64 monsterId)
     m_mapServerMonsterMoveTime.erase(monsterId);
     m_mapServerMonsterClips.erase(monsterId);
     m_mapServerMonsterTarget.erase(monsterId);
+    m_mapServerMonsterAttackTimer.erase(monsterId);
 
     wchar_t buf[128];
     swprintf_s(buf, L"[Network] Despawned NetMonster_%llu\n", monsterId);
