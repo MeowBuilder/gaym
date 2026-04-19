@@ -219,11 +219,11 @@ void SkillComponent::ProcessSkillInput(InputSystem* pInputSystem, CCamera* pCame
                 // Combo: Charge+Place → trap with charge damage
                 if (combo.hasPlace)
                 {
-                    m_Skills[index]->Execute(m_pOwner, m_ChargeTargetPosition, -(damageMultiplier * 1.5f));
+                    m_Skills[index]->Execute(m_pOwner, targetPos, -(damageMultiplier * 1.5f));
                 }
                 else
                 {
-                    ExecuteOrSplit(index, m_ChargeTargetPosition, damageMultiplier);
+                    ExecuteOrSplit(index, targetPos, damageMultiplier);
                 }
                 m_SkillStates[index] = SkillState::Casting;
                 m_ActiveSkillSlot = m_ChargingSlot;
