@@ -48,6 +48,11 @@ void VFXLibrary::Initialize() {
         def.sphViscosity        = 0.4f;
         def.sphSmoothingRadius  = 1.8f;
 
+        // 불꽃 색상: 짙은 붉은색
+        def.overrideColors    = true;
+        def.overrideCoreColor = { 0.88f, 0.12f, 0.01f, 1.0f };  // 붉은 주황
+        def.overrideEdgeColor = { 0.45f, 0.03f, 0.0f,  0.90f };  // 짙은 심홍
+
         RegisterBase(SkillSlot::Q, def);
 
         // Enhance 룬: 더 넓고 큰 파도
@@ -124,29 +129,17 @@ void VFXLibrary::Initialize() {
         p0.globalGravityStrength = 18.f;  // 파티클에 중력 추가 → masterCP와 함께 바닥까지 낙하 보장
         def.phases.push_back(p0);
 
-        // Phase 1: 충돌 폭발 — masterCPPos(충돌 지점)에서 전방위 burst
+        // Phase 1: 충돌 폭발 — burst + ExplodeFade를 한 Phase로 통합 (색 변화 없음)
         VFXPhase p1;
         p1.startTime  = 3.f;
-        p1.duration   = 0.7f;
+        p1.duration   = 2.5f;
         p1.motionMode = ParticleMotionMode::Gravity;
         p1.gravityDesc.gravity         = { 0.f, -18.f, 0.f };
         p1.gravityDesc.initialSpeedMin = 22.f;
         p1.gravityDesc.initialSpeedMax = 55.f;
         p1.phaseMaxSpeed               = 80.f;
-        p1.triggerExplodeFadeOnEnter   = false;
+        p1.triggerExplodeFadeOnEnter   = true;
         def.phases.push_back(p1);
-
-        // Phase 2: 바닥 화염 확산 — 퍼진 파티클들이 낮게 깔리며 서서히 소멸 (버스트 없음)
-        VFXPhase p2;
-        p2.startTime  = 3.7f;
-        p2.duration   = 1.8f;
-        p2.motionMode = ParticleMotionMode::Gravity;
-        p2.gravityDesc.gravity         = { 0.f, -38.f, 0.f };
-        p2.gravityDesc.initialSpeedMin = 0.f;
-        p2.gravityDesc.initialSpeedMax = 0.f;
-        p2.phaseMaxSpeed               = 80.f;
-        p2.triggerExplodeFadeOnEnter   = true;
-        def.phases.push_back(p2);
 
         // 위성 CP 없음 — 단일 거대 덩어리
 
@@ -199,10 +192,11 @@ void VFXLibrary::Initialize() {
         def.sphViscosity        = 1.5f;  // 기본값(0.25)의 6배 — 진동 억제 핵심
         def.sphSmoothingRadius  = 1.3f;
 
-        // 색상: 핵은 밝은 흰-노랑, 집결은 불꽃 주황-빨강
+        // 색상: 핵은 진한 불꽃 주황, 외곽은 짙은 크림슨 레드
+        // — coreColor.g=0.42를 낮게 유지해 속도 boost(×1.4)에도 흰색으로 포화되지 않음
         def.overrideColors    = true;
-        def.overrideCoreColor = { 1.0f, 0.95f, 0.60f, 1.0f };  // 흰-노랑 (핵)
-        def.overrideEdgeColor = { 1.0f, 0.28f, 0.0f,  0.55f };  // 불꽃 주황
+        def.overrideCoreColor = { 1.0f, 0.42f, 0.02f, 1.0f };  // 뜨거운 불꽃 주황
+        def.overrideEdgeColor = { 0.80f, 0.05f, 0.00f, 0.92f }; // 짙은 크림슨 (외곽 불꽃)
 
         // CP A - 핵: 낮은 attractionStrength로 GPU 진동력(±strength*4) 억제
         // sphereRadius를 작게 설정해 경계력(450*overshoot)이 스폰 거리에서 작동

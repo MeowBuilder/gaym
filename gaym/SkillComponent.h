@@ -46,6 +46,8 @@ public:
 
     // 무한 룬: 쿨다운 즉시 초기화
     void ResetCooldown(SkillSlot slot);
+    // 시간 역행 룬: 쿨다운 seconds 초 감소
+    void ReduceCooldown(SkillSlot slot, float seconds);
 
     // 룬 cooldownMult 적용한 실제 쿨다운 반환
     float GetEffectiveCooldown(size_t slotIndex) const;

@@ -115,6 +115,16 @@ public:
     void TakeDamage(float fDamage, bool bTriggerStagger = true);
     bool IsDead() const { return m_eCurrentState == EnemyState::Dead; }
 
+    // 방어 분쇄 디버프: defenseMult (0~1, 예: 0.75 = 방어력 25% 감소), duration 초
+    void ApplyDefenseDebuff(float defenseMult, float duration)
+    {
+        if (defenseMult < m_fDefenseMult) { // 더 강한 디버프만 덮어씀
+            m_fDefenseMult      = defenseMult;
+            m_fDefenseDebuffTimer = duration;
+        }
+    }
+    float GetDefenseMult() const { return m_fDefenseMult; }
+
     // Attack behavior
     void SetAttackBehavior(std::unique_ptr<IAttackBehavior> pBehavior);
     IAttackBehavior* GetAttackBehavior() const { return m_pAttackBehavior.get(); }
@@ -275,6 +285,10 @@ private:
     float m_fStaggerTimer = 0.0f;
     float m_fDeadTimer = 0.0f;
     float m_fHitFlashTimer = 0.0f;
+
+    // 방어 분쇄 디버프
+    float m_fDefenseMult       = 1.0f;  // 1.0 = 정상, 0.75 = 방어력 25% 감소
+    float m_fDefenseDebuffTimer = 0.0f;
 
     // Constants
     static constexpr float STAGGER_DURATION = 0.5f;

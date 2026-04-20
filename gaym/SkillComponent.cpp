@@ -9,6 +9,8 @@
 #include "Dx12App.h" // For runtime window size
 #include "NetworkManager.h" // For skill sync
 #include "RuneRegistry.h"
+#include <set>
+#include <random>
 
 SkillComponent::SkillComponent(GameObject* pOwner)
     : Component(pOwner)
@@ -352,6 +354,16 @@ void SkillComponent::ResetCooldown(SkillSlot slot)
     }
 }
 
+void SkillComponent::ReduceCooldown(SkillSlot slot, float seconds)
+{
+    size_t index = static_cast<size_t>(slot);
+    if (index >= m_CooldownTimers.size()) return;
+    m_CooldownTimers[index] = max(0.f, m_CooldownTimers[index] - seconds);
+    if (m_CooldownTimers[index] == 0.f && index < m_SkillStates.size()
+        && m_SkillStates[index] == SkillState::Cooldown)
+        m_SkillStates[index] = SkillState::Ready;
+}
+
 float SkillComponent::GetCooldownProgress(SkillSlot slot) const
 {
     size_t index = static_cast<size_t>(slot);
@@ -515,13 +527,35 @@ SkillStats SkillComponent::BuildSkillStats(SkillSlot skill, ActivationType defau
         return stats;
 
     const RuneRegistry& reg = RuneRegistry::Get();
+    bool hasL03 = false;
+    std::set<ElementType> uniqueElements;
     for (int i = 0; i < RUNES_PER_SKILL; ++i)
     {
         const EquippedRune& er = m_SkillRunes[skillIdx][i];
         if (er.IsEmpty()) continue;
         const RuneDef* def = reg.Find(er.runeId);
-        if (def) def->ApplyTo(stats, er.stackCount);
+        if (!def) continue;
+        def->ApplyTo(stats, er.stackCount);
+        if (er.runeId == "L03") hasL03 = true;
+        if (def->element != ElementType::None) uniqueElements.insert(def->element);
     }
+
+    // 원소 증폭(L03): 2개 이상 다른 원소 장착 시 +30% 데미지
+    if (hasL03 && uniqueElements.size() >= 2)
+        stats.damageMult *= 1.30f;
+
+    // 원소 변환(L04): 시전마다 원소 무작위 변경
+    if (stats.randomElementOnCast)
+    {
+        static std::mt19937 rng{ std::random_device{}() };
+        static std::uniform_int_distribution<int> dist(0, 3);
+        constexpr ElementType elements[] = {
+            ElementType::Water, ElementType::Fire,
+            ElementType::Earth, ElementType::Wind
+        };
+        stats.elementOverride = elements[dist(rng)];
+    }
+
     return stats;
 }
 

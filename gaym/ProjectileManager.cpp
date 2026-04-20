@@ -440,10 +440,18 @@ void ProjectileManager::ApplyDamage(Projectile& projectile, EnemyComponent* pEne
             if (!stats.onHitHooks.empty())
             {
                 SkillContext ctx;
-                ctx.caster     = projectile.owner;
-                ctx.element    = projectile.element;
-                ctx.baseDamage = projectile.damage;
+                ctx.caster      = projectile.owner;
+                ctx.element     = projectile.element;
+                ctx.baseDamage  = projectile.damage;
                 ctx.damageDealt = dmg;
+                ctx.skillSlot   = projectile.skillSlot;
+                ctx.scene       = m_pScene;
+                ctx.hitEnemy    = pEnemy;
+                if (pEnemy && pEnemy->GetOwner())
+                {
+                    TransformComponent* pT = pEnemy->GetOwner()->GetTransform();
+                    if (pT) ctx.hitEnemyPos = pT->GetPosition();
+                }
                 for (auto& hook : stats.onHitHooks) hook(ctx);
             }
         }

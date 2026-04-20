@@ -295,41 +295,61 @@ int FluidSkillVFXManager::SpawnFireTrailEffect(const XMFLOAT3& pos,
                                                 float halfWidth,
                                                 float lifetime)
 {
-    // 바닥 위치에 화염 파티클 스폰.
-    // direction = (0,1,0) → fwd=up, forwardBias로 CP가 spawn 위 2m에 위치.
-    // spawnRadius = halfWidth * 0.9f → 파도 폭만큼 넓은 구형 분산.
-    // 파티클은 위 CP로 끌려 올라가며 불꽃 기둥 형상 유지.
-    (void)waveRight;  // 현재 구형 스폰 방식에서는 방향 불필요 (추후 확장용 유지)
+    (void)waveRight;
+
+    // 매 호출마다 랜덤 변화 → 같은 패턴 반복 방지
+    float r0 = (rand() % 1000) * 0.001f;  // [0, 1)
+    float r1 = (rand() % 1000) * 0.001f;
 
     VFXSequenceDef def;
-    def.name          = "Q_FireTrail";
-    def.element       = ElementType::Fire;
-    def.particleCount = 80;
-    def.spawnRadius   = halfWidth * 0.9f;  // 파도 폭에 맞게 넓은 구형 스폰
-    def.maxParticleSpeed = 6.f;
+    def.name             = "Q_FireTrail";
+    def.element          = ElementType::Fire;
+    def.particleCount    = 80 + (rand() % 51);              // 80~130
+    def.spawnRadius      = halfWidth * (0.8f + r0 * 0.4f);  // 0.8~1.2 × halfWidth
+    def.maxParticleSpeed = 8.f;
 
+    // SPH: restDensity=0 (인력 없음), 낮은 점성으로 자유롭게 퍼짐
     def.overridePhysics     = true;
-    def.sphStiffness        = 20.f;
-    def.sphNearPressureMult = 0.8f;
-    def.sphRestDensity      = 3.f;
-    def.sphViscosity        = 0.3f;
-    def.sphSmoothingRadius  = 1.3f;
+    def.sphStiffness        = 10.f;
+    def.sphNearPressureMult = 0.3f;
+    def.sphRestDensity      = 0.0f;  // 0이면 항상 반발력만 → 뭉침 방지
+    def.sphViscosity        = 0.08f;
+    def.sphSmoothingRadius  = 2.0f;
 
-    VFXPhase p;
-    p.startTime  = 0.f;
-    p.duration   = lifetime;
-    p.motionMode = ParticleMotionMode::ControlPoint;
-    p.offsetParticlesWithOrigin = false;
+    // Phase 0: 메인 화염 — 중앙 버스트 없이 스폰 구체 그대로 바닥에 퍼짐
+    float mainDur = lifetime - 1.0f;
+    VFXPhase p0;
+    p0.startTime  = 0.f;
+    p0.duration   = mainDur;
+    p0.motionMode = ParticleMotionMode::Gravity;
+    p0.offsetParticlesWithOrigin = false;
+    p0.gravityDesc.gravity         = { 0.f, -6.f, 0.f };
+    p0.gravityDesc.initialSpeedMin = 0.0f;  // 버스트 없음 — 이미 구체로 퍼져 있음
+    p0.gravityDesc.initialSpeedMax = 0.0f;
+    p0.phaseMaxSpeed = 5.f;
+    p0.boxDesc.active      = true;
+    p0.boxDesc.halfExtents = { 30.0f, 30.0f, 2.5f };
+    def.phases.push_back(p0);
 
-    // CP: 중심 위 2m — 파도 폭 전체를 커버하도록 sphereRadius 넉넉히 설정
-    FluidCPDesc cp;
-    cp.orbitRadius        = 0.f;
-    cp.orbitSpeed         = 0.f;
-    cp.forwardBias        = 2.0f;              // direction=(0,1,0) → 2m 위
-    cp.attractionStrength = 4.f;
-    cp.sphereRadius       = halfWidth + 3.0f;  // 파도 전폭 + 여유
-    p.cpDescs.push_back(cp);
-    def.phases.push_back(p);
+    // Phase 1: 서서히 소멸 (ExplodeFade)
+    VFXPhase p1;
+    p1.startTime  = mainDur;
+    p1.duration   = 1.0f;
+    p1.motionMode = ParticleMotionMode::Gravity;
+    p1.offsetParticlesWithOrigin = false;
+    p1.gravityDesc.gravity         = { 0.f, -6.f, 0.f };
+    p1.gravityDesc.initialSpeedMin = 0.0f;
+    p1.gravityDesc.initialSpeedMax = 0.0f;
+    p1.phaseMaxSpeed               = 5.f;
+    p1.triggerExplodeFadeOnEnter   = true;
+    p1.boxDesc.active      = true;
+    p1.boxDesc.halfExtents = { 30.0f, 30.0f, 2.5f };
+    def.phases.push_back(p1);
+
+    // 짙은 붉은색 불꽃
+    def.overrideColors    = true;
+    def.overrideCoreColor = { 0.75f, 0.08f, 0.01f, 1.0f };
+    def.overrideEdgeColor = { 0.35f, 0.02f, 0.0f,  0.85f };
 
     XMFLOAT3 up = { 0.f, 1.f, 0.f };
     return SpawnSequenceEffect(pos, up, def);

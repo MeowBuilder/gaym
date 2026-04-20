@@ -359,11 +359,26 @@ void PlayerComponent::TakeDamage(float fDamage)
     if (fDamage <= 0.0f || IsDead()) return;
     if (IsDashing()) return;  // 대쉬 중 i-frame — 피격 무시
 
+    // 보호막이 있으면 먼저 흡수
+    if (m_fShield > 0.f)
+    {
+        float absorbed = min(m_fShield, fDamage);
+        m_fShield  -= absorbed;
+        fDamage    -= absorbed;
+        if (fDamage <= 0.f) return;
+    }
+
     m_fCurrentHP -= fDamage;
     if (m_fCurrentHP < 0.0f)
     {
         m_fCurrentHP = 0.0f;
     }
+}
+
+void PlayerComponent::AddShield(float amount)
+{
+    if (amount <= 0.f) return;
+    m_fShield = min(m_fShield + amount, MAX_SHIELD);
 }
 
 void PlayerComponent::SetCurrentHP(float fHP)

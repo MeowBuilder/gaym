@@ -87,30 +87,27 @@ void WaveSlashBehavior::Execute(GameObject* caster, const DirectX::XMFLOAT3& tar
 
 void WaveSlashBehavior::Update(float deltaTime)
 {
-    if (!m_bWaveActive || m_vfxId < 0 || !m_pVFXManager) return;
+    if (!m_pVFXManager) return;
+    if (!m_bWaveActive && m_fireTrail.empty()) return;
 
-    m_waveElapsed += deltaTime;
-
-    // 1. 파도 본체: VFX 영역 안 적 단타 (아직 안 맞은 적만)
-    HitEnemiesInWave(m_SkillData.damage * m_damageMult);
-
-    // 2. 파도 자국 생성: 현재 파도 선두 위치에 불꽃 존 드롭
-    m_trailDropTimer += deltaTime;
-    if (m_trailDropTimer >= TRAIL_DROP_INTERVAL)
+    if (m_bWaveActive && m_vfxId >= 0)
     {
-        m_trailDropTimer = 0.f;
-        DropFireTrail();
+        m_waveElapsed += deltaTime;
+        HitEnemiesInWave(m_SkillData.damage * m_damageMult);
+
+        m_trailDropTimer += deltaTime;
+        if (m_trailDropTimer >= TRAIL_DROP_INTERVAL)
+        {
+            m_trailDropTimer = 0.f;
+            DropFireTrail();
+        }
+
+        if (m_waveElapsed >= WAVE_DURATION)
+            m_bWaveActive = false;
     }
 
-    // 3. 불꽃 자국 DoT 업데이트
+    // 파도가 끝난 뒤에도 trail이 남아있는 동안 DoT 계속 적용
     UpdateFireTrail(deltaTime);
-
-    // 4. 파도 종료 (안전 타이머)
-    if (m_waveElapsed >= WAVE_DURATION)
-    {
-        m_bWaveActive = false;
-        m_bIsFinished = true;
-    }
 }
 
 void WaveSlashBehavior::HitEnemiesInWave(float damage)
@@ -170,18 +167,16 @@ void WaveSlashBehavior::DropFireTrail()
 {
     if (m_vfxId < 0 || !m_pVFXManager) return;
 
-    // 히트 판정과 동일한 기준: 파티클 선두 위치 추정
+    // GetWaveFrontPos: waveSpeed(10 m/s) 기준 박스 진행 위치 — 실제 파티클 선두(~20 m/s)보다 느림
+    // → 파도가 지나간 자리에 자국이 깔리는 효과
     XMFLOAT3 waveOrigin = m_pVFXManager->GetWaveOrigin(m_vfxId);
     XMFLOAT3 waveDir    = m_pVFXManager->GetWaveDir(m_vfxId);
-    XMVECTOR frontV = XMVectorAdd(
-        XMLoadFloat3(&waveOrigin),
-        XMVectorScale(XMVector3Normalize(XMLoadFloat3(&waveDir)),
-                      m_waveElapsed * WAVE_PARTICLE_SPEED));
+    XMFLOAT3 waveFront  = m_pVFXManager->GetWaveFrontPos(m_vfxId);
+
     XMFLOAT3 frontPos;
-    XMStoreFloat3(&frontPos, frontV);
+    frontPos = waveFront;
     frontPos.y = 0.f;
 
-    // 파도 진행 방향의 직교(좌우) 벡터 계산
     XMVECTOR fwdV    = XMVector3Normalize(XMLoadFloat3(&waveDir));
     XMVECTOR worldUp = XMVectorSet(0.f, 1.f, 0.f, 0.f);
     XMVECTOR rightV  = XMVector3Normalize(XMVector3Cross(worldUp, fwdV));
@@ -235,14 +230,11 @@ void WaveSlashBehavior::UpdateFireTrail(float deltaTime)
         }
     }
 
-    // 만료된 존: VFX 정지 후 제거 (VFX는 타이머로 자동 소멸하지만 명시적 정리)
+    // 만료된 존: StopEffect 없이 trailVfxId만 해제 — VFX 시퀀스의 fade-out 페이즈로 자연 소멸
     for (auto& zone : m_fireTrail)
     {
-        if (zone.lifetime <= 0.f && zone.trailVfxId >= 0)
-        {
-            m_pVFXManager->StopEffect(zone.trailVfxId);
+        if (zone.lifetime <= 0.f)
             zone.trailVfxId = -1;
-        }
     }
     m_fireTrail.erase(
         std::remove_if(m_fireTrail.begin(), m_fireTrail.end(),
@@ -252,7 +244,7 @@ void WaveSlashBehavior::UpdateFireTrail(float deltaTime)
 
 bool WaveSlashBehavior::IsFinished() const
 {
-    return m_bIsFinished;
+    return !m_bWaveActive && m_fireTrail.empty();
 }
 
 void WaveSlashBehavior::Reset()

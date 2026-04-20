@@ -31,6 +31,14 @@ void EnemyComponent::Update(float deltaTime)
         if (m_pOwner) m_pOwner->SetHitFlash(flash);
     }
 
+    // 방어 분쇄 디버프 타이머
+    if (m_fDefenseDebuffTimer > 0.f)
+    {
+        m_fDefenseDebuffTimer -= deltaTime;
+        if (m_fDefenseDebuffTimer <= 0.f)
+            m_fDefenseMult = 1.0f;
+    }
+
     // Boss intro cutscene takes priority
     if (IsInIntro())
     {
@@ -231,6 +239,7 @@ void EnemyComponent::TakeDamage(float fDamage, bool bTriggerStagger)
         return;
     }
 
+    fDamage /= m_fDefenseMult;  // 방어 분쇄: defenseMult < 1이면 데미지 증가
     m_Stats.m_fCurrentHP -= fDamage;
 
     // Hit flash

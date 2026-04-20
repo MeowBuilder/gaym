@@ -605,6 +605,7 @@ bool MapLoader::LoadIntoScene(
                     pScene->AllocateDescriptor(&cpuHandle, &gpuHandle);
                     pGO->LoadTexture(pDevice, pCommandList, cpuHandle);
                     pGO->SetSrvGpuDescriptorHandle(gpuHandle);
+                    pGO->SetLava(false);  // pool texture has a fixed design; UV animation would cause it to drift
                     usedLavaVariant = true;
                 }
             }
