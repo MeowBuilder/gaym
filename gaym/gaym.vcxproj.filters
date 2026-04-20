@@ -168,6 +168,9 @@
     <ClInclude Include="GroundRuptureAttackBehavior.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
+    <ClInclude Include="SequentialCrossAttackBehavior.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
     <ClInclude Include="DebugRenderer.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
@@ -507,6 +510,9 @@
       <Filter>소스 파일</Filter>
     </ClCompile>
     <ClCompile Include="GroundRuptureAttackBehavior.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="SequentialCrossAttackBehavior.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
     <ClCompile Include="DebugRenderer.cpp">

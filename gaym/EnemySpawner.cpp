@@ -24,6 +24,7 @@
 #include "RockFallAttackBehavior.h"
 #include "RockBarrageAttackBehavior.h"
 #include "GroundRuptureAttackBehavior.h"
+#include "SequentialCrossAttackBehavior.h"
 #include "BossPhaseConfig.h"
 #include "BossPhaseController.h"
 #include "Room.h"
@@ -556,11 +557,11 @@ void EnemySpawner::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pComma
             "Golem_battle_attack01_ge"
         );
     };
-    // Special: 5개 균등 (각 20%)
-    //   0:점프 진동, 1:광역 내려찍기, 2:바위 발사, 3:바위 낙하, 4:십자 균열
+    // Special: 6개 균등 (각 ~16.7%)
+    //   0:점프 진동, 1:광역 내려찍기, 2:바위 발사, 3:바위 낙하, 4:십자 균열, 5:순차 십자 폭발
     //   앞으로 패턴 추가 시에도 균등 분배 유지 (rand() % N 으로 확장)
     golem.m_fnCreateSpecialAttack = []() -> std::unique_ptr<IAttackBehavior> {
-        int r = rand() % 5;
+        int r = rand() % 6;
         if (r == 0)
         {
             // 점프 진동
@@ -618,7 +619,7 @@ void EnemySpawner::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pComma
                 2.8f, 0.5f
             );
         }
-        else
+        else if (r == 4)
         {
             // 십자/X 바닥 균열 — 애니 1회 재생 후 idle 자동 전환
             auto shape = (rand() % 2 == 0)
@@ -633,6 +634,22 @@ void EnemySpawner::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pComma
                 0.6f,    // impact
                 1.8f,    // recovery
                 2.8f, 0.5f
+            );
+        }
+        else
+        {
+            // 순차 십자 폭발 — 보스 중심에 꽉 찬 십자 3개가 0°/30°/60° 로 예약되어
+            // 순서대로 터짐. 플레이어는 fill 차오르는 속도 + emissive 밝기로 순서를 읽고
+            // 안전 웨지를 선점해야 한다.
+            return std::make_unique<SequentialCrossAttackBehavior>(
+                55.0f,   // damage per cross
+                70.0f,   // 막대 반길이 (전체 140 — 원거리 이탈 불가)
+                9.0f,    // 막대 반폭 (30° 웨지 d≈33까지 완전히 덮임)
+                2.5f,    // windup
+                0.65f,   // 폭발 간격 — 인접 웨지 이동이 "가능은 하지만 근거리에서만"
+                0.35f,   // 폭발 flash
+                1.4f,    // recovery
+                2.4f, 0.45f
             );
         }
     };
