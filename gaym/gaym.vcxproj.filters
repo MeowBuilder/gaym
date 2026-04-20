@@ -150,6 +150,9 @@
     <ClInclude Include="TailSweepAttackBehavior.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
+    <ClInclude Include="SideSmashAttackBehavior.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
     <ClInclude Include="JumpSlamAttackBehavior.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
@@ -492,6 +495,9 @@
       <Filter>소스 파일</Filter>
     </ClCompile>
     <ClCompile Include="TailSweepAttackBehavior.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="SideSmashAttackBehavior.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
     <ClCompile Include="JumpSlamAttackBehavior.cpp">

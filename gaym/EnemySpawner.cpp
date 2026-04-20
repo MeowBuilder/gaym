@@ -18,6 +18,7 @@
 #include "FlyingCircleAttackBehavior.h"
 #include "FlyingSweepAttackBehavior.h"
 #include "TailSweepAttackBehavior.h"
+#include "SideSmashAttackBehavior.h"
 #include "JumpSlamAttackBehavior.h"
 #include "ComboAttackBehavior.h"
 #include "MegaBreathAttackBehavior.h"
@@ -437,10 +438,10 @@ void EnemySpawner::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pComma
             true);    // ★ varied projectiles: 크기/속도/각/발사 위치 랜덤
     };
 
-    // ── 특수기 팩토리: 3종 랜덤 (TailSweep / HeavyCombo / 360 탄막) ───────────
+    // ── 특수기 팩토리: 4종 랜덤 (TailSweep / HeavyCombo / SideSmash / 360 탄막) ───
     kraken.m_fnCreateSpecialAttack = [pProjMgr]() -> std::unique_ptr<IAttackBehavior> {
         int roll = rand() % 100;
-        if (roll < 45)
+        if (roll < 35)
         {
             // 광역 휩쓸기 — 앞쪽 사각형 (14×30 확장)
             return std::make_unique<TailSweepAttackBehavior>(
@@ -455,7 +456,7 @@ void EnemySpawner::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pComma
                 14.0f,   // rectWidthHalf — 반폭 14 (총 28u)
                 30.0f);  // rectLength — 전방 30u
         }
-        else if (roll < 75)
+        else if (roll < 60)
         {
             // 3연타 필살 콤보 — 사각형 판정 (14×30)
             std::vector<ComboAttackBehavior::ComboHit> hits;
@@ -474,6 +475,23 @@ void EnemySpawner::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pComma
             h.fDamage = 85.0f; h.fWindupTime = 0.9f; h.fHitTime = 0.3f; h.fRecoveryTime = 0.6f;
             hits.push_back(h);
             return std::make_unique<ComboAttackBehavior>(hits);
+        }
+        else if (roll < 80)
+        {
+            // 측면 사이드스매시 — 플레이어가 있는 쪽으로 45° 틀며 내려찍기
+            //   기존 3패턴이 전부 정면 rect 였어서 사이드스텝 한 방에 무력화되던 문제 해결.
+            //   windup 1.2s 로 텔레그래프 충분히 주되, 회피 방향 예측을 강제한다.
+            return std::make_unique<SideSmashAttackBehavior>(
+                60.0f,   // damage
+                45.0f,   // tilt angle
+                12.0f,   // rect half-width (24u 총폭 — sweep 보다 약간 좁음)
+                28.0f,   // rect length
+                1.2f,    // windup
+                0.3f,    // slam
+                0.8f,    // recovery
+                0.25f,   // camera shake intensity
+                0.35f,   // camera shake duration
+                0.0f);   // anim playback speed (기본)
         }
         else
         {
