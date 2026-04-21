@@ -2,8 +2,10 @@
 #include "Component.h"
 #include "Animation.h"
 #include <map>
+#include <vector>
 
 class TransformComponent;
+class SkinnedMesh;
 
 class AnimationComponent : public Component
 {
@@ -62,4 +64,14 @@ private:
     std::map<std::string, TransformComponent*> m_mapBoneTransforms;
 
     void BuildBoneCache(GameObject* pGameObject);
+
+    // 매 프레임 재귀 스캔 제거용 캐시. Init()의 BuildBoneCache 에서 한 번만 채움.
+    struct CachedSkinnedMesh
+    {
+        SkinnedMesh* pMesh;
+        GameObject*  pHolder;
+    };
+    std::vector<CachedSkinnedMesh>     m_vSkinnedMeshes;
+    std::vector<TransformComponent*>   m_vHierarchyTransforms; // ForceUpdateTransforms 대상
+    void CollectHierarchyNodes(GameObject* pGameObject);       // BuildBoneCache 시 호출
 };

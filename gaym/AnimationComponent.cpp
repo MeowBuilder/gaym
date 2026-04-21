@@ -20,7 +20,10 @@ AnimationComponent::~AnimationComponent()
 void AnimationComponent::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList)
 {
     m_mapBoneTransforms.clear();
+    m_vSkinnedMeshes.clear();
+    m_vHierarchyTransforms.clear();
     BuildBoneCache(m_pOwner);
+    CollectHierarchyNodes(m_pOwner);
 }
 
 void AnimationComponent::BuildBoneCache(GameObject* pGameObject)
@@ -34,6 +37,24 @@ void AnimationComponent::BuildBoneCache(GameObject* pGameObject)
 
     if (pGameObject->m_pChild) BuildBoneCache(pGameObject->m_pChild);
     if (pGameObject->m_pSibling) BuildBoneCache(pGameObject->m_pSibling);
+}
+
+// 매 프레임 재귀 스캔(FindAllSkinnedMeshes / ForceUpdateTransforms) 비용 제거용.
+// Init 시 한 번만 순회해서 SkinnedMesh 와 모든 TransformComponent 포인터를 캐싱.
+void AnimationComponent::CollectHierarchyNodes(GameObject* pGameObject)
+{
+    if (!pGameObject) return;
+
+    Mesh* pMesh = pGameObject->GetMesh();
+    if (pMesh && (pMesh->GetType() & 0x10))
+    {
+        m_vSkinnedMeshes.push_back({ static_cast<SkinnedMesh*>(pMesh), pGameObject });
+    }
+    if (auto* pT = pGameObject->GetTransform())
+        m_vHierarchyTransforms.push_back(pT);
+
+    if (pGameObject->m_pChild)   CollectHierarchyNodes(pGameObject->m_pChild);
+    if (pGameObject->m_pSibling) CollectHierarchyNodes(pGameObject->m_pSibling);
 }
 
 void AnimationComponent::LoadAnimation(const char* pstrFileName)
@@ -203,29 +224,26 @@ void AnimationComponent::Update(float deltaTime)
         XMVECTOR finalRot = currRot;
         XMVECTOR finalScale = currScale;
 
-        // Blend with previous clip if blending
+        // Blend with previous clip if blending.
+        // AnimationClip::m_mapBoneNameToIndex 로 O(1) lookup (이전엔 이전 clip 본 트랙 전체 선형 서치 — O(본²))
         if (m_bIsBlending && m_pPreviousClip)
         {
-            // Find matching track in previous clip
-            for (const auto& prevTrack : m_pPreviousClip->m_vBoneTracks)
+            auto mapIt = m_pPreviousClip->m_mapBoneNameToIndex.find(track.m_strBoneName);
+            if (mapIt != m_pPreviousClip->m_mapBoneNameToIndex.end())
             {
-                if (prevTrack.m_strBoneName == track.m_strBoneName)
+                const BoneTrack& prevTrack = m_pPreviousClip->m_vBoneTracks[mapIt->second];
+                if (nPrevFrame < (int)prevTrack.m_vKeyframes.size() && nPrevNextFrame < (int)prevTrack.m_vKeyframes.size())
                 {
-                    if (nPrevFrame < (int)prevTrack.m_vKeyframes.size() && nPrevNextFrame < (int)prevTrack.m_vKeyframes.size())
-                    {
-                        const Keyframe& pk1 = prevTrack.m_vKeyframes[nPrevFrame];
-                        const Keyframe& pk2 = prevTrack.m_vKeyframes[nPrevNextFrame];
+                    const Keyframe& pk1 = prevTrack.m_vKeyframes[nPrevFrame];
+                    const Keyframe& pk2 = prevTrack.m_vKeyframes[nPrevNextFrame];
 
-                        XMVECTOR prevPos = XMVectorLerp(XMLoadFloat3(&pk1.m_xmf3Position), XMLoadFloat3(&pk2.m_xmf3Position), fPrevRatio);
-                        XMVECTOR prevRot = XMQuaternionSlerp(XMLoadFloat4(&pk1.m_xmf4Rotation), XMLoadFloat4(&pk2.m_xmf4Rotation), fPrevRatio);
-                        XMVECTOR prevScale = XMVectorLerp(XMLoadFloat3(&pk1.m_xmf3Scale), XMLoadFloat3(&pk2.m_xmf3Scale), fPrevRatio);
+                    XMVECTOR prevPos = XMVectorLerp(XMLoadFloat3(&pk1.m_xmf3Position), XMLoadFloat3(&pk2.m_xmf3Position), fPrevRatio);
+                    XMVECTOR prevRot = XMQuaternionSlerp(XMLoadFloat4(&pk1.m_xmf4Rotation), XMLoadFloat4(&pk2.m_xmf4Rotation), fPrevRatio);
+                    XMVECTOR prevScale = XMVectorLerp(XMLoadFloat3(&pk1.m_xmf3Scale), XMLoadFloat3(&pk2.m_xmf3Scale), fPrevRatio);
 
-                        // Blend between previous and current
-                        finalPos = XMVectorLerp(prevPos, currPos, fBlendWeight);
-                        finalRot = XMQuaternionSlerp(prevRot, currRot, fBlendWeight);
-                        finalScale = XMVectorLerp(prevScale, currScale, fBlendWeight);
-                    }
-                    break;
+                    finalPos = XMVectorLerp(prevPos, currPos, fBlendWeight);
+                    finalRot = XMQuaternionSlerp(prevRot, currRot, fBlendWeight);
+                    finalScale = XMVectorLerp(prevScale, currScale, fBlendWeight);
                 }
             }
         }
@@ -242,52 +260,26 @@ void AnimationComponent::Update(float deltaTime)
         pTransform->SetLocalMatrix(Matrix4x4::Identity());
     }
 
-    // --- Skinning Logic (Find ALL SkinnedMeshes in hierarchy) ---
-    bool s_bCastLog = m_bBoneLogDone;
-
-    struct SkinnedMeshEntry
-    {
-        SkinnedMesh* pMesh;
-        GameObject* pHolder;
-    };
-    std::vector<SkinnedMeshEntry> vSkinnedMeshes;
-
-    std::function<void(GameObject*)> FindAllSkinnedMeshes = [&](GameObject* pObj)
-    {
-        Mesh* pMesh = pObj->GetMesh();
-        if (pMesh && (pMesh->GetType() & 0x10))
-        {
-            vSkinnedMeshes.push_back({ static_cast<SkinnedMesh*>(pMesh), pObj });
-        }
-        if (pObj->m_pChild) FindAllSkinnedMeshes(pObj->m_pChild);
-        if (pObj->m_pSibling) FindAllSkinnedMeshes(pObj->m_pSibling);
-    };
-    FindAllSkinnedMeshes(m_pOwner);
-
-    if (!s_bCastLog)
-    {
-        m_bBoneLogDone = true;
-    }
+    // --- Skinning Logic ---
+    // Init 시점에 캐싱한 m_vSkinnedMeshes / m_vHierarchyTransforms 를 그대로 사용.
+    // 이전엔 std::function 재귀 람다로 매 프레임 트리 전체 스캔 (트리 크기 + lambda 오버헤드).
+    m_bBoneLogDone = true;
 
     // F3: skip skinning → explicitly clear bIsSkinned so shader uses raw bind-pose vertices
-    if (!vSkinnedMeshes.empty() && s_bDebugStaticPose)
+    if (!m_vSkinnedMeshes.empty() && s_bDebugStaticPose)
     {
-        for (const auto& entry : vSkinnedMeshes)
+        for (const auto& entry : m_vSkinnedMeshes)
             entry.pHolder->SetSkinned(false);
         return;
     }
 
-    if (!vSkinnedMeshes.empty())
+    if (!m_vSkinnedMeshes.empty())
     {
-        std::function<void(GameObject*)> ForceUpdateTransforms = [&](GameObject* pObj)
-        {
-            pObj->GetTransform()->Update(0.0f);
-            if (pObj->m_pChild) ForceUpdateTransforms(pObj->m_pChild);
-            if (pObj->m_pSibling) ForceUpdateTransforms(pObj->m_pSibling);
-        };
-        ForceUpdateTransforms(m_pOwner);
+        // 캐시된 TransformComponent 들에 대해 Update(0) 호출 (world matrix 갱신)
+        for (TransformComponent* pT : m_vHierarchyTransforms)
+            pT->Update(0.0f);
 
-        for (const auto& entry : vSkinnedMeshes)
+        for (const auto& entry : m_vSkinnedMeshes)
         {
             SkinnedMesh* pSkinnedMesh = entry.pMesh;
             GameObject* pMeshHolder = entry.pHolder;

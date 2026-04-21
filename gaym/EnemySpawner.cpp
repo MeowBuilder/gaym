@@ -80,7 +80,7 @@ void EnemySpawner::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pComma
     airElemental.m_strMeshPath      = "Assets/Enemies/Elementals/AirElemental_Bl/AirElemental_Bl.bin";
     airElemental.m_strAnimationPath = "Assets/Enemies/Elementals/AirElemental_Bl/AirElemental_Bl_Anim.bin";
     airElemental.m_strTexturePath   = "Assets/Enemies/Elementals/AirElemental_Bl/Textures/T_AirElemental_Body_Bl_D.png";
-    airElemental.m_xmf3Scale = XMFLOAT3(2.0f, 2.0f, 2.0f);
+    airElemental.m_xmf3Scale = XMFLOAT3(5.0f, 5.0f, 5.0f);
     airElemental.m_xmf4Color = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
 
     airElemental.m_Stats.m_fMaxHP          = 80.0f;
@@ -104,7 +104,7 @@ void EnemySpawner::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pComma
     rushAoE.m_strMeshPath      = "Assets/Enemies/Elementals/FireGolem_Rd/FireGolem_Rd.bin";
     rushAoE.m_strAnimationPath = "Assets/Enemies/Elementals/FireGolem_Rd/FireGolem_Rd_Anim.bin";
     rushAoE.m_strTexturePath   = "Assets/Enemies/Elementals/FireGolem_Rd/Textures/T_FireGolem_Rd_D.png";
-    rushAoE.m_xmf3Scale = XMFLOAT3(2.0f, 2.0f, 2.0f);
+    rushAoE.m_xmf3Scale = XMFLOAT3(5.0f, 5.0f, 5.0f);
     rushAoE.m_xmf4Color = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
 
     rushAoE.m_Stats.m_fMaxHP          = 100.0f;
@@ -130,7 +130,7 @@ void EnemySpawner::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pComma
     rushFront.m_strMeshPath      = "Assets/Enemies/Elementals/EarthElemental_Gn/EarthElemental_Gn.bin";
     rushFront.m_strAnimationPath = "Assets/Enemies/Elementals/EarthElemental_Gn/EarthElemental_Gn_Anim.bin";
     rushFront.m_strTexturePath   = "Assets/Enemies/Elementals/EarthElemental_Gn/Textures/T_EarthElemental_Gn_D.png";
-    rushFront.m_xmf3Scale = XMFLOAT3(2.0f, 2.0f, 2.0f);
+    rushFront.m_xmf3Scale = XMFLOAT3(5.0f, 5.0f, 5.0f);
     rushFront.m_xmf4Color = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
 
     rushFront.m_Stats.m_fMaxHP          = 80.0f;
@@ -157,7 +157,7 @@ void EnemySpawner::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pComma
     ranged.m_strMeshPath      = "Assets/Enemies/Elementals/StormElemental_Bl/StormElemental_Bl.bin";
     ranged.m_strAnimationPath = "Assets/Enemies/Elementals/StormElemental_Bl/StormElemental_Bl_Anim.bin";
     ranged.m_strTexturePath   = "Assets/Enemies/Elementals/StormElemental_Bl/Textures/T_StormElemental_Bl_D.png";
-    ranged.m_xmf3Scale = XMFLOAT3(2.0f, 2.0f, 2.0f);
+    ranged.m_xmf3Scale = XMFLOAT3(5.0f, 5.0f, 5.0f);
     ranged.m_xmf4Color = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
 
     ranged.m_Stats.m_fMaxHP          = 60.0f;
@@ -180,7 +180,7 @@ void EnemySpawner::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pComma
     dragon.m_strMeshPath = "Assets/Enemies/Dragon/Red.bin";
     dragon.m_strAnimationPath = "Assets/Enemies/Dragon/Red_Anim.bin";
     dragon.m_strTexturePath = "Assets/Enemies/Dragon/Textures/RedHP.png";
-    dragon.m_xmf3Scale = XMFLOAT3(3.0f, 3.0f, 3.0f);  // 더 크게
+    dragon.m_xmf3Scale = XMFLOAT3(5.0f, 5.0f, 5.0f);  // 더 크게
     dragon.m_xmf4Color = XMFLOAT4(1.0f, 0.3f, 0.1f, 1.0f);
     dragon.m_Stats.m_fMaxHP = 800.0f;           // HP 대폭 상향
     dragon.m_Stats.m_fCurrentHP = 800.0f;
@@ -388,7 +388,7 @@ void EnemySpawner::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pComma
     kraken.m_strMeshPath      = "Assets/Enemies/Kraken/KRAKEN.bin";
     kraken.m_strAnimationPath = "Assets/Enemies/Kraken/KRAKEN_Anim.bin";
     kraken.m_strTexturePath   = "Assets/Enemies/Kraken/Textures/Tex_KRAKEN_BODY_BaseColor.png";
-    kraken.m_xmf3Scale = XMFLOAT3(3.0f, 3.0f, 3.0f);
+    kraken.m_xmf3Scale = XMFLOAT3(5.0f, 5.0f, 5.0f);
     kraken.m_xmf4Color = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
     kraken.m_fColliderXZMultiplier = 0.8f;   // 거대 몸체에 맞춰 XZ 피격 반경 확대
 
@@ -717,7 +717,7 @@ void EnemySpawner::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pComma
     blueDragon.m_strMeshPath      = "Assets/Enemies/Dragon_blue/Blue.bin";
     blueDragon.m_strAnimationPath = "Assets/Enemies/Dragon_blue/Blue_Anim.bin";
     blueDragon.m_strTexturePath   = "Assets/Enemies/Dragon_blue/Textures/BlueHP.png";
-    blueDragon.m_xmf3Scale = XMFLOAT3(3.0f, 3.0f, 3.0f);
+    blueDragon.m_xmf3Scale = XMFLOAT3(5.0f, 5.0f, 5.0f);
     blueDragon.m_xmf4Color = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
     blueDragon.m_fColliderXZMultiplier = 1.0f;   // 뚱뚱한 몸집에 맞게 피격 판정 확대 (기본 0.3 → 1.0)
 

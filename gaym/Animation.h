@@ -3,6 +3,7 @@
 #include <string>
 #include <vector>
 #include <map>
+#include <unordered_map>
 #include <memory>
 
 struct Keyframe
@@ -26,8 +27,20 @@ public:
     float m_fDuration;
     float m_fFrameRate;
     int m_nTotalFrames;
-    
+
     std::vector<BoneTrack> m_vBoneTracks;
+
+    // 본 이름 → m_vBoneTracks 인덱스. 블렌드 시 이전 clip 의 같은 본을 O(1) lookup 하려고 씀.
+    // 로더(AnimationSet::LoadAnimationFromFile) 가 모든 트랙 push 후 BuildBoneIndex() 호출.
+    std::unordered_map<std::string, int> m_mapBoneNameToIndex;
+
+    void BuildBoneIndex()
+    {
+        m_mapBoneNameToIndex.clear();
+        m_mapBoneNameToIndex.reserve(m_vBoneTracks.size());
+        for (int i = 0; i < (int)m_vBoneTracks.size(); ++i)
+            m_mapBoneNameToIndex[m_vBoneTracks[i].m_strBoneName] = i;
+    }
 };
 
 class AnimationSet

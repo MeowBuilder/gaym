@@ -11,6 +11,7 @@
 #include "Scene.h"
 #include "ParticleSystem.h"
 #include "Particle.h"
+#include "DamageNumberManager.h"
 
 PlayerComponent::PlayerComponent(GameObject* pOwner)
     : Component(pOwner)
@@ -372,6 +373,23 @@ void PlayerComponent::TakeDamage(float fDamage)
     if (m_fCurrentHP < 0.0f)
     {
         m_fCurrentHP = 0.0f;
+    }
+
+    // 피격 연출 — 네트워크 모드 ProcessPlayerDamage 와 동일한 플래시/데미지 넘버/카메라 셰이크.
+    // 오프라인에선 이 세 가지가 누락되어 있어 체감상 "맞는지 모르겠음".
+    TriggerHitFlash();
+
+    if (m_pOwner && m_pOwner->GetTransform())
+    {
+        DirectX::XMFLOAT3 pos = m_pOwner->GetTransform()->GetPosition();
+        pos.y += 3.0f;
+        DamageNumberManager::Get().AddNumber(pos, fDamage);
+    }
+
+    if (Scene* pScene = Dx12App::GetInstance() ? Dx12App::GetInstance()->GetScene() : nullptr)
+    {
+        if (CCamera* pCam = pScene->GetCamera())
+            pCam->StartShake(3.0f, 0.35f);  // 체감상 보이도록 세기·지속 up
     }
 }
 

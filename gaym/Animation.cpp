@@ -130,6 +130,9 @@ bool AnimationSet::LoadAnimationFromFile(const char* pstrFileName)
         }
         if (!VerifyTag(pInFile, "</Clip>")) { fclose(pInFile); return false; }
 
+        // 블렌드 성능 최적화용 본명→인덱스 맵 구축 (O(본²) 선형 서치 제거)
+        pClip->BuildBoneIndex();
+
         m_vClips.push_back(pClip);
         m_mapClips[pClip->m_strName] = pClip;
     }

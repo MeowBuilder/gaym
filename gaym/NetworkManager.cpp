@@ -1123,25 +1123,25 @@ static MonsterPreset GetMonsterPresetByType(uint32 monsterType)
     case 2: // AirElemental
         return { "Assets/Enemies/Elementals/AirElemental_Bl/AirElemental_Bl.bin",
                  "Assets/Enemies/Elementals/AirElemental_Bl/AirElemental_Bl_Anim.bin",
-                 2.0f, "idle", "Run_Forward",
+                 5.0f, "idle", "Run_Forward",
                  "Assets/Enemies/Elementals/AirElemental_Bl/Textures/T_AirElemental_Body_Bl_D.png",
                  "Combat_Unarmed_Attack", "Death" };
     case 3: // RangedEnemy (StormElemental)
         return { "Assets/Enemies/Elementals/StormElemental_Bl/StormElemental_Bl.bin",
                  "Assets/Enemies/Elementals/StormElemental_Bl/StormElemental_Bl_Anim.bin",
-                 2.0f, "idle", "Run_Forward",
+                 5.0f, "idle", "Run_Forward",
                  "Assets/Enemies/Elementals/StormElemental_Bl/Textures/T_StormElemental_Bl_D.png",
                  "Combat_Unarmed_Attack", "Death" };
     case 4: // RushAoEEnemy (FireGolem)
         return { "Assets/Enemies/Elementals/FireGolem_Rd/FireGolem_Rd.bin",
                  "Assets/Enemies/Elementals/FireGolem_Rd/FireGolem_Rd_Anim.bin",
-                 2.0f, "idle", "Run_Forward",
+                 5.0f, "idle", "Run_Forward",
                  "Assets/Enemies/Elementals/FireGolem_Rd/Textures/T_FireGolem_Rd_D.png",
                  "Combat_Unarmed_Attack", "Death" };
     case 5: // RushFrontEnemy (EarthElemental)
         return { "Assets/Enemies/Elementals/EarthElemental_Gn/EarthElemental_Gn.bin",
                  "Assets/Enemies/Elementals/EarthElemental_Gn/EarthElemental_Gn_Anim.bin",
-                 2.0f, "idle", "Run_Forward",
+                 5.0f, "idle", "Run_Forward",
                  "Assets/Enemies/Elementals/EarthElemental_Gn/Textures/T_EarthElemental_Gn_D.png",
                  "Combat_Unarmed_Attack", "Death" };
     case 6: // Dragon (Red)
@@ -1173,7 +1173,7 @@ static MonsterPreset GetMonsterPresetByType(uint32 monsterType)
     default:
         return { "Assets/Enemies/Elementals/AirElemental_Bl/AirElemental_Bl.bin",
                  "Assets/Enemies/Elementals/AirElemental_Bl/AirElemental_Bl_Anim.bin",
-                 2.0f, "idle", "Run_Forward",
+                 5.0f, "idle", "Run_Forward",
                  "Assets/Enemies/Elementals/AirElemental_Bl/Textures/T_AirElemental_Body_Bl_D.png",
                  "Combat_Unarmed_Attack", "Death" };
     }

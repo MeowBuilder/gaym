@@ -28,7 +28,8 @@ void EnemyComponent::Update(float deltaTime)
     {
         m_fHitFlashTimer -= deltaTime;
         float flash = (m_fHitFlashTimer > 0.f) ? (m_fHitFlashTimer / FLASH_DURATION) : 0.f;
-        if (m_pOwner) m_pOwner->SetHitFlash(flash);
+        // 계층 전체 전파 — 자식 mesh 도 플래시 CB 반영 (SetHitFlash 는 root 만 설정)
+        if (m_pOwner) m_pOwner->SetHitFlashAll(flash);
     }
 
     // 방어 분쇄 디버프 타이머
@@ -242,9 +243,9 @@ void EnemyComponent::TakeDamage(float fDamage, bool bTriggerStagger)
     fDamage /= m_fDefenseMult;  // 방어 분쇄: defenseMult < 1이면 데미지 증가
     m_Stats.m_fCurrentHP -= fDamage;
 
-    // Hit flash
+    // Hit flash — 계층 전체 전파 (자식 mesh 까지) 해야 실제로 보임
     m_fHitFlashTimer = FLASH_DURATION;
-    if (m_pOwner) m_pOwner->SetHitFlash(1.f);
+    if (m_pOwner) m_pOwner->SetHitFlashAll(1.f);
 
     // Floating damage number
     if (m_pOwner && m_pOwner->GetTransform())
