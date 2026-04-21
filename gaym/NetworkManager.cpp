@@ -15,6 +15,7 @@
 #include "PlayerComponent.h"
 #include "Camera.h"
 #include "DamageNumberManager.h"
+#include "Room.h"
 
 // ServerPacketHandler.cpp에 정의된 파일 로그 함수 — network_log.txt에 append
 extern void WriteNetworkLog(const std::string& msg);
@@ -286,11 +287,21 @@ void NetworkManager::Update(Scene* pScene, ID3D12Device* pDevice, ID3D12Graphics
             break;
 
         case NetworkCommand::MonsterAttack:
-            ProcessMonsterAttack(pScene, cmd.monsterId, cmd.attackType, cmd.windupSec);
+            ProcessMonsterAttack(pScene, cmd.monsterId, cmd.attackType, cmd.windupSec,
+                                 cmd.targetPlayerId, cmd.x, cmd.y, cmd.z);
             break;
 
         case NetworkCommand::PlayerDamage:
             ProcessPlayerDamage(pScene, cmd.playerId, cmd.damage, cmd.currentHp, cmd.isDead, cmd.attackerMonsterId);
+            break;
+
+        case NetworkCommand::MonsterDamage:
+            ProcessMonsterDamage(pScene, cmd.monsterId, cmd.damage, cmd.currentHp, cmd.isDead,
+                                 cmd.attackerPlayerId, cmd.skillType);
+            break;
+
+        case NetworkCommand::RoomCleared:
+            ProcessRoomCleared(pScene, cmd.stageIndex, cmd.roomIndex);
             break;
         }
     }
@@ -362,6 +373,35 @@ void NetworkManager::SendTorchInteract()
 
     OutputDebugString(L"[CLIENT][SendTorchInteract] sent\n");
     WriteNetworkLog("[Network] C_TORCH_INTERACT sent");
+}
+
+void NetworkManager::SendPlayerAttack(int skillType,
+                                      float x, float y, float z,
+                                      float dirX, float dirY, float dirZ,
+                                      float targetX, float targetY, float targetZ)
+{
+    if (!m_bConnected || !m_pSession)
+        return;
+
+    Protocol::C_PLAYER_ATTACK pkt;
+    pkt.set_skilltype(static_cast<Protocol::SkillType>(skillType));
+    pkt.set_x(x);
+    pkt.set_y(y);
+    pkt.set_z(z);
+    pkt.set_dirx(dirX);
+    pkt.set_diry(dirY);
+    pkt.set_dirz(dirZ);
+    pkt.set_targetx(targetX);
+    pkt.set_targety(targetY);
+    pkt.set_targetz(targetZ);
+
+    auto sendBuffer = ServerPacketHandler::MakeSendBuffer(pkt);
+    m_pSession->Send(sendBuffer);
+
+    char buf[256];
+    sprintf_s(buf, "[Network] C_PLAYER_ATTACK sent: skillType=%d pos=(%.2f,%.2f,%.2f) target=(%.2f,%.2f,%.2f)",
+        skillType, x, y, z, targetX, targetY, targetZ);
+    WriteNetworkLog(buf);
 }
 
 void NetworkManager::QueueRoomTransition(uint32 stageIndex, uint32 roomIndex, bool isBossRoom)
@@ -468,6 +508,12 @@ void NetworkManager::ProcessRoomTransition(Scene* pScene, uint32 stageIndex, uin
         // roomIndex를 풀 인덱스로 사용 → 모든 클라가 동일한 맵 로드
         pScene->TransitionToRoomByIndex(static_cast<int>(roomIndex));
     }
+
+    // 방 전환이 끝나면 서버 몬스터 스폰을 트리거해야 함.
+    // 서버 Room 은 HandleTorchInteract 를 받아야만 몬스터를 스폰하도록 돼 있음 (최초 방 진입과 동일 플로우).
+    // 오프라인에서는 방 Active 시 자동 스폰이지만, 네트워크 모드에서는 C_TORCH_INTERACT 가 스폰 트리거.
+    // 첫 방에선 맵에 배치된 횃불/큐브를 F 로 눌러 시작했지만, 다음 방 이후에는 자동으로 요청해준다.
+    SendTorchInteract();
 }
 
 void NetworkManager::QueueSpawnPlayer(uint64 playerId, const std::string& name, int playerType, float x, float y, float z)
@@ -1272,9 +1318,12 @@ void NetworkManager::ProcessMonsterMove(uint64 monsterId, float x, float y, floa
             bAttackLocked = true;
     }
 
+    // 죽은 몬스터는 death 애니 유지 — walk 로 덮지 않음 (despawn 대기 중 2s 동안 이동 패킷 올 수 있음)
+    bool bDead = (m_setDeadServerMonsters.find(monsterId) != m_setDeadServerMonsters.end());
+
     // 걷기 애니메이션 부드럽게 전환 — preset별 walk 클립 이름 사용
     auto* pAnim = pMonster->GetComponent<AnimationComponent>();
-    if (pAnim && !bAttackLocked)
+    if (pAnim && !bAttackLocked && !bDead)
     {
         auto clipIt = m_mapServerMonsterClips.find(monsterId);
         const char* walkClip = (clipIt != m_mapServerMonsterClips.end())
@@ -1287,6 +1336,27 @@ void NetworkManager::ProcessMonsterMove(uint64 monsterId, float x, float y, floa
 
 void NetworkManager::CheckServerMonsterIdle(float deltaTime)
 {
+    // (0) Hit flash 페이드아웃 — SetHitFlashAll 이 자동 감쇠 안 하므로 수동 tick (원격 플레이어와 동일 패턴)
+    for (auto it = m_mapServerMonsterHitFlashTimer.begin(); it != m_mapServerMonsterHitFlashTimer.end(); )
+    {
+        it->second -= deltaTime;
+        auto mIt = m_mapServerMonsters.find(it->first);
+        if (mIt != m_mapServerMonsters.end() && mIt->second)
+        {
+            if (it->second > 0.0f)
+            {
+                float f = it->second / SERVER_MONSTER_HIT_FLASH_DURATION;
+                mIt->second->SetHitFlashAll(f);
+            }
+            else
+            {
+                mIt->second->SetHitFlashAll(0.0f);
+            }
+        }
+        if (it->second <= 0.0f) it = m_mapServerMonsterHitFlashTimer.erase(it);
+        else ++it;
+    }
+
     // (1) 공격 애니 타이머 감소 — 0 되면 idle 로 자동 복귀 (Move 안 오고 공격만 끝난 경우)
     for (auto it = m_mapServerMonsterAttackTimer.begin(); it != m_mapServerMonsterAttackTimer.end(); )
     {
@@ -1294,7 +1364,9 @@ void NetworkManager::CheckServerMonsterIdle(float deltaTime)
         if (it->second <= 0.0f)
         {
             auto mIt = m_mapServerMonsters.find(it->first);
-            if (mIt != m_mapServerMonsters.end())
+            // 죽은 몬스터는 death 애니 유지 — idle 로 덮지 않음
+            bool bDead = (m_setDeadServerMonsters.find(it->first) != m_setDeadServerMonsters.end());
+            if (mIt != m_mapServerMonsters.end() && !bDead)
             {
                 auto* pAnim = mIt->second->GetComponent<AnimationComponent>();
                 if (pAnim)
@@ -1317,7 +1389,8 @@ void NetworkManager::CheckServerMonsterIdle(float deltaTime)
         if (it->second >= IDLE_TRANSITION_TIME)
         {
             auto mIt = m_mapServerMonsters.find(it->first);
-            if (mIt != m_mapServerMonsters.end())
+            bool bDead = (m_setDeadServerMonsters.find(it->first) != m_setDeadServerMonsters.end());
+            if (mIt != m_mapServerMonsters.end() && !bDead)
             {
                 // 공격 애니 재생 중이면 건드리지 않음 (공격 타이머 쪽이 마무리함)
                 auto atkIt = m_mapServerMonsterAttackTimer.find(it->first);
@@ -1338,7 +1411,8 @@ void NetworkManager::CheckServerMonsterIdle(float deltaTime)
     }
 }
 
-void NetworkManager::ProcessMonsterAttack(Scene* pScene, uint64 monsterId, uint32 attackType, float windupSec)
+void NetworkManager::ProcessMonsterAttack(Scene* pScene, uint64 monsterId, uint32 attackType, float windupSec,
+                                          uint64 targetPlayerId, float atkX, float atkY, float atkZ)
 {
     auto it = m_mapServerMonsters.find(monsterId);
     if (it == m_mapServerMonsters.end())
@@ -1348,6 +1422,10 @@ void NetworkManager::ProcessMonsterAttack(Scene* pScene, uint64 monsterId, uint3
         WriteNetworkLog(buf);
         return;
     }
+
+    // 이미 사망한 몬스터는 공격 애니 재생 skip (death 유지)
+    if (m_setDeadServerMonsters.find(monsterId) != m_setDeadServerMonsters.end())
+        return;
 
     GameObject* pMonster = it->second;
     auto* pAnim = pMonster->GetComponent<AnimationComponent>();
@@ -1367,9 +1445,65 @@ void NetworkManager::ProcessMonsterAttack(Scene* pScene, uint64 monsterId, uint3
     // 공격 중엔 idle 전환 억제
     m_mapServerMonsterMoveTime.erase(monsterId);
 
+    // 원거리 공격 (MonsterAttackType::Ranged = 2) 이면 비쥬얼 투사체 스폰.
+    //   - 데미지는 서버가 S_PLAYER_DAMAGE 로 별도 처리 → 여기선 damage=0 으로 시각만 재현.
+    //   - CheckProjectileCollisions 의 enemy projectile 경로가 로컬 플레이어 충돌 시 projectile 제거해줌.
+    if (attackType == 2)
+    {
+        ProjectileManager* pProj = pScene ? pScene->GetProjectileManager() : nullptr;
+        if (pProj)
+        {
+            XMFLOAT3 startPos{ atkX, atkY + 1.5f, atkZ };
+
+            // 타겟 플레이어 위치 (로컬 or 원격)
+            XMFLOAT3 targetPos = startPos;
+            uint64 localId = GetLocalPlayerId();
+            if (targetPlayerId == localId)
+            {
+                if (GameObject* pLocal = pScene->GetPlayer())
+                {
+                    if (auto* pT = pLocal->GetTransform())
+                    {
+                        targetPos = pT->GetPosition();
+                        targetPos.y += 1.5f;
+                    }
+                }
+            }
+            else
+            {
+                auto rIt = m_mapRemotePlayers.find(targetPlayerId);
+                if (rIt != m_mapRemotePlayers.end() && rIt->second)
+                {
+                    if (auto* pT = rIt->second->GetTransform())
+                    {
+                        targetPos = pT->GetPosition();
+                        targetPos.y += 1.5f;
+                    }
+                }
+            }
+
+            constexpr float RANGED_SPEED = 18.f;
+            pProj->SpawnProjectile(
+                startPos, targetPos,
+                0.0f,        // damage (서버 권위)
+                RANGED_SPEED,
+                0.5f,        // collisionRadius
+                0.0f,        // explosionRadius (없음)
+                ElementType::Fire,
+                nullptr,     // owner
+                false,       // isPlayerProjectile → 로컬 플레이어와 충돌 체크 경로
+                1.0f,        // scale
+                RuneCombo{}, // 룬 없음
+                0.0f,        // chargeRatio
+                80.f,        // maxDistance
+                false, false, 0.f, 0.f, 0.f,
+                SkillSlot::Count);
+        }
+    }
+
     char buf[128];
-    sprintf_s(buf, "[Network] MonsterAttack applied: monsterId=%llu clip=%s lock=%.2fs",
-              monsterId, attackClip, lockDur);
+    sprintf_s(buf, "[Network] MonsterAttack applied: monsterId=%llu clip=%s lock=%.2fs atkType=%u",
+              monsterId, attackClip, lockDur, attackType);
     WriteNetworkLog(buf);
 }
 
@@ -1451,6 +1585,118 @@ void NetworkManager::ProcessPlayerDamage(Scene* pScene, uint64 playerId, float d
     WriteNetworkLog(buf);
 }
 
+void NetworkManager::QueueMonsterDamage(uint64 monsterId, float damage, float currentHp, bool isDead,
+                                        uint64 attackerPlayerId, int skillType)
+{
+    std::lock_guard<std::mutex> lock(m_queueMutex);
+
+    NetworkCommandData cmd{};
+    cmd.type = NetworkCommand::MonsterDamage;
+    cmd.monsterId = monsterId;
+    cmd.damage = damage;
+    cmd.currentHp = currentHp;
+    cmd.isDead = isDead;
+    cmd.attackerPlayerId = attackerPlayerId;
+    cmd.skillType = skillType;
+
+    m_vCommandQueue.push_back(cmd);
+}
+
+void NetworkManager::QueueRoomCleared(uint32 stageIndex, uint32 roomIndex)
+{
+    std::lock_guard<std::mutex> lock(m_queueMutex);
+
+    NetworkCommandData cmd{};
+    cmd.type = NetworkCommand::RoomCleared;
+    cmd.stageIndex = stageIndex;
+    cmd.roomIndex = roomIndex;
+
+    m_vCommandQueue.push_back(cmd);
+}
+
+void NetworkManager::ProcessMonsterDamage(Scene* pScene, uint64 monsterId, float damage,
+                                          float currentHp, bool isDead,
+                                          uint64 attackerPlayerId, int skillType)
+{
+    if (!pScene) return;
+
+    auto it = m_mapServerMonsters.find(monsterId);
+    if (it == m_mapServerMonsters.end())
+    {
+        char buf[128];
+        sprintf_s(buf, "[Network] MonsterDamage: unknown monsterId=%llu (despawned?)", monsterId);
+        WriteNetworkLog(buf);
+        return;
+    }
+
+    GameObject* pMonster = it->second;
+    if (!pMonster) return;
+
+    // 데미지 넘버 — 몬스터 머리 위
+    if (damage > 0.0f && pMonster->GetTransform())
+    {
+        XMFLOAT3 pos = pMonster->GetTransform()->GetPosition();
+        pos.y += 2.0f;  // EnemyComponent::TakeDamage 와 동일 오프셋
+        DamageNumberManager::Get().AddNumber(pos, damage);
+    }
+
+    // Hit flash — 0.15s 페이드 (원격 플레이어와 동일 패턴)
+    m_mapServerMonsterHitFlashTimer[monsterId] = SERVER_MONSTER_HIT_FLASH_DURATION;
+    pMonster->SetHitFlashAll(1.0f);
+
+    // 우클릭 (Fireball) 피격 시 폭발 VFX — 네트워크 몬스터는 EnemyComponent 가 없어서 로컬 투사체가 충돌
+    // 감지를 못 하고 그냥 통과, 폭발 이펙트가 안 뜨기 때문에 서버 피격 통지 시점에 몬스터 위치에서 수동 생성.
+    if (skillType == 4 /* SKILL_TYPE_MOUSE_RIGHT */)
+    {
+        ProjectileManager* pProj = pScene->GetProjectileManager();
+        if (pProj && pMonster->GetTransform())
+        {
+            pProj->SpawnExplosionParticles(pMonster->GetTransform()->GetPosition(), ElementType::Fire);
+        }
+    }
+
+    if (isDead)
+    {
+        // 사망 애니 재생 (preset deathClip) — 이후 MonsterMove/Attack 전환 skip
+        auto* pAnim = pMonster->GetComponent<AnimationComponent>();
+        auto clipIt = m_mapServerMonsterClips.find(monsterId);
+        if (pAnim && clipIt != m_mapServerMonsterClips.end() && !clipIt->second.death.empty())
+        {
+            pAnim->CrossFade(clipIt->second.death.c_str(), 0.15f, false, true);
+        }
+
+        m_setDeadServerMonsters.insert(monsterId);
+        m_mapServerMonsterMoveTime.erase(monsterId);
+        m_mapServerMonsterAttackTimer.erase(monsterId);
+    }
+
+    char buf[192];
+    sprintf_s(buf, "[Network] MonsterDamage applied: id=%llu dmg=%.1f hp=%.1f dead=%d attacker=%llu skill=%d",
+              monsterId, damage, currentHp, isDead ? 1 : 0, attackerPlayerId, skillType);
+    WriteNetworkLog(buf);
+}
+
+void NetworkManager::ProcessRoomCleared(Scene* pScene, uint32 stageIndex, uint32 roomIndex)
+{
+    if (!pScene) return;
+
+    // 현재 로컬 방을 Cleared 상태로 마크하고 포탈 큐브 스폰 (오프라인 경로와 동일 연출)
+    CRoom* pRoom = pScene->GetCurrentRoom();
+    if (pRoom)
+    {
+        if (pRoom->GetState() != RoomState::Cleared)
+            pRoom->SetState(RoomState::Cleared);
+
+        if (!pRoom->HasPortalCube())
+            pRoom->SpawnPortalCube();
+    }
+
+    char buf[128];
+    sprintf_s(buf, "[Network] RoomCleared applied: stage=%u room=%u portalSpawned=%d",
+              stageIndex, roomIndex, (pRoom && pRoom->HasPortalCube()) ? 1 : 0);
+    WriteNetworkLog(buf);
+}
+
 void NetworkManager::ProcessMonsterDespawn(Scene* pScene, uint64 monsterId)
 {
     auto it = m_mapServerMonsters.find(monsterId);
@@ -1464,6 +1710,8 @@ void NetworkManager::ProcessMonsterDespawn(Scene* pScene, uint64 monsterId)
     m_mapServerMonsterClips.erase(monsterId);
     m_mapServerMonsterTarget.erase(monsterId);
     m_mapServerMonsterAttackTimer.erase(monsterId);
+    m_mapServerMonsterHitFlashTimer.erase(monsterId);
+    m_setDeadServerMonsters.erase(monsterId);
 
     wchar_t buf[128];
     swprintf_s(buf, L"[Network] Despawned NetMonster_%llu\n", monsterId);

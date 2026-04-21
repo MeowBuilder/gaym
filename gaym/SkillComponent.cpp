@@ -66,6 +66,7 @@ void SkillComponent::Update(float deltaTime)
         if (m_fChannelTickAccum >= m_fChannelTickRate)
         {
             m_fChannelTickAccum -= m_fChannelTickRate;
+            m_bChannelTickFiredThisFrame = true;  // 네트워크 tick 판정용 플래그
 
             size_t index = static_cast<size_t>(m_ActiveSkillSlot);
             if (index < m_Skills.size() && m_Skills[index])
@@ -95,7 +96,7 @@ void SkillComponent::Update(float deltaTime)
             }
         }
 
-        // 채널링 중 네트워크 동기화 (방향 업데이트 전송)
+        // 채널링 중 네트워크 동기화 (방향 업데이트 전송 + 채널링 tick 에 맞춰 공격 판정 요청)
         NetworkManager* pNetMgr = NetworkManager::GetInstance();
         if (pNetMgr && pNetMgr->IsConnected() && m_pOwner)
         {
@@ -108,9 +109,23 @@ void SkillComponent::Update(float deltaTime)
                 DirectX::XMFLOAT3 lookDir;
                 DirectX::XMStoreFloat3(&lookDir, lookVec);
 
+                // VFX 방향 업데이트용 C_SKILL (원격 클라가 빔 따라가도록)
                 pNetMgr->SendSkill(skillType, pos.x, pos.y, pos.z, lookDir.x, lookDir.y, lookDir.z);
+
+                // 채널링 tick 이 발생한 이번 프레임이면 서버에 공격 판정 요청.
+                // 로컬은 FireBeamBehavior::Update 에서 HIT_INTERVAL(0.2s) 마다 다단 히트 — 서버도 같은 간격으로.
+                // (m_fChannelTickAccum 은 위에서 감소 후 여분이 남지만, 이번 프레임에 tick 이 발생했으면
+                //  감소 직후 값이 m_fChannelTickRate 보다 작다 — 간단히 "tick 발생 이번 프레임"을 따로 표시)
+                if (m_bChannelTickFiredThisFrame)
+                {
+                    pNetMgr->SendPlayerAttack(skillType,
+                        pos.x, pos.y, pos.z,
+                        lookDir.x, lookDir.y, lookDir.z,
+                        m_ChannelTargetPosition.x, m_ChannelTargetPosition.y, m_ChannelTargetPosition.z);
+                }
             }
         }
+        m_bChannelTickFiredThisFrame = false;
 
         // Check if channel duration expired
         if (m_fChannelTime >= m_fChannelDuration)
@@ -793,6 +808,15 @@ void SkillComponent::ExecuteWithActivationType(SkillSlot slot, const DirectX::XM
             {
                 pNetMgr->SendSkill(skillType, pos.x, pos.y, pos.z, lookDir.x, lookDir.y, lookDir.z);
             }
+
+            // 서버 히트 판정 요청 — C_PLAYER_ATTACK.
+            // 서버는 target 좌표 기준 반경 판정 (Q=6, E=8, R=10, 우클릭=5).
+            // Q/E/우클릭 모두 마우스로 조준해서 쓰는 원거리 스킬이므로, 조준 월드 좌표(targetPosition)를
+            // target 으로 쓰는 게 R 과 동일하게 가장 자연스러움. 플레이어가 조준한 지점 반경 내 몬스터가 맞는다.
+            pNetMgr->SendPlayerAttack(skillType,
+                pos.x, pos.y, pos.z,
+                lookDir.x, lookDir.y, lookDir.z,
+                targetPosition.x, targetPosition.y, targetPosition.z);
         }
     }
 }

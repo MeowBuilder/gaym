@@ -136,6 +136,7 @@ private:
     float m_fChannelTickRate = 0.2f;  // Time between ticks
     float m_fChannelTickAccum = 0.0f;
     DirectX::XMFLOAT3 m_ChannelTargetPosition;  // Stored target for channeling
+    bool m_bChannelTickFiredThisFrame = false;  // Set true on tick, consumed by network sync then reset
 
     // Enhance system
     bool m_bIsEnhanced = false;

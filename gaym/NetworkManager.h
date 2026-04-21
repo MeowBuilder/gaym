@@ -39,7 +39,9 @@ enum class NetworkCommand
     MonsterMove,
     MonsterDespawn,
     MonsterAttack,
-    PlayerDamage
+    PlayerDamage,
+    MonsterDamage,
+    RoomCleared
 };
 
 // 네트워크 명령 구조체
@@ -73,6 +75,7 @@ struct NetworkCommandData
     float currentHp;
     bool  isDead;
     uint64 attackerMonsterId;
+    uint64 attackerPlayerId;
 };
 
 // =============================================================================
@@ -132,6 +135,12 @@ public:
     // 방 전투 시작 요청 전송 (상호작용 큐브 F키) — 서버가 몬스터 스폰 트리거
     void SendTorchInteract();
 
+    // 플레이어 공격(히트 판정 요청) 전송 — 서버가 히트 판정 후 S_MONSTER_DAMAGE 브로드캐스트
+    void SendPlayerAttack(int skillType,
+                          float x, float y, float z,
+                          float dirX, float dirY, float dirZ,
+                          float targetX, float targetY, float targetZ);
+
     // 로컬 플레이어 ID 설정/조회 (atomic으로 스레드 안전)
     void SetLocalPlayerId(uint64 playerId) { m_nLocalPlayerId.store(playerId); }
     uint64 GetLocalPlayerId() const { return m_nLocalPlayerId.load(); }
@@ -160,9 +169,15 @@ public:
                             float x, float y, float z, float yaw, float windupSec);
     void QueuePlayerDamage(uint64 playerId, float damage, float currentHp, bool isDead, uint64 attackerMonsterId);
 
+    // 몬스터 피격 / 방 클리어 큐잉 (네트워크 스레드 → 메인 스레드)
+    void QueueMonsterDamage(uint64 monsterId, float damage, float currentHp, bool isDead,
+                            uint64 attackerPlayerId, int skillType);
+    void QueueRoomCleared(uint32 stageIndex, uint32 roomIndex);
+
     // 서버 몬스터 조회
     GameObject* GetServerMonster(uint64 monsterId);
     bool HasServerMonsters() const { return !m_mapServerMonsters.empty(); }
+    const std::unordered_map<uint64, GameObject*>& GetServerMonsters() const { return m_mapServerMonsters; }
 
     // 원격 플레이어 조회
     GameObject* GetRemotePlayer(uint64 playerId);
@@ -208,8 +223,12 @@ private:
     void ProcessMonsterDespawn(Scene* pScene, uint64 monsterId);
 
     // 전투 처리 (메인 스레드)
-    void ProcessMonsterAttack(Scene* pScene, uint64 monsterId, uint32 attackType, float windupSec);
+    void ProcessMonsterAttack(Scene* pScene, uint64 monsterId, uint32 attackType, float windupSec,
+                              uint64 targetPlayerId, float atkX, float atkY, float atkZ);
     void ProcessPlayerDamage(Scene* pScene, uint64 playerId, float damage, float currentHp, bool isDead, uint64 attackerMonsterId);
+    void ProcessMonsterDamage(Scene* pScene, uint64 monsterId, float damage, float currentHp, bool isDead,
+                              uint64 attackerPlayerId, int skillType);
+    void ProcessRoomCleared(Scene* pScene, uint32 stageIndex, uint32 roomIndex);
 
     // 서버 몬스터 관리 (메인 스레드에서만 접근)
     std::unordered_map<uint64, GameObject*> m_mapServerMonsters;
@@ -221,6 +240,13 @@ private:
     // 공격 애니 재생 중인 몬스터 — 이 시간 동안은 Move 와서도 Walk 로 덮어쓰지 않음
     std::unordered_map<uint64, float> m_mapServerMonsterAttackTimer;
     static constexpr float ATTACK_ANIM_LOCK = 0.6f;  // 공격 애니 지속 (대략)
+
+    // 서버 몬스터 hit flash 타이머 — 피격 시 glow 페이드아웃 (원격 플레이어와 동일 패턴)
+    std::unordered_map<uint64, float> m_mapServerMonsterHitFlashTimer;
+    static constexpr float SERVER_MONSTER_HIT_FLASH_DURATION = 0.15f;
+
+    // 사망 애니 재생된 서버 몬스터 ID — 이후 Move/Idle/Attack 전환 skip
+    std::unordered_set<uint64> m_setDeadServerMonsters;
 
     // 서버 MOVE 패킷 간격이 띄엄띄엄해서 직접 SetPosition하면 순간이동처럼 보임.
     // 타겟 pos/yaw 저장 → 매 프레임 exponential smoothing으로 접근.

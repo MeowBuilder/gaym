@@ -80,6 +80,9 @@ public:
     // Clear all projectiles
     void Clear();
 
+    // Spawn explosion particles at position — 네트워크 모드에서 서버 권위 피격 통지를 받아 클라가 직접 폭발 VFX 생성할 때도 사용
+    void SpawnExplosionParticles(const XMFLOAT3& position, ElementType element);
+
 private:
     // Check collisions for a single projectile
     void CheckProjectileCollisions(Projectile& projectile);
@@ -95,9 +98,6 @@ private:
 
     // Get color based on element type
     XMFLOAT4 GetElementColor(ElementType element) const;
-
-    // Spawn explosion particles at position
-    void SpawnExplosionParticles(const XMFLOAT3& position, ElementType element);
 
 private:
     std::vector<Projectile> m_Projectiles;

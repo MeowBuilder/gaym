@@ -12,6 +12,7 @@
 #include "TransformComponent.h"
 #include "Mesh.h"
 #include "DescriptorHeap.h"
+#include "NetworkManager.h"
 #include <DirectXCollision.h>
 #include <random>
 
@@ -360,6 +361,36 @@ void ProjectileManager::CheckProjectileCollisions(Projectile& projectile)
                 }
                 // 관통: 같은 적에 연속 히트 방지를 위해 잠깐 무적 처리 대신
                 // 단순히 충돌 구체를 통과한 뒤 다음 적을 노림 — 루프 계속
+            }
+        }
+
+        // 네트워크 모드: 서버 몬스터 (EnemyComponent 없음, 로컬 Room 밖에 존재) 도 충돌 체크.
+        // 데미지는 서버 권위이므로 여기선 폭발 VFX 트리거 + projectile 비활성화만 처리.
+        // wasHit=true 면 Update 루프가 FluidVFXManager::ExplodeEffect 를 불러줘서 폭발 이펙트가 자연 생성됨.
+        NetworkManager* pNetMgr = NetworkManager::GetInstance();
+        if (pNetMgr && pNetMgr->IsConnected() && projectile.isActive)
+        {
+            for (const auto& kv : pNetMgr->GetServerMonsters())
+            {
+                GameObject* netMonster = kv.second;
+                if (!netMonster) continue;
+                TransformComponent* pT = netMonster->GetTransform();
+                if (!pT) continue;
+
+                XMFLOAT3 mPos = pT->GetPosition();
+                XMFLOAT3 mScale = pT->GetScale();
+                float maxScale = max(mScale.x, max(mScale.y, mScale.z));
+                float radius = max(1.5f, maxScale * 1.5f);
+
+                BoundingSphere mSphere(mPos, radius);
+                mSphere.Center.y += radius * 0.7f;
+
+                if (projSphere.Intersects(mSphere))
+                {
+                    projectile.wasHit = true;
+                    projectile.isActive = false;
+                    return;  // 관통 없음 — 첫 서버 몬스터 충돌 시 폭발
+                }
             }
         }
     }

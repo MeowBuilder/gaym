@@ -342,3 +342,44 @@ bool Handle_S_PLAYER_DAMAGE(PacketSessionRef& session, Protocol::S_PLAYER_DAMAGE
     }
     return true;
 }
+
+// 몬스터 피격 처리 (플레이어 -> 몬스터 공격 결과)
+bool Handle_S_MONSTER_DAMAGE(PacketSessionRef& session, Protocol::S_MONSTER_DAMAGE& pkt)
+{
+    uint64 monsterId = pkt.monsterid();
+    float damage = pkt.damage();
+    float currentHp = pkt.currenthp();
+    bool isDead = pkt.isdead();
+    uint64 attackerPlayerId = pkt.attackerplayerid();
+    int skillType = static_cast<int>(pkt.skilltype());
+
+    char buf[256];
+    sprintf_s(buf, "[Network] S_MONSTER_DAMAGE received: monsterId=%llu damage=%.2f currentHp=%.2f isDead=%d attackerPlayerId=%llu skillType=%d",
+        monsterId, damage, currentHp, isDead ? 1 : 0, attackerPlayerId, skillType);
+    WriteNetworkLog(buf);
+
+    NetworkManager* pNetMgr = NetworkManager::GetInstance();
+    if (pNetMgr)
+    {
+        pNetMgr->QueueMonsterDamage(monsterId, damage, currentHp, isDead, attackerPlayerId, skillType);
+    }
+    return true;
+}
+
+// 방 클리어 처리
+bool Handle_S_ROOM_CLEARED(PacketSessionRef& session, Protocol::S_ROOM_CLEARED& pkt)
+{
+    uint32 stageIndex = pkt.stageindex();
+    uint32 roomIndex = pkt.roomindex();
+
+    char buf[256];
+    sprintf_s(buf, "[Network] S_ROOM_CLEARED received: stage=%u room=%u", stageIndex, roomIndex);
+    WriteNetworkLog(buf);
+
+    NetworkManager* pNetMgr = NetworkManager::GetInstance();
+    if (pNetMgr)
+    {
+        pNetMgr->QueueRoomCleared(stageIndex, roomIndex);
+    }
+    return true;
+}
