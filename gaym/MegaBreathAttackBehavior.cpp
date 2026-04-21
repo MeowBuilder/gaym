@@ -243,8 +243,9 @@ void MegaBreathAttackBehavior::Update(float dt, EnemyComponent* pEnemy)
                     pCamera->StartShake(2.5f, m_fBreathDuration);  // 거대 파도 강렬한 진동
                 }
             }
-            // 집결 VFX 정리 — 터진 순간 사라지고 Beam으로 대체
-            DestroyChargeVFX();
+            // (2) 집결된 charge 파티클을 입 위치에서 방사형 폭발 → shockwave 연출.
+            //     StopEffect 대신 ExplodeEffect 로 모인 파티클이 흩어지며 자연 소멸.
+            TriggerMouthShockwave();
             SpawnFireWave(pEnemy);
 
         }
@@ -1175,12 +1176,20 @@ void MegaBreathAttackBehavior::SpawnFireWave(EnemyComponent* pEnemy)
 
 void MegaBreathAttackBehavior::UpdateFireWave(float dt, EnemyComponent* pEnemy)
 {
-    // SPH wave 는 자체 waveSpeed + wavePushForce 로 자율 전진 —
-    // 여기서는 데미지 판정용 Wave 진행 위치만 FluidSkillVFXManager 로부터 조회
-    // (ApplyBreathDamage 는 IsPointInWave API 사용)
+    UNREFERENCED_PARAMETER(pEnemy);
+
+    // (3) 파도 전진 위치에 heat trail 주기 드롭 — 지나간 자리에 잔불
+    m_fTrailDropTimer += dt;
+    if (m_fTrailDropTimer >= TRAIL_DROP_INTERVAL)
+    {
+        m_fTrailDropTimer -= TRAIL_DROP_INTERVAL;
+        DropHeatTrail();
+    }
 }
 
 // ─── Charge VFX: 입 주변 파티클 집결 "곧 뭔가 온다" ────────────────────────
+// 플레이어 우클릭(Fireball) VFX 의 "사방에서 수렴하는 혜성" 느낌을 가져와서
+// 보스 스케일로 키움 — 발사(origin 이동)는 없음. origin 을 입 위치로 고정해 그 자리에 맺힘.
 void MegaBreathAttackBehavior::SpawnChargeVFX(EnemyComponent* pEnemy)
 {
     if (!pEnemy || !m_pRoom) return;
@@ -1199,51 +1208,35 @@ void MegaBreathAttackBehavior::SpawnChargeVFX(EnemyComponent* pEnemy)
     auto* pT = pOwner->GetTransform();
     if (!pT) return;
 
-    // 입 위치 근사 (Windup 단계의 보스 회전 기준) — 몸통 뒤쪽이 아닌 실제 입 앞쪽
+    // 입 위치 근사 (Windup 단계의 보스 회전 기준) — beam origin 과 동일
     XMFLOAT3 bossPos = pT->GetPosition();
     XMFLOAT3 bossRot = pT->GetRotation();
     float yawRad = XMConvertToRadians(bossRot.y);
 
-    // 입 앞쪽으로 이동 (13→17 전방, 6→7 높이) — beam origin 과 동일
     XMFLOAT3 mouth;
     mouth.x = bossPos.x + sinf(yawRad) * 17.0f;
     mouth.y = bossPos.y + 7.0f;
     mouth.z = bossPos.z + cosf(yawRad) * 17.0f;
     XMFLOAT3 forward = { sinf(yawRad), 0.0f, cosf(yawRad) };
 
-    // ControlPoint 모드 — 파티클이 멀리서 천천히 입쪽으로 흘러들어옴
-    VFXSequenceDef def;
-    def.name          = "Dragon_MegaBreath_Charge";
-    def.element       = ElementType::Fire;
-    def.particleCount = 5500;         // 3500→5500: 빈칸 제거 (밀도 ↑)
-    def.spawnRadius   = 0.7f;
-    def.particleSize  = 0.8f;         // 0.55→0.8: 겹침 확보 + 존재감
-    def.useSSFBlur    = false;
+    // 플레이어 RightClick 의 def 를 가져와서 보스 스케일로 확대.
+    VFXSequenceDef def = VFXLibrary::Get().GetDef(SkillSlot::RightClick, RUNE_NONE, ElementType::Fire);
+    def.name = "Dragon_MegaBreath_Charge";
 
-    // cardinal 스폰 — 6m 반경(8→6)으로 타이트하게 모아 밀도 유지
-    def.cardinalSpawnRadius = 6.0f;
-    def.cardinalInwardSpeed = 2.0f;
+    // 보스용 스케일 업 — 입 앞에 맺히는 거대 화염구 느낌
+    def.particleCount      = static_cast<int>(def.particleCount * 4);  // 420 → 1680
+    def.spawnRadius       *= 2.0f;   // 0.8 → 1.6
+    def.cardinalSpawnRadius *= 2.0f; // 4.0 → 8.0
+    def.particleSize      *= 1.3f;   // 존재감 증대
 
-    // 색상 — core/edge 대비 강화: 노란-흰 코어 ↔ 깊은 적색 에지 (단색 탈피)
-    def.overrideColors    = true;
-    def.overrideCoreColor = { 1.0f, 0.95f, 0.55f, 1.0f };  // 뜨거운 노란-흰 코어
-    def.overrideEdgeColor = { 0.85f, 0.1f, 0.0f, 0.9f };   // 깊은 적색 외곽
+    // CP 조정: 인력은 완만하게(Windup 1.2s 동안 빨려드는 타임), 목표 구체 크게
+    if (!def.cpDescs.empty())
+    {
+        def.cpDescs[0].attractionStrength *= 0.6f;  // 너무 빨리 수렴 방지
+        def.cpDescs[0].sphereRadius       *= 2.0f;  // 1.2 → 2.4
+    }
 
-    // 중심 attractor CP — 약하게: 스폰 초반 관성 손상 없이 천천히 빨려듦
-    FluidCPDesc cp;
-    cp.forwardBias        = 0.0f;
-    cp.attractionStrength = 2.8f;     // 기존 5.5 → 더 약하게
-    cp.sphereRadius       = 1.2f;
-    def.cpDescs.push_back(cp);
-
-    VFXPhase p;
-    p.startTime  = 0.f;
-    p.duration   = 99.f;
-    p.motionMode = ParticleMotionMode::ControlPoint;
-    p.offsetParticlesWithOrigin = true;
-    def.phases.push_back(p);
-
-    // Player manager + SSF 경로 (isPlayerEffect=true 기본값)
+    // origin 고정 — offsetParticlesWithOrigin=true 이지만 origin 자체가 안 움직이므로 제자리
     m_nChargeVFXId = m_pFluidVFXManager->SpawnSequenceEffect(mouth, forward, def, true);
 }
 
@@ -1274,6 +1267,59 @@ void MegaBreathAttackBehavior::DestroyFireWave()
                 m_nFluidVFXIds[i] = -1;
             }
         }
+
+        // Trail 은 lifetime 기반 자연 소멸이 원칙이지만 강제 중단 시에는 정리
+        for (int id : m_vTrailVFXIds) if (id >= 0) m_pFluidVFXManager->StopEffect(id);
     }
+    m_vTrailVFXIds.clear();
+    m_fTrailDropTimer = 0.f;
     m_pFluidVFXManager = nullptr;
 }
+
+// (2) Windup → Breath 전환 shockwave: 집결된 charge 파티클을 입 위치에서 방사형 폭발시켜
+//     시각적 "빵!" 임팩트 제공. ExplodeEffect 가 CP 를 해제하고 파티클을 바깥으로 튕겨 보냄.
+void MegaBreathAttackBehavior::TriggerMouthShockwave()
+{
+    if (!m_pFluidVFXManager) return;
+
+    if (m_nChargeVFXId >= 0)
+    {
+        // ExplodeEffect: 모인 파티클을 입 위치 기준 방사형으로 튕김 → shockwave 연출
+        m_pFluidVFXManager->ExplodeEffect(m_nChargeVFXId, m_xmf3BeamOrigin);
+        // 파티클이 흩어지며 자연 소멸하도록 ID 만 해제 (StopEffect 하면 즉시 사라져서 효과 없음)
+        m_nChargeVFXId = -1;
+    }
+}
+
+// (3) 파도 전진 위치에 잔불 자국 드롭. WaveSlash 의 DropFireTrail 흉내.
+//     5-fan beam 의 "대표 진행도" 는 timer 비율로 근사 — 파티클 실제 위치가 아니라
+//     시간에 맞춰 beam 방향을 따라 앞으로 밀리는 가상 커서.
+void MegaBreathAttackBehavior::DropHeatTrail()
+{
+    if (!m_pFluidVFXManager) return;
+    if (m_fBeamLength <= 0.f) return;
+
+    // 진행도: Breath 시작 후 경과 시간 / 총 지속 → 0~1
+    float progress = m_fTimer / m_fBreathDuration;
+    if (progress > 1.0f) progress = 1.0f;
+
+    // 앞쪽에서부터 차곡차곡 자국이 깔리도록 진행도에 따라 전진
+    float fwdDist = progress * m_fBeamLength;
+    XMFLOAT3 trailPos;
+    trailPos.x = m_xmf3BeamOrigin.x + m_xmf3BeamDirection.x * fwdDist;
+    trailPos.y = 0.f;  // 바닥
+    trailPos.z = m_xmf3BeamOrigin.z + m_xmf3BeamDirection.z * fwdDist;
+
+    // 진행 방향의 직교 벡터 (파도 폭 방향)
+    XMFLOAT3 waveRight;
+    waveRight.x =  m_xmf3BeamDirection.z;
+    waveRight.y = 0.f;
+    waveRight.z = -m_xmf3BeamDirection.x;
+
+    // 파도 폭 비례 반폭 — 5-fan end radius 의 대략 절반을 쓰면 맵 그을린 느낌 적당
+    float halfW = m_fBeamEndRadius * 0.5f;
+
+    int id = m_pFluidVFXManager->SpawnFireTrailEffect(trailPos, waveRight, halfW, TRAIL_LIFETIME);
+    if (id >= 0) m_vTrailVFXIds.push_back(id);
+}
+

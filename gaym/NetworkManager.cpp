@@ -493,10 +493,33 @@ void NetworkManager::ProcessRoomTransition(Scene* pScene, uint32 stageIndex, uin
     if (!pScene)
         return;
 
+    // 중복 전환 방어: 서버가 S_ROOM_TRANSITION 을 동일 프레임에 두 번 보내거나
+    // 클라 큐에 중복 push 된 경우, 방 정리 중 다시 정리·재생성 호출로 dangling pointer 크래시 발생.
+    if (m_bInRoomTransition)
+    {
+        WriteNetworkLog("[Network] ProcessRoomTransition skipped: already transitioning");
+        return;
+    }
+    m_bInRoomTransition = true;
+
     wchar_t buf[256];
     swprintf_s(buf, L"[Network] ProcessRoomTransition stage=%u room=%u boss=%d\n",
         stageIndex, roomIndex, isBossRoom ? 1 : 0);
     OutputDebugString(buf);
+
+    // 이전 방 서버 몬스터 전부 정리 — GameObject 는 Scene 에 MarkForDeletion 으로 삭제 예약,
+    // 보조 맵들은 즉시 clear. 새 방에서 같은 monsterId 가 재전송돼도 깨끗한 상태에서 재스폰됨.
+    for (auto& kv : m_mapServerMonsters)
+    {
+        if (kv.second) pScene->MarkForDeletion(kv.second);
+    }
+    m_mapServerMonsters.clear();
+    m_mapServerMonsterClips.clear();
+    m_mapServerMonsterTarget.clear();
+    m_mapServerMonsterMoveTime.clear();
+    m_mapServerMonsterAttackTimer.clear();
+    m_mapServerMonsterHitFlashTimer.clear();
+    m_setDeadServerMonsters.clear();
 
     if (isBossRoom)
     {
@@ -509,11 +532,34 @@ void NetworkManager::ProcessRoomTransition(Scene* pScene, uint32 stageIndex, uin
         pScene->TransitionToRoomByIndex(static_cast<int>(roomIndex));
     }
 
+    // 원격 플레이어 좌표 리셋 — 서버 HandlePortalInteract 는 좌표를 건드리지 않으므로
+    // 이전 방 좌표가 그대로 남아 새 맵에서 맵 밖/이상한 위치로 보일 수 있음 ("안 보이는 현상").
+    // 다음 S_MOVE 패킷 오면 실제 위치로 갱신되므로 임시로 로컬 플레이어 근처에 모아둠.
+    if (GameObject* pLocal = pScene->GetPlayer())
+    {
+        if (auto* pLocalT = pLocal->GetTransform())
+        {
+            XMFLOAT3 localPos = pLocalT->GetPosition();
+            for (auto& kv : m_mapRemotePlayers)
+            {
+                if (GameObject* pRemote = kv.second)
+                {
+                    if (auto* pT = pRemote->GetTransform())
+                    {
+                        pT->SetPosition(localPos.x, localPos.y, localPos.z);
+                    }
+                }
+            }
+        }
+    }
+
     // 방 전환이 끝나면 서버 몬스터 스폰을 트리거해야 함.
     // 서버 Room 은 HandleTorchInteract 를 받아야만 몬스터를 스폰하도록 돼 있음 (최초 방 진입과 동일 플로우).
     // 오프라인에서는 방 Active 시 자동 스폰이지만, 네트워크 모드에서는 C_TORCH_INTERACT 가 스폰 트리거.
     // 첫 방에선 맵에 배치된 횃불/큐브를 F 로 눌러 시작했지만, 다음 방 이후에는 자동으로 요청해준다.
     SendTorchInteract();
+
+    m_bInRoomTransition = false;
 }
 
 void NetworkManager::QueueSpawnPlayer(uint64 playerId, const std::string& name, int playerType, float x, float y, float z)
@@ -681,6 +727,13 @@ void NetworkManager::ProcessSpawnPlayer(Scene* pScene, ID3D12Device* pDevice,
 
     // 맵에 등록
     m_mapRemotePlayers[playerId] = pRemotePlayer;
+
+    // 원격 플레이어가 방금 점유한 descriptor slot 들을 "영구" 범위로 편입.
+    // 이 후 방 전환 시 m_nNextDescriptorIndex 가 m_nPersistentDescriptorEnd 로 리셋되지만,
+    // 그 값이 원격 플레이어 slot 뒤로 이동했으므로 새 방 오브젝트가 원격 플레이어의
+    // CB/descriptor slot 을 재사용하며 덮어쓰는 충돌이 사라짐.
+    // (원격 플레이어가 방 전환 후 안 보이던 증상의 근본 원인)
+    pScene->UpdatePersistentDescriptorEnd();
 
     swprintf_s(idLog, 256, L"[Network] SUCCESS: Spawned RemotePlayer_%llu (%hs). Total RemoteCount: %zu\n",
               playerId, name.c_str(), m_mapRemotePlayers.size());
@@ -1186,11 +1239,14 @@ void NetworkManager::ProcessMonsterSpawn(Scene* pScene, ID3D12Device* pDevice,
                                          float x, float y, float z, float yaw,
                                          float hp, bool isBoss)
 {
-    // 중복 방지
+    // 중복 방지: 같은 monsterId 가 이미 있으면 새 GameObject 만들지 않고 skip.
+    // (기존은 위치만 갱신했으나 방 전환 후 서버가 같은 id 를 재전송할 때 이전 방 몬스터가
+    //  새 방에 재등장하는 혼란 발생 — ProcessRoomTransition 이 맵을 clear 하므로 여기선 단순 skip.)
     if (m_mapServerMonsters.find(monsterId) != m_mapServerMonsters.end())
     {
-        // 이미 있으면 위치만 갱신
-        ProcessMonsterMove(monsterId, x, y, z, yaw);
+        char dupBuf[128];
+        sprintf_s(dupBuf, "[Network] MonsterSpawn skipped: duplicate monsterId=%llu", monsterId);
+        WriteNetworkLog(dupBuf);
         return;
     }
 

@@ -123,6 +123,16 @@ private:
     void UpdateFireWave(float dt, EnemyComponent* pEnemy);
     void DestroyFireWave();
 
+    // (2) Windup→Breath 전환 순간 입에서 수렴된 charge 파티클을 방사형으로 폭발시키는 shockwave
+    void TriggerMouthShockwave();
+
+    // (3) Breath 중 파도가 스쳐간 바닥에 heat trail(잔불) 주기 드롭 — WaveSlash DropFireTrail 흉내
+    void DropHeatTrail();
+    std::vector<int>   m_vTrailVFXIds;       // 살아있는 trail IDs (Reset 시 정리)
+    float              m_fTrailDropTimer = 0.f;
+    static constexpr float TRAIL_DROP_INTERVAL = 0.2f;   // 드롭 간격 (초)
+    static constexpr float TRAIL_LIFETIME      = 3.0f;   // 각 자국 지속 (초)
+
     // SPH Beam 기반 거대 화염 분사 — 입에서 끝까지 연속 분사 (cone)
     //  여러 빔을 좌우로 팬-아웃 스폰해 cone 영역을 더 넓고 조밀하게 채움
     //  5개 빔: -12°, -6°, 0°, +6°, +12° — 사이사이 간격 최소화

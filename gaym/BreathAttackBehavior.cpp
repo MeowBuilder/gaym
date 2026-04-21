@@ -7,18 +7,18 @@
 #include "MathUtils.h"
 
 BreathAttackBehavior::BreathAttackBehavior(ProjectileManager* pProjectileManager,
-                                           float fDamagePerHit,
-                                           float fProjectileSpeed,
-                                           int nProjectileCount,
-                                           float fSpreadAngle,
-                                           float fWindupTime,
-                                           float fBreathDuration,
-                                           float fRecoveryTime,
-                                           float fProjectileRadius,
-                                           float fProjectileScale,
-                                           ElementType eElement,
-                                           const char* pClipOverride,
-                                           bool bVariedProjectiles)
+	float fDamagePerHit,
+	float fProjectileSpeed,
+	int nProjectileCount,
+	float fSpreadAngle,
+	float fWindupTime,
+	float fBreathDuration,
+	float fRecoveryTime,
+	float fProjectileRadius,
+	float fProjectileScale,
+	ElementType eElement,
+	const char* pClipOverride,
+	bool bVariedProjectiles)
     : m_pProjectileManager(pProjectileManager)
     , m_fDamagePerHit(fDamagePerHit)
     , m_fProjectileSpeed(fProjectileSpeed)
