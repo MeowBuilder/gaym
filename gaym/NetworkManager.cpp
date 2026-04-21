@@ -1120,29 +1120,30 @@ static MonsterPreset GetMonsterPresetByType(uint32 monsterType)
     switch (monsterType)
     {
     // attackClip/deathClip 는 EnemySpawner.cpp 의 m_AnimConfig.m_strAttackClip / m_strDeathClip 과 일치해야 함
-    case 2: // AirElemental
-        return { "Assets/Enemies/Elementals/AirElemental_Bl/AirElemental_Bl.bin",
-                 "Assets/Enemies/Elementals/AirElemental_Bl/AirElemental_Bl_Anim.bin",
-                 5.0f, "idle", "Run_Forward",
-                 "Assets/Enemies/Elementals/AirElemental_Bl/Textures/T_AirElemental_Body_Bl_D.png",
-                 "Combat_Unarmed_Attack", "Death" };
-    case 3: // RangedEnemy (StormElemental)
-        return { "Assets/Enemies/Elementals/StormElemental_Bl/StormElemental_Bl.bin",
-                 "Assets/Enemies/Elementals/StormElemental_Bl/StormElemental_Bl_Anim.bin",
-                 5.0f, "idle", "Run_Forward",
-                 "Assets/Enemies/Elementals/StormElemental_Bl/Textures/T_StormElemental_Bl_D.png",
-                 "Combat_Unarmed_Attack", "Death" };
-    case 4: // RushAoEEnemy (FireGolem)
+    // 네트워크 monsterType → 오프라인 JSON Fire stage preset 과 동일한 Rd (red) 메쉬로 통일
+    case 2: // Melee → FireGolem_Rd
         return { "Assets/Enemies/Elementals/FireGolem_Rd/FireGolem_Rd.bin",
                  "Assets/Enemies/Elementals/FireGolem_Rd/FireGolem_Rd_Anim.bin",
-                 5.0f, "idle", "Run_Forward",
+                 5.5f, "idle", "Run_Forward",
                  "Assets/Enemies/Elementals/FireGolem_Rd/Textures/T_FireGolem_Rd_D.png",
                  "Combat_Unarmed_Attack", "Death" };
-    case 5: // RushFrontEnemy (EarthElemental)
-        return { "Assets/Enemies/Elementals/EarthElemental_Gn/EarthElemental_Gn.bin",
-                 "Assets/Enemies/Elementals/EarthElemental_Gn/EarthElemental_Gn_Anim.bin",
-                 5.0f, "idle", "Run_Forward",
-                 "Assets/Enemies/Elementals/EarthElemental_Gn/Textures/T_EarthElemental_Gn_D.png",
+    case 3: // Ranged → MagmaElemental_Rd
+        return { "Assets/Enemies/Elementals/MagmaElemental_Rd/MagmaElemental_Rd.bin",
+                 "Assets/Enemies/Elementals/MagmaElemental_Rd/MagmaElemental_Rd_Anim.bin",
+                 5.5f, "idle", "Run_Forward",
+                 "Assets/Enemies/Elementals/MagmaElemental_Rd/Textures/T_MagmaElemental_Rd_D.png",
+                 "Combat_Unarmed_Attack", "Death" };
+    case 4: // RushAoE → MoltenElemental_Rd
+        return { "Assets/Enemies/Elementals/MoltenElemental_Rd/MoltenElemental_Rd.bin",
+                 "Assets/Enemies/Elementals/MoltenElemental_Rd/MoltenElemental_Rd_Anim.bin",
+                 5.5f, "idle", "Run_Forward",
+                 "Assets/Enemies/Elementals/MoltenElemental_Rd/Textures/T_MoltenElemental_Rd_D.png",
+                 "Combat_Unarmed_Attack", "Death" };
+    case 5: // RushFront → ChaosElemental_Rd
+        return { "Assets/Enemies/Elementals/ChaosElemental_Rd/ChaosElemental_Rd.bin",
+                 "Assets/Enemies/Elementals/ChaosElemental_Rd/ChaosElemental_Rd_Anim.bin",
+                 5.5f, "idle", "Run_Forward",
+                 "Assets/Enemies/Elementals/ChaosElemental_Rd/Textures/T_ChaosElemental_Rd_D.png",
                  "Combat_Unarmed_Attack", "Death" };
     case 6: // Dragon (Red)
         return { "Assets/Enemies/Dragon/Red.bin",
@@ -1169,12 +1170,12 @@ static MonsterPreset GetMonsterPresetByType(uint32 monsterType)
                  "Assets/Enemies/Dragon_blue/Blue_Anim.bin",
                  3.0f, "Idle", "Walk", "",
                  "Fireball Shoot", "Die" };
-    case 1: // TestEnemy — 메쉬 없음, 큐브 fallback 생략하고 air 대체
+    case 1: // TestEnemy — FireGolem_Rd 로 fallback (Melee 타입과 동일)
     default:
-        return { "Assets/Enemies/Elementals/AirElemental_Bl/AirElemental_Bl.bin",
-                 "Assets/Enemies/Elementals/AirElemental_Bl/AirElemental_Bl_Anim.bin",
-                 5.0f, "idle", "Run_Forward",
-                 "Assets/Enemies/Elementals/AirElemental_Bl/Textures/T_AirElemental_Body_Bl_D.png",
+        return { "Assets/Enemies/Elementals/FireGolem_Rd/FireGolem_Rd.bin",
+                 "Assets/Enemies/Elementals/FireGolem_Rd/FireGolem_Rd_Anim.bin",
+                 5.5f, "idle", "Run_Forward",
+                 "Assets/Enemies/Elementals/FireGolem_Rd/Textures/T_FireGolem_Rd_D.png",
                  "Combat_Unarmed_Attack", "Death" };
     }
 }

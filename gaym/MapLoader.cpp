@@ -468,6 +468,7 @@ bool MapLoader::LoadIntoScene(
         jsonDir = "";
 
     const JsonVal& mapObjs = root["mapObjects"];
+    TorchSystem* pTorchSystemRef = pScene->GetTorchSystem();  // Brazier 감지 시 불 추가용
     for (size_t i = 0; i < mapObjs.size(); i++) {
         const JsonVal& mo = mapObjs[i];
         std::string meshRelPath = mo["meshFile"].str;
@@ -496,6 +497,20 @@ bool MapLoader::LoadIntoScene(
             -pos[2].f()*MAP_SCALE + positionOffset.z);
         pGO->GetTransform()->SetRotation(XMFLOAT4(rot[0].f(), rot[1].f(), -rot[2].f(), rot[3].f()));
         pGO->GetTransform()->SetScale(sx, sy, sz);
+
+        // Brazier_002: 맵에 배치된 화로 오브젝트 위에 횃불 flame 스폰.
+        // TorchSystem 의 flame billboard + 조명 공용 재활용. mesh 중복 스폰 X.
+        // flameScale 3.5 로 꽤 크게, heightOffset 은 Brazier 스케일 비례 받침 상단.
+        {
+            std::string moName = mo.has("name") ? mo["name"].str : "";
+            if (pTorchSystemRef && moName.find("Brazier_002") != std::string::npos)
+            {
+                XMFLOAT3 brazierPos = pGO->GetTransform()->GetPosition();
+                float heightOff = sy * 1.7f;  // 받침 위쪽에 살짝 낮게 — 화로 속에 꽂힌 느낌
+                pTorchSystemRef->AddTorch(brazierPos, pDevice, pCommandList,
+                                          3.5f /*flameScale*/, false /*spawnMesh*/, heightOff);
+            }
+        }
 
         // Render
         pGO->SetMesh(objRes.pMesh);
@@ -653,20 +668,8 @@ bool MapLoader::LoadIntoScene(
         } // !isProp && maxWorldExt > 0.3f
     }
 
-    // ── 3b. Torch placement at player spawn (for testing) ────────────────────────
-    // 복제 로딩 시 중복 횃불 방지
-    TorchSystem* pTorchSystem = pScene->GetTorchSystem();
-    if (!skipRoomAndSpawn && pTorchSystem) {
-        const JsonVal& spawn = root["playerSpawn"];
-        const JsonVal& spawnPos = spawn["position"];
-        XMFLOAT3 torchPos(
-            spawnPos[0].f() * MAP_SCALE + 3.0f,  // Slightly offset from player
-            0.0f,
-            -spawnPos[2].f() * MAP_SCALE + 3.0f
-        );
-        pTorchSystem->AddTorch(torchPos, pDevice, pCommandList);
-        OutputDebugStringA("[MapLoader] Placed 1 torch near player spawn\n");
-    }
+    // ── 3b. 플레이어 스폰 근처 테스트 횃불 하드코딩 제거 (사용자 요청)
+    //        Brazier_002 위의 flame 이 맵 횃불 역할을 대신함.
 
     // ── 4. Obstacles (collision only) ────────────────────────────────────────
     const JsonVal& obstacles = root["obstacles"];
@@ -776,11 +779,17 @@ bool MapLoader::LoadIntoScene(
             pScene->GetEnemySpawner()->RegisterEnemyPreset(presetName, data);
         }
 
-        // Add spawn positions (one per count)
+        // 2D grid 배치 — 기존 X축 일렬(2*MAP_SCALE=10m) 은 count 늘면 방 경계 넘음.
+        //   ceil(sqrt(count)) x 같은 크기 격자, 셀 간격 5m.
+        int cols = static_cast<int>(ceilf(sqrtf(static_cast<float>(count))));
+        if (cols < 1) cols = 1;
+        const float cell = 5.0f;
         for (int c = 0; c < count; c++) {
-            // Spread multiple of same preset slightly
             XMFLOAT3 p = spawnPos;
-            p.x += c * 2.0f * MAP_SCALE;
+            int row = c / cols;
+            int col = c % cols;
+            p.x += col * cell;
+            p.z += row * cell;
             spawnConfig.AddSpawn(presetName, p);
         }
     }

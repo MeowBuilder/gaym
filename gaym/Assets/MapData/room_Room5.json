@@ -31,7 +31,7 @@
   "enemySpawns": [
     {
       "presetName": "MoltenElemental_Rd",
-      "count": 3,
+      "count": 2,
       "activationDelay": 0.0,
       "position": [
         -6.73,
@@ -57,9 +57,9 @@
         "meshPath": "Assets/Enemies/Elementals/MoltenElemental_Rd/MoltenElemental_Rd.bin",
         "animationPath": "Assets/Enemies/Elementals/MoltenElemental_Rd/MoltenElemental_Rd_Anim.bin",
         "scale": [
-          10.0,
-          10.0,
-          10.0
+          11.0,
+          11.0,
+          11.0
         ],
         "color": [
           255,
@@ -78,7 +78,7 @@
     },
     {
       "presetName": "MoltenElemental_Rd",
-      "count": 3,
+      "count": 2,
       "activationDelay": 2.0,
       "position": [
         6.0,
@@ -104,9 +104,9 @@
         "meshPath": "Assets/Enemies/Elementals/MoltenElemental_Rd/MoltenElemental_Rd.bin",
         "animationPath": "Assets/Enemies/Elementals/MoltenElemental_Rd/MoltenElemental_Rd_Anim.bin",
         "scale": [
-          10.0,
-          10.0,
-          10.0
+          11.0,
+          11.0,
+          11.0
         ],
         "color": [
           255,
@@ -125,7 +125,7 @@
     },
     {
       "presetName": "MoltenElemental_Rd",
-      "count": 3,
+      "count": 2,
       "activationDelay": 4.0,
       "position": [
         14.8,
@@ -151,9 +151,9 @@
         "meshPath": "Assets/Enemies/Elementals/MoltenElemental_Rd/MoltenElemental_Rd.bin",
         "animationPath": "Assets/Enemies/Elementals/MoltenElemental_Rd/MoltenElemental_Rd_Anim.bin",
         "scale": [
-          10.0,
-          10.0,
-          10.0
+          11.0,
+          11.0,
+          11.0
         ],
         "color": [
           255,
@@ -172,7 +172,7 @@
     },
     {
       "presetName": "MoltenElemental_Rd",
-      "count": 3,
+      "count": 2,
       "activationDelay": 6.0,
       "position": [
         10.39,
@@ -198,9 +198,9 @@
         "meshPath": "Assets/Enemies/Elementals/MoltenElemental_Rd/MoltenElemental_Rd.bin",
         "animationPath": "Assets/Enemies/Elementals/MoltenElemental_Rd/MoltenElemental_Rd_Anim.bin",
         "scale": [
-          10.0,
-          10.0,
-          10.0
+          11.0,
+          11.0,
+          11.0
         ],
         "color": [
           255,
@@ -219,7 +219,7 @@
     },
     {
       "presetName": "MoltenElemental_Rd",
-      "count": 3,
+      "count": 2,
       "activationDelay": 8.0,
       "position": [
         -5.33,
@@ -245,9 +245,9 @@
         "meshPath": "Assets/Enemies/Elementals/MoltenElemental_Rd/MoltenElemental_Rd.bin",
         "animationPath": "Assets/Enemies/Elementals/MoltenElemental_Rd/MoltenElemental_Rd_Anim.bin",
         "scale": [
-          10.0,
-          10.0,
-          10.0
+          11.0,
+          11.0,
+          11.0
         ],
         "color": [
           255,
@@ -266,7 +266,7 @@
     },
     {
       "presetName": "MoltenElemental_Rd",
-      "count": 3,
+      "count": 2,
       "activationDelay": 10.0,
       "position": [
         -20.75,
@@ -292,9 +292,9 @@
         "meshPath": "Assets/Enemies/Elementals/MoltenElemental_Rd/MoltenElemental_Rd.bin",
         "animationPath": "Assets/Enemies/Elementals/MoltenElemental_Rd/MoltenElemental_Rd_Anim.bin",
         "scale": [
-          10.0,
-          10.0,
-          10.0
+          11.0,
+          11.0,
+          11.0
         ],
         "color": [
           255,
@@ -313,7 +313,7 @@
     },
     {
       "presetName": "MoltenElemental_Rd",
-      "count": 3,
+      "count": 2,
       "activationDelay": 10.0,
       "position": [
         -22.78,
@@ -339,9 +339,9 @@
         "meshPath": "Assets/Enemies/Elementals/MoltenElemental_Rd/MoltenElemental_Rd.bin",
         "animationPath": "Assets/Enemies/Elementals/MoltenElemental_Rd/MoltenElemental_Rd_Anim.bin",
         "scale": [
-          10.0,
-          10.0,
-          10.0
+          11.0,
+          11.0,
+          11.0
         ],
         "color": [
           255,

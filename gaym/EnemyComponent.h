@@ -295,9 +295,9 @@ private:
     static constexpr float FLASH_DURATION   = 0.15f;
     static constexpr float DEAD_LINGER_TIME = 2.0f;
 
-    // Separation (avoid stacking)
-    float m_fSeparationRadius = 5.0f;    // Distance to start avoiding other enemies
-    float m_fSeparationStrength = 10.0f; // Strength of the separation force
+    // Separation (avoid stacking) — 몬스터끼리 좀 더 퍼지는 느낌. 서버 Monster.cpp SEP_* 와 동일 값 유지 필수.
+    float m_fSeparationRadius = 8.0f;    // 밀어내는 범위 (이전 5.0)
+    float m_fSeparationStrength = 14.0f; // 밀어내는 힘 (이전 10.0)
 
     // Smooth rotation
     float m_fRotationSpeed = 180.0f;     // Degrees per second

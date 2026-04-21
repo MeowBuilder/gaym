@@ -3,14 +3,22 @@
 #include "GameObject.h"
 #include "TransformComponent.h"
 #include "Mesh.h"
+#include "Dx12App.h"
+#include "Scene.h"
+#include "Camera.h"
 #include <functional>
 #include <vector>
 
 bool AnimationComponent::s_bDebugStaticPose = false;
+int  AnimationComponent::s_nGlobalFrame    = 0;
 
 AnimationComponent::AnimationComponent(GameObject* pOwner) : Component(pOwner)
 {
     m_pAnimationSet = std::make_shared<AnimationSet>();
+
+    // Phase 는 owner 포인터 해시 기반 — 생성 순서에 따라 그룹이 섞여 몰림 방지.
+    // kPhaseGroupCount 로 나눠 Update 마다 s_nGlobalFrame 과 매칭되는 그룹만 본 계산.
+    m_iUpdatePhase = static_cast<int>(reinterpret_cast<uintptr_t>(pOwner) % kPhaseGroupCount);
 }
 
 AnimationComponent::~AnimationComponent()
@@ -101,8 +109,10 @@ void AnimationComponent::CrossFade(const std::string& strClipName, float fBlendD
 
     // Set new clip
     m_pCurrentClip = pNewClip;
-    // Apply time offset for looping animations to desync between instances
-    m_fCurrentTime = bLoop ? fmod(m_fTimeOffset, pNewClip->m_fDuration) : 0.0f;
+    // Apply time offset for looping animations to desync between instances.
+    // 단, forceRestart=true 는 "반드시 처음부터" 의도(Attack state 전환 등) — desync offset 무시.
+    // 과거엔 loop=true + force=true 시 offset 이 걸려 공격 애니가 중간부터 재생되는 버그.
+    m_fCurrentTime = (bLoop && !bForceRestart) ? fmod(m_fTimeOffset, pNewClip->m_fDuration) : 0.0f;
     m_bLoop = bLoop;
     m_bIsPlaying = true;
 
@@ -125,6 +135,53 @@ void AnimationComponent::Restart()
 void AnimationComponent::Update(float deltaTime)
 {
     if (!m_bIsPlaying || !m_pCurrentClip) return;
+
+    // ── LOD skip 결정 (플레이어 등 m_bCullEnabled=false 는 건너뜀) ─────────
+    // (B) Phase offset: 몬스터마다 frame % N 그룹 중 본인 그룹일 때만 본 계산.
+    //     Skip 된 프레임은 deltaTime 을 누적해 ON 프레임에 한번에 처리 → 재생 속도 유지.
+    // (A) Frustum culling: 카메라 뷰 밖이면 본 계산 완전 skip (누적도 안 함 — 다시 보일 때 그 자리부터).
+    if (m_bCullEnabled)
+    {
+        // Frustum 체크 — 탑뷰여도 방 경계 넘는 몬스터는 카메라 밖
+        bool bInFrustum = true;
+        if (Scene* pScene = Dx12App::GetInstance() ? Dx12App::GetInstance()->GetScene() : nullptr)
+        {
+            if (CCamera* pCam = pScene->GetCamera())
+            {
+                XMMATRIX matProj = XMLoadFloat4x4(&pCam->GetProjectionMatrix());
+                XMMATRIX matView = XMLoadFloat4x4(&pCam->GetViewMatrix());
+                BoundingFrustum frustum;
+                BoundingFrustum::CreateFromMatrix(frustum, matProj);
+
+                // projMatrix 기반 frustum 은 view space 기준 → view 의 역변환으로 world 로 옮김
+                XMVECTOR det;
+                XMMATRIX matInvView = XMMatrixInverse(&det, matView);
+                frustum.Transform(frustum, matInvView);
+
+                if (m_pOwner && m_pOwner->GetTransform())
+                {
+                    XMFLOAT3 p = m_pOwner->GetTransform()->GetPosition();
+                    // 넉넉한 반경 (몬스터 scale 5.0 기준 + 마진)
+                    BoundingSphere sph({ p.x, p.y + 3.0f, p.z }, 8.0f);
+                    bInFrustum = frustum.Intersects(sph);
+                }
+            }
+        }
+
+        if (!bInFrustum)
+        {
+            // 카메라 밖 — 본 계산 skip. time 은 그대로 두어 다시 보일 때 그 포즈 이어짐.
+            return;
+        }
+
+        // Frustum 안이지만 phase 체크
+        m_fAccumDelta += deltaTime;
+        if ((s_nGlobalFrame % kPhaseGroupCount) != (m_iUpdatePhase % kPhaseGroupCount))
+            return;
+
+        deltaTime = m_fAccumDelta;   // 누적분 한 번에 처리
+        m_fAccumDelta = 0.f;
+    }
 
     // Apply playback speed
     float scaledDelta = deltaTime * m_fPlaybackSpeed;

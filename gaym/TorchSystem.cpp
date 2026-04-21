@@ -511,7 +511,8 @@ void TorchSystem::LoadFlameTexture(ID3D12Device* pDevice, ID3D12GraphicsCommandL
 }
 
 void TorchSystem::AddTorch(const XMFLOAT3& position, ID3D12Device* pDevice,
-                           ID3D12GraphicsCommandList* pCommandList)
+                           ID3D12GraphicsCommandList* pCommandList,
+                           float flameScale, bool spawnMesh, float heightOffset)
 {
     if (m_vTorches.size() >= MAX_TORCH_LIGHTS)
     {
@@ -526,9 +527,11 @@ void TorchSystem::AddTorch(const XMFLOAT3& position, ID3D12Device* pDevice,
     torch.m_fFlickerTimer = 0.0f;
     torch.m_fFlickerOffset = (float)(rand() % 1000) / 1000.0f * 6.28f;  // Random phase
     torch.m_pMeshObject = nullptr;
+    torch.m_fFlameScale  = flameScale;
+    torch.m_fHeightOffset = heightOffset;
 
-    // Load torch mesh if available
-    if (m_pScene)
+    // Load torch mesh if requested (Brazier 같은 맵 배치 오브젝트는 spawnMesh=false 로 중복 방지)
+    if (spawnMesh && m_pScene)
     {
         GameObject* pTorchMesh = MeshLoader::LoadGeometryFromFile(
             m_pScene, pDevice, pCommandList, nullptr,
@@ -596,13 +599,13 @@ void TorchSystem::FillLightData(PassConstants* pPassConstants)
     {
         const auto& torch = m_vTorches[i];
 
-        // Light position is above the torch base (at flame height)
+        // Light position is above the torch base (at flame height). Brazier 같은 큰 받침은 heightOffset 크게.
         pPassConstants->m_TorchLights[i].m_xmf3Position = XMFLOAT3(
-            torch.m_xmf3Position.x + m_xmf3FlameOffset.x,
-            torch.m_xmf3Position.y + m_xmf3FlameOffset.y,
-            torch.m_xmf3Position.z + m_xmf3FlameOffset.z);
+            torch.m_xmf3Position.x,
+            torch.m_xmf3Position.y + torch.m_fHeightOffset,
+            torch.m_xmf3Position.z);
 
-        pPassConstants->m_TorchLights[i].m_fRange = m_fLightRange;
+        pPassConstants->m_TorchLights[i].m_fRange    = m_fLightRange * torch.m_fFlameScale;  // flame 크면 빛도 멀리
         pPassConstants->m_TorchLights[i].m_xmf3Color = m_xmf3LightColor;
         pPassConstants->m_TorchLights[i].m_fIntensity = torch.m_fCurrentIntensity;
     }
@@ -641,11 +644,11 @@ void TorchSystem::Render(ID3D12GraphicsCommandList* pCommandList,
         const auto& torch = m_vTorches[i];
 
         pInstances[i].position = XMFLOAT3(
-            torch.m_xmf3Position.x + m_xmf3FlameOffset.x,
-            torch.m_xmf3Position.y + m_xmf3FlameOffset.y,
-            torch.m_xmf3Position.z + m_xmf3FlameOffset.z);
+            torch.m_xmf3Position.x,
+            torch.m_xmf3Position.y + torch.m_fHeightOffset,
+            torch.m_xmf3Position.z);
 
-        pInstances[i].size = m_fFlameWidth;
+        pInstances[i].size = m_fFlameWidth * torch.m_fFlameScale;
 
         // Intensity controls flame brightness
         float intensity = torch.m_fCurrentIntensity;

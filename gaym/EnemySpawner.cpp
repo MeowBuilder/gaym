@@ -80,7 +80,7 @@ void EnemySpawner::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pComma
     airElemental.m_strMeshPath      = "Assets/Enemies/Elementals/AirElemental_Bl/AirElemental_Bl.bin";
     airElemental.m_strAnimationPath = "Assets/Enemies/Elementals/AirElemental_Bl/AirElemental_Bl_Anim.bin";
     airElemental.m_strTexturePath   = "Assets/Enemies/Elementals/AirElemental_Bl/Textures/T_AirElemental_Body_Bl_D.png";
-    airElemental.m_xmf3Scale = XMFLOAT3(5.0f, 5.0f, 5.0f);
+    airElemental.m_xmf3Scale = XMFLOAT3(5.5f, 5.5f, 5.5f);
     airElemental.m_xmf4Color = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
 
     airElemental.m_Stats.m_fMaxHP          = 80.0f;
@@ -104,7 +104,7 @@ void EnemySpawner::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pComma
     rushAoE.m_strMeshPath      = "Assets/Enemies/Elementals/FireGolem_Rd/FireGolem_Rd.bin";
     rushAoE.m_strAnimationPath = "Assets/Enemies/Elementals/FireGolem_Rd/FireGolem_Rd_Anim.bin";
     rushAoE.m_strTexturePath   = "Assets/Enemies/Elementals/FireGolem_Rd/Textures/T_FireGolem_Rd_D.png";
-    rushAoE.m_xmf3Scale = XMFLOAT3(5.0f, 5.0f, 5.0f);
+    rushAoE.m_xmf3Scale = XMFLOAT3(5.5f, 5.5f, 5.5f);
     rushAoE.m_xmf4Color = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
 
     rushAoE.m_Stats.m_fMaxHP          = 100.0f;
@@ -130,7 +130,7 @@ void EnemySpawner::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pComma
     rushFront.m_strMeshPath      = "Assets/Enemies/Elementals/EarthElemental_Gn/EarthElemental_Gn.bin";
     rushFront.m_strAnimationPath = "Assets/Enemies/Elementals/EarthElemental_Gn/EarthElemental_Gn_Anim.bin";
     rushFront.m_strTexturePath   = "Assets/Enemies/Elementals/EarthElemental_Gn/Textures/T_EarthElemental_Gn_D.png";
-    rushFront.m_xmf3Scale = XMFLOAT3(5.0f, 5.0f, 5.0f);
+    rushFront.m_xmf3Scale = XMFLOAT3(5.5f, 5.5f, 5.5f);
     rushFront.m_xmf4Color = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
 
     rushFront.m_Stats.m_fMaxHP          = 80.0f;
@@ -157,7 +157,7 @@ void EnemySpawner::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pComma
     ranged.m_strMeshPath      = "Assets/Enemies/Elementals/StormElemental_Bl/StormElemental_Bl.bin";
     ranged.m_strAnimationPath = "Assets/Enemies/Elementals/StormElemental_Bl/StormElemental_Bl_Anim.bin";
     ranged.m_strTexturePath   = "Assets/Enemies/Elementals/StormElemental_Bl/Textures/T_StormElemental_Bl_D.png";
-    ranged.m_xmf3Scale = XMFLOAT3(5.0f, 5.0f, 5.0f);
+    ranged.m_xmf3Scale = XMFLOAT3(5.5f, 5.5f, 5.5f);
     ranged.m_xmf4Color = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
 
     ranged.m_Stats.m_fMaxHP          = 60.0f;
@@ -180,7 +180,7 @@ void EnemySpawner::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pComma
     dragon.m_strMeshPath = "Assets/Enemies/Dragon/Red.bin";
     dragon.m_strAnimationPath = "Assets/Enemies/Dragon/Red_Anim.bin";
     dragon.m_strTexturePath = "Assets/Enemies/Dragon/Textures/RedHP.png";
-    dragon.m_xmf3Scale = XMFLOAT3(5.0f, 5.0f, 5.0f);  // 더 크게
+    dragon.m_xmf3Scale = XMFLOAT3(3.0f, 3.0f, 3.0f);  // 원본값 복원 (충돌/판정/브레스 범위 연동 때문에 보스는 스케일 유지)
     dragon.m_xmf4Color = XMFLOAT4(1.0f, 0.3f, 0.1f, 1.0f);
     dragon.m_Stats.m_fMaxHP = 800.0f;           // HP 대폭 상향
     dragon.m_Stats.m_fCurrentHP = 800.0f;
@@ -388,7 +388,7 @@ void EnemySpawner::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pComma
     kraken.m_strMeshPath      = "Assets/Enemies/Kraken/KRAKEN.bin";
     kraken.m_strAnimationPath = "Assets/Enemies/Kraken/KRAKEN_Anim.bin";
     kraken.m_strTexturePath   = "Assets/Enemies/Kraken/Textures/Tex_KRAKEN_BODY_BaseColor.png";
-    kraken.m_xmf3Scale = XMFLOAT3(5.0f, 5.0f, 5.0f);
+    kraken.m_xmf3Scale = XMFLOAT3(3.0f, 3.0f, 3.0f);  // 원본값 복원
     kraken.m_xmf4Color = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
     kraken.m_fColliderXZMultiplier = 0.8f;   // 거대 몸체에 맞춰 XZ 피격 반경 확대
 
@@ -525,7 +525,7 @@ void EnemySpawner::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pComma
     golem.m_strMeshPath      = "Assets/Enemies/Golem/Golem01_Generic_prefab.bin";
     golem.m_strAnimationPath = "Assets/Enemies/Golem/Golem01_Generic_prefab_Anim.bin";
     golem.m_strTexturePath   = "Assets/Enemies/Golem/Textures/chr_04_Golem_alb.png";
-    golem.m_xmf3Scale = XMFLOAT3(14.0f, 14.0f, 14.0f);  // 10 → 14 (맵 확대 예정 + 제단 위압감)
+    golem.m_xmf3Scale = XMFLOAT3(14.0f, 14.0f, 14.0f);  // 원본값 복원 (17은 잔상/떨림 문제)
     golem.m_xmf4Color = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
 
     golem.m_Stats.m_fMaxHP              = 2500.0f;
@@ -566,10 +566,11 @@ void EnemySpawner::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pComma
 
     // Primary: "주먹 내려찍기" — attack01 @ 0.7× = 8.1s
     //   windup 을 애니 slam 피크 (~45% = 3.6s) 에 맞춤 → 찍는 순간에 데미지/파편 동기화
+    //   3.5 → 3.8: 사용자 체감상 데미지가 애니보다 빨라 windup 뒤로 살짝 이동
     golem.m_fnCreateAttack = []() {
         return std::make_unique<JumpSlamAttackBehavior>(
             160.0f, 0.0f, 0.25f, 50.0f,
-            3.5f, 1.3f,                     // windup 2.0→3.5, recovery 1.6→1.3 (합 5.3s)
+            3.8f, 1.3f,                     // windup 3.5→3.8
             false,
             2.5f, 0.5f,
             "Golem_battle_attack01_ge"
@@ -579,7 +580,11 @@ void EnemySpawner::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pComma
     //   0:점프 진동, 1:광역 내려찍기, 2:바위 발사, 3:바위 낙하, 4:십자 균열, 5:순차 십자 폭발
     //   앞으로 패턴 추가 시에도 균등 분배 유지 (rand() % N 으로 확장)
     golem.m_fnCreateSpecialAttack = []() -> std::unique_ptr<IAttackBehavior> {
-        int r = rand() % 6;
+        // 직전에 쓴 패턴은 제외하고 재추첨 — 같은 패턴 연속 시전 방지
+        static int s_lastIndex = -1;
+        int r;
+        do { r = rand() % 6; } while (r == s_lastIndex);
+        s_lastIndex = r;
         if (r == 0)
         {
             // 점프 진동
@@ -717,7 +722,7 @@ void EnemySpawner::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pComma
     blueDragon.m_strMeshPath      = "Assets/Enemies/Dragon_blue/Blue.bin";
     blueDragon.m_strAnimationPath = "Assets/Enemies/Dragon_blue/Blue_Anim.bin";
     blueDragon.m_strTexturePath   = "Assets/Enemies/Dragon_blue/Textures/BlueHP.png";
-    blueDragon.m_xmf3Scale = XMFLOAT3(5.0f, 5.0f, 5.0f);
+    blueDragon.m_xmf3Scale = XMFLOAT3(3.0f, 3.0f, 3.0f);  // 원본값 복원
     blueDragon.m_xmf4Color = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
     blueDragon.m_fColliderXZMultiplier = 1.0f;   // 뚱뚱한 몸집에 맞게 피격 판정 확대 (기본 0.3 → 1.0)
 
@@ -746,10 +751,13 @@ void EnemySpawner::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pComma
     blueDragon.m_IndicatorConfig.m_eType      = IndicatorType::Circle;
     blueDragon.m_IndicatorConfig.m_fHitRadius = 14.0f;
 
-    // 기본 공격: 레드 드래곤과 완전 동일 파라미터, 색상만 Water
+    // 기본 공격: 브레스. windup 넉넉히(0.4→1.0) 주고 clip override 명시해서 "Fireball Shoot" 확실히 재생.
     blueDragon.m_fnCreateAttack = [pProjMgr]() {
         return std::make_unique<BreathAttackBehavior>(
-            pProjMgr, 32.0f, 38.0f, 5, 50.0f, 0.4f, 0.8f, 0.3f, 1.0f, 3.0f, ElementType::Water);
+            pProjMgr, 32.0f, 38.0f, 5, 50.0f,
+            1.0f /*windup*/, 1.2f /*breath*/, 0.5f /*recovery*/,
+            1.0f, 3.0f, ElementType::Water,
+            "Fireball Shoot" /*clipOverride*/);
     };
 
     // 특수 공격: 뚱뚱한 몸집에 맞는 묵직하고 느린 패턴들

@@ -261,13 +261,13 @@ private:
     static constexpr float KRAKEN_T_BURST      = 4.0f;   // Rise + 1.6s
     static constexpr float KRAKEN_T_REVEAL     = 6.0f;   // Burst + 2.0s (몸 드러내는 여운)
     static constexpr float KRAKEN_T_ROAR       = 9.5f;   // Reveal + 3.5s (포효 fully 재생)
-    static constexpr float KRAKEN_T_JUMP       = 11.9f;  // Roar + 2.4s (점프 arc 여유)
-    static constexpr float KRAKEN_T_SLAM       = 14.4f;  // Jump + 2.5s (임팩트 여운)
-    static constexpr float KRAKEN_T_WATER_RISE = 24.4f;  // Slam + 10s (물 차오름, 상승 폭 커져서 길어짐)
+    static constexpr float KRAKEN_T_JUMP       = 14.0f;  // Roar + 4.5s (거리 -100)
+    static constexpr float KRAKEN_T_SLAM       = 16.0f;  // Jump + 2.0s
+    static constexpr float KRAKEN_T_WATER_RISE = 26.0f;  // Slam + 10s
 
     // 슬램/점프 착지점 (맵 바깥 수면 위)
     static constexpr float KRAKEN_SLAM_OFFSET_X = 0.0f;
-    static constexpr float KRAKEN_SLAM_OFFSET_Z = -70.0f;
+    static constexpr float KRAKEN_SLAM_OFFSET_Z = -125.0f;  // 맵 바깥 물 장판 위 내려찍기
     static constexpr float KRAKEN_LAND_Y        = -2.0f;   // 수면(-4) 위 몸체 노출 Y
     static constexpr float KRAKEN_JUMP_PEAK_DY  = 25.0f;   // 점프 최고점 추가 Y
 

@@ -31,7 +31,7 @@
   "enemySpawns": [
     {
       "presetName": "FireGolem_Rd",
-      "count": 8,
+      "count": 5,
       "activationDelay": 1.0,
       "position": [
         0.0,
@@ -57,9 +57,9 @@
         "meshPath": "Assets/Enemies/Elementals/FireGolem_Rd/FireGolem_Rd.bin",
         "animationPath": "Assets/Enemies/Elementals/FireGolem_Rd/FireGolem_Rd_Anim.bin",
         "scale": [
-          5.0,
-          5.0,
-          5.0
+          5.5,
+          5.5,
+          5.5
         ],
         "color": [
           255,
@@ -78,7 +78,7 @@
     },
     {
       "presetName": "ChaosElemental_Rd",
-      "count": 2,
+      "count": 1,
       "activationDelay": 1.0,
       "position": [
         0.0,
@@ -104,9 +104,9 @@
         "meshPath": "Assets/Enemies/Elementals/ChaosElemental_Rd/ChaosElemental_Rd.bin",
         "animationPath": "Assets/Enemies/Elementals/ChaosElemental_Rd/ChaosElemental_Rd_Anim.bin",
         "scale": [
-          5.0,
-          5.0,
-          5.0
+          5.5,
+          5.5,
+          5.5
         ],
         "color": [
           255,
@@ -125,7 +125,7 @@
     },
     {
       "presetName": "LavaMan_Rd",
-      "count": 8,
+      "count": 5,
       "activationDelay": 5.0,
       "position": [
         0.0,
@@ -151,9 +151,9 @@
         "meshPath": "Assets/Enemies/Elementals/LavaMan_Rd/LavaMan_Rd.bin",
         "animationPath": "Assets/Enemies/Elementals/LavaMan_Rd/LavaMan_Rd_Anim.bin",
         "scale": [
-          5.0,
-          5.0,
-          5.0
+          5.5,
+          5.5,
+          5.5
         ],
         "color": [
           255,
@@ -172,7 +172,7 @@
     },
     {
       "presetName": "MoltenElemental_Rd",
-      "count": 4,
+      "count": 3,
       "activationDelay": 7.0,
       "position": [
         -16.03,
@@ -198,9 +198,9 @@
         "meshPath": "Assets/Enemies/Elementals/MoltenElemental_Rd/MoltenElemental_Rd.bin",
         "animationPath": "Assets/Enemies/Elementals/MoltenElemental_Rd/MoltenElemental_Rd_Anim.bin",
         "scale": [
-          5.0,
-          5.0,
-          5.0
+          5.5,
+          5.5,
+          5.5
         ],
         "color": [
           255,

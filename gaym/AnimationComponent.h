@@ -37,6 +37,18 @@ public:
     static bool s_bDebugStaticPose;
     bool m_bBoneLogDone = false;  // per-instance bone match log flag
 
+    // ── LOD / Culling 상태 ──────────────────────────────────────────────
+    // Phase offset: 모든 AnimationComponent 가 매 프레임 전부 본 계산하면 부담 크니
+    //   monster/npc 를 N 그룹으로 나눠 프레임마다 한 그룹씩만 돌림.
+    //   skip 된 프레임의 deltaTime 은 누적 → ON 프레임에 큰 step 으로 한번에 처리 → 재생속도 동일.
+    // Frustum culling: 카메라 frustum 밖 몬스터는 본 계산 skip (time 도 정지).
+    //   다음에 시야 안 들어오면 그때부터 다시 진행.
+    static constexpr int kPhaseGroupCount = 2;           // 2그룹 분산 (≈ 30fps 상당)
+    static void TickGlobalFrame() { ++s_nGlobalFrame; }  // Scene::Update 에서 매 프레임 한 번 호출
+    static int  GetGlobalFrame()  { return s_nGlobalFrame; }
+
+    void SetCullEnabled(bool b) { m_bCullEnabled = b; }  // 플레이어 등 항상 풀 업데이트 대상은 false 로
+
     // Playback speed (1.0 = normal, 0.5 = half speed, 2.0 = double speed)
     void SetPlaybackSpeed(float fSpeed) { m_fPlaybackSpeed = fSpeed; }
     float GetPlaybackSpeed() const { return m_fPlaybackSpeed; }
@@ -74,4 +86,10 @@ private:
     std::vector<CachedSkinnedMesh>     m_vSkinnedMeshes;
     std::vector<TransformComponent*>   m_vHierarchyTransforms; // ForceUpdateTransforms 대상
     void CollectHierarchyNodes(GameObject* pGameObject);       // BuildBoneCache 시 호출
+
+    // LOD 내부 상태
+    static int s_nGlobalFrame;         // 전역 프레임 (Scene::Update 에서 tick)
+    int        m_iUpdatePhase = 0;     // ctor 에서 ptr 해시 기반 지정
+    float      m_fAccumDelta   = 0.f;  // phase skip 된 프레임 delta 누적
+    bool       m_bCullEnabled  = true; // false 면 frustum/phase skip 무시 (플레이어 용)
 };

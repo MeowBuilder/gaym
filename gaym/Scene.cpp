@@ -102,6 +102,7 @@ void Scene::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList)
         auto* pAnim = pPlayer->AddComponent<AnimationComponent>();
         pAnim->LoadAnimation("Assets/Player/MageBlue_Anim.bin");
         pAnim->Play("Idle", true);
+        pAnim->SetCullEnabled(false);  // 플레이어는 항상 풀 애니메이션 (frustum/phase skip 면제)
 
         // Add Collider Component for Player
         auto* pPlayerCollider = pPlayer->AddComponent<ColliderComponent>();
@@ -361,47 +362,8 @@ void Scene::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList)
     }
 
     // --------------------------------------------------------------------------
-    // Volcano 장식 메쉬 배치 (맵 외곽 배경용) — 워터마크 이전에 생성해 영속 슬롯 확보
+    // Volcano 장식 메쉬 배치 제거됨 (사용자 요청 — 맵 외곽 배경으로 쓰던 대형 화산 오브젝트들)
     // --------------------------------------------------------------------------
-    {
-        struct VolcanoPlacement {
-            float x, y, z;
-            float scale;
-            float rotY;
-        };
-        // 대형 화산 3개 (맵 외곽 배경용 - 충분히 먼 거리로 배치)
-        VolcanoPlacement placements[] = {
-            { -600.0f, -8.0f, -800.0f, 3000.0f, 20.0f },   // 서북쪽 먼 외곽
-            { 600.0f, -8.0f, -800.0f, 2800.0f, -15.0f },   // 동북쪽 먼 외곽
-            { 0.0f, -10.0f, 400.0f, 5000.0f, 10.0f },      // 남쪽 외곽 (더 큰 화산)
-        };
-
-        XMFLOAT4X4 identity;
-        XMStoreFloat4x4(&identity, XMMatrixIdentity());
-
-        for (const auto& placement : placements)
-        {
-            CRoom* pTempRoom = m_pCurrentRoom;
-            m_pCurrentRoom = nullptr;  // m_vGameObjects에 등록 (룸에 속하지 않음)
-
-            GameObject* pVolcano = MeshLoader::LoadGeometryFromFile(
-                this, pDevice, pCommandList, NULL,
-                "Assets/MapData/meshes/volcano/volcano.bin");
-
-            m_pCurrentRoom = pTempRoom;
-
-            if (pVolcano)
-            {
-                pVolcano->GetTransform()->SetLocalMatrix(identity);
-                pVolcano->GetTransform()->SetPosition(placement.x, placement.y, placement.z);
-                pVolcano->GetTransform()->SetScale(placement.scale, placement.scale, placement.scale);
-                pVolcano->GetTransform()->SetRotation(-90.0f, placement.rotY, 0.0f);
-
-                AddRenderComponentsToHierarchy(pDevice, pCommandList, pVolcano, m_vShaders[0].get(), false);
-            }
-        }
-        OutputDebugString(L"[Scene] Volcano decorations placed (4 large volcanoes)\n");
-    }
 
     // --------------------------------------------------------------------------
     // 영속 디스크립터 워터마크 기록
@@ -530,6 +492,9 @@ void Scene::Update(float deltaTime, InputSystem* pInputSystem)
 {
     m_fLastDeltaTime = deltaTime;
 
+    // LOD 용 전역 프레임 카운터 — AnimationComponent 의 phase offset 분산에 사용
+    AnimationComponent::TickGlobalFrame();
+
     // ── Kraken emergence cinematic ──────────────────────────────────────────
     // Trigger: death callback sets m_bPendingKrakenSpawn
     if (m_bPendingKrakenSpawn && m_pPreloadedKraken)
@@ -652,9 +617,9 @@ void Scene::Update(float deltaTime, InputSystem* pInputSystem)
             if (T >= KRAKEN_T_BURST)
             {
                 m_eKrakenStage = KrakenCutsceneStage::Reveal;
-                // Wide reveal shot
+                // Wide reveal shot (앞모습 보이도록 yaw +180°: 210 → 30)
                 XMFLOAT3 camFocus = m_xmf3PendingKrakenPos; camFocus.y = 3.0f;
-                m_pCamera->StartCinematic(camFocus, 65.0f, 35.0f, 210.0f);
+                m_pCamera->StartCinematic(camFocus, 65.0f, 35.0f, 30.0f);
                 OutputDebugString(L"[Scene] Kraken cutscene: REVEAL\n");
             }
         }
@@ -664,17 +629,17 @@ void Scene::Update(float deltaTime, InputSystem* pInputSystem)
             float t = (T - KRAKEN_T_BURST) / (KRAKEN_T_REVEAL - KRAKEN_T_BURST);
             if (t > 1.0f) t = 1.0f;
 
-            // Slowly zoom out further during reveal
+            // Slowly zoom out further during reveal (yaw 앞모습: 30°)
             float dist = lerp(65.0f, 75.0f, t);
-            m_pCamera->SetCinematicOrbit(dist, 35.0f, 210.0f);
+            m_pCamera->SetCinematicOrbit(dist, 35.0f, 30.0f);
 
             if (T >= KRAKEN_T_REVEAL)
             {
                 // Reveal 완료 → 포효 단계로
                 m_eKrakenStage = KrakenCutsceneStage::Roar;
-                // 포효: 카메라 더 가까이 Kraken 얼굴 중심
+                // 포효: 앞모습(yaw 0°) + 너무 가깝지 않도록 dist 55
                 XMFLOAT3 camFocus = m_xmf3PendingKrakenPos; camFocus.y = 4.0f;
-                m_pCamera->StartCinematic(camFocus, 35.0f, 20.0f, 180.0f);
+                m_pCamera->StartCinematic(camFocus, 55.0f, 25.0f, 0.0f);
 
                 // Unreal Take 애니메이션 재생 (포효)
                 if (pKrakenObj)
@@ -712,20 +677,16 @@ void Scene::Update(float deltaTime, InputSystem* pInputSystem)
                     m_xmf3PendingKrakenPos.z + KRAKEN_SLAM_OFFSET_Z
                 };
 
-                // 점프 추적 카메라
+                // 점프 추적 카메라 (앞모습: yaw 200 → 20)
                 XMFLOAT3 camFocus = {
                     (m_xmf3KrakenJumpStart.x + m_xmf3KrakenJumpEnd.x) * 0.5f,
                     4.0f,
                     (m_xmf3KrakenJumpStart.z + m_xmf3KrakenJumpEnd.z) * 0.5f
                 };
-                m_pCamera->StartCinematic(camFocus, 80.0f, 30.0f, 200.0f);
+                m_pCamera->StartCinematic(camFocus, 80.0f, 30.0f, 20.0f);
 
-                // 점프/도약 클립 — 촉수를 크게 휘두르는 3단 콤보 전반부로 역동성 부여
-                if (pKrakenObj)
-                {
-                    auto* pAnim = pKrakenObj->GetComponent<AnimationComponent>();
-                    if (pAnim) pAnim->CrossFade("Sweep_Smash_Attack_3_HIt_Combo", 0.1f, false);
-                }
+                // 점프 동안은 애니 전환 없이 Roar 에서 넘어온 Idle 포즈를 그대로 유지.
+                // 착지 순간 Attack_Forward 를 Slam 단계에서 CrossFade → 임팩트 프레임 즉시 시작.
 
                 // 착지 방향으로 yaw 정렬 — 모델 forward가 +Z 축이라 180° 플립 불필요
                 if (pKrakenObj)
@@ -781,9 +742,10 @@ void Scene::Update(float deltaTime, InputSystem* pInputSystem)
                     if (u < 0.5f) { float r = u * 2.0f; arc = 1.0f - (1.0f - r) * (1.0f - r); }
                     else          { float r = (u - 0.5f) * 2.0f; arc = 1.0f - r * r; }
                     pos.y = yBase + KRAKEN_JUMP_PEAK_DY * arc;
-                    // 공중 피치: 상승 중 뒤로 젖힘(-) → 하강 중 앞으로 내리찍음(+)
-                    pitchDeg = (u < 0.5f) ? -12.0f * (u * 2.0f)
-                                          :  28.0f * ((u - 0.5f) * 2.0f);
+                    // 공중 피치 — Attack_Forward 애니가 이미 내려찍는 자세라 과한 추가 기울임은 오히려 어색함.
+                    // 상승 시 살짝 젖힘(-6) → 하강 시 완만하게 앞으로(+10).
+                    pitchDeg = (u < 0.5f) ? -6.0f * (u * 2.0f)
+                                          :  10.0f * ((u - 0.5f) * 2.0f);
                 }
                 pKrakenObj->GetTransform()->SetPosition(pos);
 
@@ -806,16 +768,16 @@ void Scene::Update(float deltaTime, InputSystem* pInputSystem)
                     pKrakenObj->GetTransform()->SetRotation(rot);
                 }
 
-                // 슬램 임팩트용 카메라 (착지 지점 클로즈업)
+                // 슬램 임팩트용 카메라 (앞모습 yaw 20°)
                 XMFLOAT3 camFocus = m_xmf3KrakenJumpEnd;
                 camFocus.y = 2.0f;
-                m_pCamera->StartCinematic(camFocus, 50.0f, 30.0f, 200.0f);
+                m_pCamera->StartCinematic(camFocus, 50.0f, 30.0f, 20.0f);
 
-                // 슬램 애니메이션 — 전방 공격 (2s)
+                // 착지 순간 내려찍기 애니 재생 시작 — 임팩트 프레임부터 깔끔하게 진입.
                 if (pKrakenObj)
                 {
                     auto* pAnim = pKrakenObj->GetComponent<AnimationComponent>();
-                    if (pAnim) pAnim->CrossFade("Attack_Forward", 0.08f, false);
+                    if (pAnim) pAnim->CrossFade("Attack_Forward", 0.05f, false, true);
                 }
                 OutputDebugString(L"[Scene] Kraken cutscene: SLAM\n");
             }
@@ -2291,6 +2253,8 @@ void Scene::TransitionToBossRoom()
         // 보스 인트로 컷씬 시작
         if (pDragon)
         {
+            // 보스는 애니 LOD(phase/frustum skip) 면제 — 찍기 등 긴 모션의 끊김 방지
+            if (auto* pA = pDragon->GetComponent<AnimationComponent>()) pA->SetCullEnabled(false);
             EnemyComponent* pEnemy = pDragon->GetComponent<EnemyComponent>();
             if (pEnemy)
             {
@@ -2922,9 +2886,8 @@ void Scene::TransitionToWaterBossRoom()
     ID3D12Device*              pDevice      = Dx12App::GetInstance()->GetDevice();
     ID3D12GraphicsCommandList* pCommandList = Dx12App::GetInstance()->GetCommandList();
 
-    // ── 9. 물 맵 로드 (첫 번째 맵 풀 사용)
-    if (!m_vMapPool.empty())
-        m_strCurrentMap = m_vMapPool[0];
+    // ── 9. 보스 공용 맵 로드 — 모든 보스전이 Red Dragon 과 동일한 맵 사용 (rooms.json 의 bossRoom)
+    m_strCurrentMap = m_strBossMap;
     bool bLoaded = MapLoader::LoadIntoScene(
         m_strCurrentMap.c_str(), this, pDevice, pCommandList, m_vShaders[0].get());
     if (!bLoaded)
@@ -3004,12 +2967,9 @@ void Scene::TransitionToWaterBossRoom()
         RoomSpawnConfig emptyConfig;
         m_pCurrentRoom->SetSpawnConfig(emptyConfig);
 
-        XMFLOAT3 bossPos = XMFLOAT3(0.0f, 0.0f, 20.0f);
-        if (m_pPlayerGameObject)
-        {
-            XMFLOAT3 playerPos = m_pPlayerGameObject->GetTransform()->GetPosition();
-            bossPos = XMFLOAT3(playerPos.x, playerPos.y, playerPos.z + 20.0f);
-        }
+        // 보스 스폰 위치 = 맵 중앙 (공용 보스 맵 기준)
+        const BoundingBox& bossBB = m_pCurrentRoom->GetBoundingBox();
+        XMFLOAT3 bossPos = XMFLOAT3(bossBB.Center.x, 0.0f, bossBB.Center.z);
 
         // Pre-spawn Kraken hidden underground (no target) to avoid mid-combat GPU upload lag
         // Y=-10000: 시야/프러스텀 밖으로 완전히 숨김 (다른 숨긴 오브젝트들과 동일 깊이)
@@ -3018,6 +2978,7 @@ void Scene::TransitionToWaterBossRoom()
         if (pKraken)
         {
             pKraken->GetTransform()->SetScale(0.05f, 0.05f, 0.05f);
+            if (auto* pA = pKraken->GetComponent<AnimationComponent>()) pA->SetCullEnabled(false);
             m_pPreloadedKraken = pKraken->GetComponent<EnemyComponent>();
         }
 
@@ -3026,6 +2987,7 @@ void Scene::TransitionToWaterBossRoom()
 
         if (pDragon)
         {
+            if (auto* pA = pDragon->GetComponent<AnimationComponent>()) pA->SetCullEnabled(false);
             EnemyComponent* pDragonEnemy = pDragon->GetComponent<EnemyComponent>();
             if (pDragonEnemy)
             {
@@ -3276,7 +3238,8 @@ void Scene::TransitionToEarthBossRoom()
     ID3D12Device*              pDevice      = Dx12App::GetInstance()->GetDevice();
     ID3D12GraphicsCommandList* pCommandList = Dx12App::GetInstance()->GetCommandList();
 
-    if (!m_vMapPool.empty()) m_strCurrentMap = m_vMapPool[0];
+    // 보스 공용 맵 — Red Dragon 과 동일 (rooms.json 의 bossRoom)
+    m_strCurrentMap = m_strBossMap;
     bool bLoaded = MapLoader::LoadIntoScene(
         m_strCurrentMap.c_str(), this, pDevice, pCommandList, m_vShaders[0].get());
     if (!bLoaded) { OutputDebugString(L"[Scene] Earth boss map load failed!\n"); return; }
@@ -3295,6 +3258,10 @@ void Scene::TransitionToEarthBossRoom()
         XMFLOAT3 golemPos = { roomBB.Center.x, 0.0f, roomBB.Center.z };  // XZ 중앙, Y=0(지면)
 
         GameObject* pGolem = m_pEnemySpawner->SpawnEnemy(m_pCurrentRoom, "Golem", golemPos, m_pPlayerGameObject);
+        if (pGolem)
+        {
+            if (auto* pA = pGolem->GetComponent<AnimationComponent>()) pA->SetCullEnabled(false);
+        }
         // 인트로 호출 제거 — 골렘은 제단에 박혀있는 석상 컨셉이라 내려오는 연출 불필요
 
         m_pCurrentRoom->SetState(RoomState::Active);
@@ -3353,7 +3320,8 @@ void Scene::TransitionToGrassBossRoom()
     ID3D12Device*              pDevice      = Dx12App::GetInstance()->GetDevice();
     ID3D12GraphicsCommandList* pCommandList = Dx12App::GetInstance()->GetCommandList();
 
-    if (!m_vMapPool.empty()) m_strCurrentMap = m_vMapPool[0];
+    // 보스 공용 맵 — Red Dragon 과 동일 (rooms.json 의 bossRoom)
+    m_strCurrentMap = m_strBossMap;
     bool bLoaded = MapLoader::LoadIntoScene(
         m_strCurrentMap.c_str(), this, pDevice, pCommandList, m_vShaders[0].get());
     if (!bLoaded) { OutputDebugString(L"[Scene] Grass boss map load failed!\n"); return; }
@@ -3367,16 +3335,14 @@ void Scene::TransitionToGrassBossRoom()
         m_pCurrentRoom->SetSpawnConfig(emptyConfig);
 
         OutputDebugString(L"[Scene] Spawning Demon boss\n");
-        XMFLOAT3 demonPos = XMFLOAT3(0.0f, 0.0f, 20.0f);
-        if (m_pPlayerGameObject)
-        {
-            XMFLOAT3 p = m_pPlayerGameObject->GetTransform()->GetPosition();
-            demonPos = XMFLOAT3(p.x, p.y, p.z + 20.0f);
-        }
+        // 맵 중앙 스폰 (공용 보스 맵 기준)
+        const BoundingBox& demonBB = m_pCurrentRoom->GetBoundingBox();
+        XMFLOAT3 demonPos = XMFLOAT3(demonBB.Center.x, 0.0f, demonBB.Center.z);
 
         GameObject* pDemon = m_pEnemySpawner->SpawnEnemy(m_pCurrentRoom, "Demon", demonPos, m_pPlayerGameObject);
         if (pDemon)
         {
+            if (auto* pA = pDemon->GetComponent<AnimationComponent>()) pA->SetCullEnabled(false);
             EnemyComponent* pEnemy = pDemon->GetComponent<EnemyComponent>();
             if (pEnemy) pEnemy->StartBossIntro(4.0f);
         }
