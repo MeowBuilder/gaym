@@ -124,6 +124,11 @@ void Dx12App::OnCreate(HINSTANCE hInstance, HWND hMainWnd)
     CreateDepthStencilView();
     CreateShadowMap();
 
+    // HDR scene RT + bloom post-process (scene is rendered offscreen here, then
+    // tonemap+composited to the LDR swap-chain back buffer).
+    m_pBloom = std::make_unique<BloomPostProcess>();
+    m_pBloom->Init(m_pd3dDevice.Get(), m_nWndClientWidth, m_nWndClientHeight);
+
     // CommandList를 열고 리소스 생성을 기록합니다.
     CHECK_HR(m_pd3dCommandList->Reset(m_pd3dCommandAllocator.Get(), NULL));
 
@@ -643,6 +648,13 @@ void Dx12App::FrameAdvance()
             }
         }
 
+        // DEBUG: G key = bloom(Glow) on/off toggle (before/after 비교)
+        if (m_inputSystem.IsKeyPressed('G') && m_pBloom)
+        {
+            m_pBloom->ToggleEnabled();
+            OutputDebugStringA(m_pBloom->IsEnabled() ? "[Bloom] ON\n" : "[Bloom] OFF\n");
+        }
+
         // DEBUG: K key = 현재 방 적 전원 즉사 (포탈/드랍 테스트용)
         if (m_inputSystem.IsKeyPressed('K'))
         {
@@ -680,7 +692,14 @@ void Dx12App::FrameAdvance()
     shadowBarrierBack.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
     m_pd3dCommandList->ResourceBarrier(1, &shadowBarrierBack);
 
-    // Text rendering (2D overlay on top of 3D scene)
+    // Bloom: capture LDR scene from the back buffer, extract bright pixels (threshold),
+    // Gaussian blur, then additive-composite back onto the swap-chain back buffer.
+    m_pBloom->Apply(m_pd3dCommandList.Get(),
+                    m_pd3dRenderTargetBuffers[m_nSwapChainBufferIndex].Get(),
+                    d3dRtvCPUDescriptorHandle,
+                    m_nWndClientWidth, m_nWndClientHeight);
+
+    // Text rendering (2D overlay on top of 3D scene + bloom)
     RenderText();
 
     d3dResourceBarrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
@@ -725,6 +744,10 @@ void Dx12App::OnResize(UINT nWidth, UINT nHeight)
 
     CreateRenderTargetViews();
     CreateDepthStencilView();
+
+    // HDR scene RT + bloom chain
+    if (m_pBloom)
+        m_pBloom->OnResize(m_pd3dDevice.Get(), m_nWndClientWidth, m_nWndClientHeight);
 
     // Screen-Space Fluid 텍스처 리사이즈
     if (m_pScene)

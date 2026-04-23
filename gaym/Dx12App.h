@@ -4,6 +4,7 @@
 #include "InputSystem.h" // Added InputSystem include
 #include "HealthBarUI.h"
 #include "NetworkManager.h" // Added NetworkManager include
+#include "BloomPostProcess.h"
 #include <memory>
 
 // DirectXTK12 for text rendering
@@ -101,6 +102,9 @@ private:
 
     // Health Bar UI
     std::unique_ptr<HealthBarUI> m_pHealthBarUI;
+
+    // Bloom post-process (owns HDR scene RT + blur chain + tonemap composite)
+    std::unique_ptr<BloomPostProcess> m_pBloom;
 
     // Network Manager
     NetworkManager* m_pNetworkManager = nullptr;

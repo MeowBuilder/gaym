@@ -256,16 +256,18 @@ void ParticleSystem::Render(ID3D12GraphicsCommandList* pCommandList)
             pCB->m_bIsSkinned = 0;
             pCB->m_bHasTexture = 0;
 
-            // Use particle color with emissive for glow effect
+            // Use particle color with emissive for glow effect.
+            // HDR emissive > 1.0 so the bloom bright-pass picks up particles as light sources.
             pCB->mMaterial.m_cAmbient = particle.color;
             pCB->mMaterial.m_cDiffuse = particle.color;
             pCB->mMaterial.m_cSpecular = XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f);  // No specular
+            constexpr float kParticleEmissiveBoost = 3.0f;  // HDR intensity multiplier
             pCB->mMaterial.m_cEmissive = XMFLOAT4(
-                particle.color.x * 0.8f,
-                particle.color.y * 0.8f,
-                particle.color.z * 0.8f,
+                particle.color.x * kParticleEmissiveBoost,
+                particle.color.y * kParticleEmissiveBoost,
+                particle.color.z * kParticleEmissiveBoost,
                 particle.color.w
-            );  // Strong emissive for glow
+            );
 
             // Set descriptor table
             D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle = m_pDescriptorHeap->GetGPUHandle(

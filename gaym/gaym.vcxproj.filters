@@ -216,6 +216,9 @@
     <ClInclude Include="ParticleSystem.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
+    <ClInclude Include="BloomPostProcess.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
     <ClInclude Include="DropItemComponent.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
@@ -548,6 +551,9 @@
     <ClCompile Include="ParticleSystem.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
+    <ClCompile Include="BloomPostProcess.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
     <ClCompile Include="DropItemComponent.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
@@ -704,6 +710,7 @@
     <FxCompile Include="shaders.hlsl" />
     <FxCompile Include="fluid_particles.hlsl" />
     <FxCompile Include="terrain.hlsl" />
+    <FxCompile Include="bloom.hlsl" />
   </ItemGroup>
   <ItemGroup>
     <None Include="GameObject.inl">
