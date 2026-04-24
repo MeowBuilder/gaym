@@ -113,8 +113,11 @@ private:
     UINT m_halfWidth  = 0;
     UINT m_halfHeight = 0;
 
-    float m_threshold       = 0.5f;   // LDR source: soft-knee start luminance.
-    float m_intensity       = 2.0f;   // Bloom add-strength in composite.
+    // Cartoon/stylized tuning: brightness threshold plus a chroma gate in the
+    // shader keep character specular/diffuse highlights from blooming while
+    // letting saturated skill-particle colors glow.
+    float m_threshold       = 0.8f;   // LDR source: soft-knee start value.
+    float m_intensity       = 1.8f;   // Bloom add-strength in composite.
     UINT  m_blurIterations  = 3;      // Number of H+V passes (each widens blur radius).
     bool  m_enabled         = true;
 };

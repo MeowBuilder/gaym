@@ -32,20 +32,27 @@ VS_OUT VS_Fullscreen(uint id : SV_VertexID)
     return o;
 }
 
-float Luminance(float3 c)
-{
-    return dot(c, float3(0.2126f, 0.7152f, 0.0722f));
-}
-
 float4 PS_BrightPass(VS_OUT i) : SV_TARGET
 {
     float3 c = g_tex0.Sample(g_sampler, i.uv).rgb;
-    float  l = Luminance(c);
-    // Soft threshold: smooth falloff in a small band above threshold so the
-    // bloom does not pop in hard-edged.
-    float  soft = saturate((l - threshold) / max(1.0f - threshold, 1e-4f));
-    // Bias toward brighter pixels.
+    float  maxC = max(c.r, max(c.g, c.b));
+    float  minC = min(c.r, min(c.g, c.b));
+    // Chromaticity: 0 for grayscale (lit character diffuse + specular often
+    // clips near-white here), ~1 for pure saturated skill-particle colors.
+    float  chroma = (maxC > 1e-5f) ? ((maxC - minC) / maxC) : 0.0f;
+
+    // Brightness gate: only bright pixels qualify.
+    float  soft = saturate((maxC - threshold) / max(1.0f - threshold, 1e-4f));
     soft = soft * soft;
+
+    // Chroma gate: unsaturated bright stuff (character spec highlights, lit
+    // skin/armor, bright stone) gets heavily damped. Saturated colors
+    // (skill particles, fire/ice FX) pass through unaffected.
+    //  chroma 0.0  -> gate 0.05  (5% — just a whisper of bloom on whites)
+    //  chroma 0.4+ -> gate 1.0   (full bloom)
+    float  chromaGate = saturate(0.05f + chroma * 2.4f);
+    soft *= chromaGate;
+
     return float4(c * soft, 1.0f);
 }
 
