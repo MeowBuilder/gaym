@@ -89,6 +89,18 @@ struct VFXSequenceDef {
     float waveOscWaveNumber = 0.8f;  // 공간 파수 k (rad/m), 파장 = 2π/k
 };
 
+// 룬 원소를 VFXSequenceDef에 색상으로 반영한다.
+// overrideColors=true + FluidElementColors를 코어/엣지로 덮어씌움.
+inline VFXSequenceDef WithElementColors(VFXSequenceDef def, ElementType element)
+{
+    FluidElementColor ec  = FluidElementColors::Get(element);
+    def.element           = element;
+    def.overrideColors    = true;
+    def.overrideCoreColor = ec.coreColor;
+    def.overrideEdgeColor = ec.edgeColor;
+    return def;
+}
+
 class VFXLibrary {
 public:
     static VFXLibrary& Get();

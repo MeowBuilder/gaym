@@ -559,6 +559,9 @@ SkillStats SkillComponent::BuildSkillStats(SkillSlot skill, ActivationType defau
     if (hasL03 && uniqueElements.size() >= 2)
         stats.damageMult *= 1.30f;
 
+    // elementSet: VFX 색상 오버라이드용 (순서 보존)
+    stats.elementSet.assign(uniqueElements.begin(), uniqueElements.end());
+
     // 원소 변환(L04): 시전마다 원소 무작위 변경
     if (stats.randomElementOnCast)
     {
@@ -620,6 +623,9 @@ void SkillComponent::ExecuteOrSplit(size_t index, const XMFLOAT3& target, float 
     ActivationType defType = m_Skills[index] ? m_Skills[index]->GetSkillData().activationType : ActivationType::Instant;
     SkillStats stats = BuildSkillStats(slot, defType);
     RuneCombo combo = GetRuneCombo(slot);
+
+    // 룬 데미지 배율 적용 — Execute에 넘기는 mult에 포함시켜 모든 스킬에 일괄 적용
+    mult *= stats.damageMult;
 
     auto invokeOnCast = [&]() {
         if (!stats.onCastHooks.empty() && m_pOwner)

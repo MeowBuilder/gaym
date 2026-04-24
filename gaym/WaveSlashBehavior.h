@@ -59,6 +59,7 @@ private:
 
     std::unordered_set<EnemyComponent*> m_hitEnemies;  // 파도 본체에 이미 히트된 적
     std::vector<FireZone>               m_fireTrail;   // 활성 불꽃 자국 존
+    std::vector<int>                    m_extraVFXIds; // 다중 원소 추가 VFX 슬롯
 
     // 파도 본체 히트 판정
     // WAVE_PARTICLE_SPEED: VFXLibrary maxParticleSpeed(20)에 맞춰 실제 파티클 선두 속도 사용

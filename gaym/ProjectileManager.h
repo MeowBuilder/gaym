@@ -65,7 +65,8 @@ public:
         float lifestealRatio = 0.f,
         float execDamageBonus = 0.f,
         float cdResetChance = 0.f,
-        SkillSlot skillSlot = SkillSlot::Count
+        SkillSlot skillSlot = SkillSlot::Count,
+        const std::vector<ElementType>& elementSet = {}
     );
 
     // Update all projectiles (movement + collision)

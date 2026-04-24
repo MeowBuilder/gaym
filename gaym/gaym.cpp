@@ -121,9 +121,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         case VK_F11:
             g_pDx12App->ToggleFullscreen();
             break;
-        case VK_ESCAPE:
-            PostQuitMessage(0);
-            break;
         }
         break;
     case WM_MOUSEMOVE:
