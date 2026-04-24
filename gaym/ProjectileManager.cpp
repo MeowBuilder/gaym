@@ -170,6 +170,40 @@ void ProjectileManager::SpawnProjectile(const Projectile& projectile)
         }
     }
 
+    // 궤도 동반 투사체 (궤도/중궤도 룬): SkillStats에서 orbitalCount 읽어 헬릭스 투사체 생성
+    if (!projectile.isOrbital && projectile.isPlayerProjectile
+        && projectile.skillSlot != SkillSlot::Count && projectile.owner)
+    {
+        SkillComponent* pSkillComp = projectile.owner->GetComponent<SkillComponent>();
+        if (pSkillComp)
+        {
+            int orbCount = pSkillComp->BuildSkillStats(projectile.skillSlot).orbitalCount;
+            if (orbCount > 0)
+            {
+                // 재할당으로 참조 무효화 방지: 필요한 데이터를 값으로 복사
+                Projectile base = projectile;
+                constexpr float PI2 = 6.28318530f;
+                float angleStep = PI2 / orbCount;
+                for (int oi = 0; oi < orbCount && m_Projectiles.size() < MAX_PROJECTILES; ++oi)
+                {
+                    Projectile orb   = base;
+                    orb.isOrbital    = true;
+                    orb.orbitalCenter     = base.position;
+                    orb.orbitalForwardDir = base.direction;
+                    orb.orbitalAngle      = angleStep * oi;  // 균등 위상 배분
+                    orb.orbitalRadius     = 2.0f;
+                    orb.orbitalAngularSpeed = 5.0f;
+                    orb.damage       = base.damage * 0.35f;
+                    orb.scale        = 0.55f;
+                    orb.fluidVFXId   = -1;
+                    orb.extraVFXIds.clear();
+                    orb.spawnOnHitCount = 0;  // 궤도 투사체의 반향 방지
+                    m_Projectiles.push_back(orb);
+                }
+            }
+        }
+    }
+
     wchar_t buffer[256];
     swprintf_s(buffer, 256, L"[ProjectileManager] Spawned projectile at (%.1f, %.1f, %.1f) -> dir (%.2f, %.2f, %.2f)\n",
         projectile.position.x, projectile.position.y, projectile.position.z,

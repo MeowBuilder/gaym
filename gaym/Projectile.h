@@ -47,22 +47,51 @@ struct Projectile
     int   spawnOnHitCount = 0;      // 반향: 적중 시 주변 적으로 추가 투사체 생성
     SkillSlot skillSlot   = SkillSlot::Count; // 적중 시 onHit 훅 호출용 슬롯 정보
 
+    // 궤도 운동 (궤도/중궤도 룬)
+    bool      isOrbital          = false;
+    XMFLOAT3  orbitalCenter      = {};     // 매 프레임 direction으로 전진하는 궤도 중심
+    XMFLOAT3  orbitalForwardDir  = {};     // 중심 이동 방향
+    float     orbitalRadius      = 2.0f;
+    float     orbitalAngle       = 0.f;    // 현재 궤도 각도 (라디안)
+    float     orbitalAngularSpeed = 5.0f;  // 회전 속도 (rad/s)
+
     // Helper to update position
     void Update(float deltaTime)
     {
         if (!isActive) return;
 
         float moveDistance = speed * deltaTime;
-        position.x += direction.x * moveDistance;
-        position.y += direction.y * moveDistance;
-        position.z += direction.z * moveDistance;
-
         distanceTraveled += moveDistance;
+        if (distanceTraveled >= maxDistance) { isActive = false; return; }
 
-        // Deactivate if max distance reached
-        if (distanceTraveled >= maxDistance)
+        if (isOrbital)
         {
-            isActive = false;
+            // 궤도 중심을 forward 방향으로 전진
+            orbitalCenter.x += orbitalForwardDir.x * moveDistance;
+            orbitalCenter.y += orbitalForwardDir.y * moveDistance;
+            orbitalCenter.z += orbitalForwardDir.z * moveDistance;
+
+            // 각도 증가
+            orbitalAngle += orbitalAngularSpeed * deltaTime;
+
+            // 헬릭스 위치: center + right*cos + up*sin
+            XMVECTOR fwd   = XMVector3Normalize(XMLoadFloat3(&orbitalForwardDir));
+            XMVECTOR up    = XMVectorSet(0, 1, 0, 0);
+            float    dot   = XMVectorGetX(XMVector3Dot(fwd, up));
+            XMVECTOR right = (fabsf(dot) > 0.99f)
+                ? XMVectorSet(1, 0, 0, 0)
+                : XMVector3Normalize(XMVector3Cross(up, fwd));
+            XMVECTOR centerV = XMLoadFloat3(&orbitalCenter);
+            XMVECTOR pos = centerV
+                + right * (orbitalRadius * cosf(orbitalAngle))
+                + up    * (orbitalRadius * sinf(orbitalAngle));
+            XMStoreFloat3(&position, pos);
+        }
+        else
+        {
+            position.x += direction.x * moveDistance;
+            position.y += direction.y * moveDistance;
+            position.z += direction.z * moveDistance;
         }
     }
 
