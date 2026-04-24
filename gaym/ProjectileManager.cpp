@@ -90,10 +90,30 @@ void ProjectileManager::SpawnProjectile(const Projectile& projectile)
         {
             // 플레이어 투사체: 플레이어 전용 매니저 → SSF 파이프라인
             uint32_t runeFlags = ToRuneFlags(proj.runeCombo);
-            VFXSequenceDef seqDef = VFXLibrary::Get().GetDef(
-                SkillSlot::RightClick, runeFlags, proj.element);
+            SkillSlot vfxSlot  = (proj.skillSlot != SkillSlot::Count) ? proj.skillSlot : SkillSlot::RightClick;
+
+            // 1차 원소: elementSet이 있으면 그 색상 사용, 없으면 기본 element
+            ElementType primaryElem = proj.elementSet.empty() ? proj.element : proj.elementSet[0];
+            VFXSequenceDef seqDef = VFXLibrary::Get().GetDef(vfxSlot, runeFlags, primaryElem);
+            if (!proj.elementSet.empty())
+            {
+                seqDef = WithElementColors(seqDef, primaryElem);
+                if (proj.elementSet.size() > 1)
+                    seqDef.particleCount = max(100, (int)(seqDef.particleCount * 0.6f));
+            }
             proj.fluidVFXId = m_pFluidVFXManager->SpawnSequenceEffect(
                 proj.position, proj.direction, seqDef);
+
+            // 추가 원소 VFX
+            for (size_t ei = 1; ei < proj.elementSet.size(); ++ei)
+            {
+                VFXSequenceDef extraDef = VFXLibrary::Get().GetDef(vfxSlot, runeFlags, proj.element);
+                extraDef = WithElementColors(extraDef, proj.elementSet[ei]);
+                extraDef.particleCount = max(100, (int)(extraDef.particleCount * 0.6f));
+                int eid = m_pFluidVFXManager->SpawnSequenceEffect(
+                    proj.position, proj.direction, extraDef);
+                if (eid >= 0) proj.extraVFXIds.push_back(eid);
+            }
         }
         else if (!proj.isPlayerProjectile && m_pEnemyFluidVFXManager)
         {
@@ -176,7 +196,8 @@ void ProjectileManager::SpawnProjectile(
     float lifestealRatio,
     float execDamageBonus,
     float cdResetChance,
-    SkillSlot skillSlot)
+    SkillSlot skillSlot,
+    const std::vector<ElementType>& elementSet)
 {
     Projectile proj;
     proj.position         = startPos;
@@ -199,6 +220,7 @@ void ProjectileManager::SpawnProjectile(
     proj.execDamageBonus  = execDamageBonus;
     proj.cdResetChance    = cdResetChance;
     proj.skillSlot        = skillSlot;
+    proj.elementSet       = elementSet;
 
     // Calculate direction
     XMVECTOR start = XMLoadFloat3(&startPos);
@@ -263,6 +285,9 @@ void ProjectileManager::Update(float deltaTime)
         // Update fluid VFX position
         if (pVFX && projectile.fluidVFXId >= 0)
             pVFX->TrackEffect(projectile.fluidVFXId, projectile.position, projectile.direction);
+        if (pVFX)
+            for (int eid : projectile.extraVFXIds)
+                if (eid >= 0) pVFX->TrackEffect(eid, projectile.position, projectile.direction);
 
         // Check collisions
         if (projectile.isActive)
@@ -285,8 +310,24 @@ void ProjectileManager::Update(float deltaTime)
                 else
                     pVFX->StopEffect(projectile.fluidVFXId);
             }
-            // Spawn explosion particles
-            SpawnExplosionParticles(projectile.position, projectile.element);
+            // Extra element VFX
+            if (pVFX)
+            {
+                for (int eid : projectile.extraVFXIds)
+                {
+                    if (eid < 0) continue;
+                    if (projectile.wasHit && projectile.isPlayerProjectile)
+                        pVFX->ExplodeEffect(eid, projectile.position);
+                    else
+                        pVFX->StopEffect(eid);
+                }
+            }
+            // Spawn explosion particles for each element
+            if (projectile.elementSet.empty())
+                SpawnExplosionParticles(projectile.position, projectile.element);
+            else
+                for (ElementType e : projectile.elementSet)
+                    SpawnExplosionParticles(projectile.position, e);
             inactiveCount++;
         }
     }

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <DirectXMath.h>
+#include <vector>
 #include "SkillTypes.h"
 
 using namespace DirectX;
@@ -31,8 +32,10 @@ struct Projectile
     // Visual
     float scale = 1.0f;
     float chargeRatio = 0.0f;
-    int fluidVFXId = -1;         // Associated fluid VFX effect (-1 = none)
-    RuneCombo runeCombo;         // Rune combo for VFX customization
+    int fluidVFXId = -1;             // Associated fluid VFX effect (-1 = none)
+    std::vector<int> extraVFXIds;    // Extra VFX slots for multi-element runes
+    RuneCombo runeCombo;             // Rune combo for VFX customization
+    std::vector<ElementType> elementSet; // Rune element set for multi-element VFX
     bool wasHit = false;         // True if deactivated by collision (not range)
 
     // Rune-driven runtime flags (set at spawn from SkillStats)

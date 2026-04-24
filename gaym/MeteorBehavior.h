@@ -2,6 +2,7 @@
 
 #include "ISkillBehavior.h"
 #include "SkillData.h"
+#include <vector>
 
 class FluidSkillVFXManager;
 class Scene;
@@ -33,6 +34,8 @@ private:
     FluidSkillVFXManager* m_pVFXManager = nullptr;
     Scene*    m_pScene  = nullptr;
     int m_vfxId = -1;
+
+    std::vector<int> m_extraVFXIds; // 다중 원소 추가 VFX 슬롯
 
     // 히트 판정용
     XMFLOAT3  m_targetPos    = {};

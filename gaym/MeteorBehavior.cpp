@@ -59,17 +59,37 @@ void MeteorBehavior::Execute(GameObject* caster, const DirectX::XMFLOAT3& target
     // 3. 방향 = 아래 (낙하)
     XMFLOAT3 direction = { 0.f, -1.f, 0.f };
 
-    // 4. 룬 플래그
+    // 4. 룬 플래그 + 원소 스탯
     uint32_t runeFlags = GetRuneFlags(caster);
+    SkillStats stats;
+    if (caster) {
+        auto* pSkillComp = caster->GetComponent<SkillComponent>();
+        if (pSkillComp && m_slot != SkillSlot::Count)
+            stats = pSkillComp->BuildSkillStats(m_slot, m_SkillData.activationType);
+    }
 
-    // 5. VFXLibrary에서 메테오 시퀀스 정의 가져오기 (스킬 속성색 적용)
+    // 5. VFXLibrary에서 메테오 시퀀스 정의 + 룬 원소 색상 오버라이드
     VFXSequenceDef seqDef = VFXLibrary::Get().GetDef(SkillSlot::R, runeFlags, m_SkillData.element);
+    if (!stats.elementSet.empty())
+    {
+        seqDef = WithElementColors(seqDef, stats.elementSet[0]);
+        if (stats.elementSet.size() > 1)
+            seqDef.particleCount = max(100, (int)(seqDef.particleCount * 0.6f));
+    }
 
-    // 6. 시퀀스 이펙트 생성
-    //    SpawnSequenceEffect 내부에서 masterCPPos = { origin.x, origin.y + 50, origin.z } 로 설정됨
-    //    origin = spawnPos (이미 상공 위치)이므로, masterCPPos를 spawnPos 자체로 쓰기 위해
-    //    spawnPos를 origin으로 전달
+    // 6. 시퀀스 이펙트 생성 (1차 원소)
     m_vfxId = m_pVFXManager->SpawnSequenceEffect(spawnPos, direction, seqDef);
+
+    // 추가 원소 VFX (2차 이상)
+    m_extraVFXIds.clear();
+    for (size_t ei = 1; ei < stats.elementSet.size(); ++ei)
+    {
+        VFXSequenceDef extraDef = VFXLibrary::Get().GetDef(SkillSlot::R, runeFlags, m_SkillData.element);
+        extraDef = WithElementColors(extraDef, stats.elementSet[ei]);
+        extraDef.particleCount = max(100, (int)(extraDef.particleCount * 0.6f));
+        int eid = m_pVFXManager->SpawnSequenceEffect(spawnPos, direction, extraDef);
+        if (eid >= 0) m_extraVFXIds.push_back(eid);
+    }
 
     // 히트 판정 상태 초기화
     m_targetPos   = targetPos;
@@ -147,11 +167,15 @@ bool MeteorBehavior::IsFinished() const
 
 void MeteorBehavior::Reset()
 {
+    if (m_pVFXManager)
+        for (int eid : m_extraVFXIds)
+            if (eid >= 0) m_pVFXManager->StopEffect(eid);
     m_bIsFinished = true;
     m_bExploded   = false;
     m_elapsed     = 0.f;
     m_hitTimer    = 0.f;
     m_vfxId       = -1;
+    m_extraVFXIds.clear();
 }
 
 uint32_t MeteorBehavior::GetRuneFlags(GameObject* caster) const

@@ -58,12 +58,37 @@ void WaveSlashBehavior::Execute(GameObject* caster, const DirectX::XMFLOAT3& tar
         XMStoreFloat3(&direction, dirV);
     }
 
-    // 2. 룬 플래그 → VFX 시퀀스 정의
+    // 2. 룬 플래그 + 원소 스탯
     uint32_t runeFlags = GetRuneFlags(caster);
-    VFXSequenceDef seqDef = VFXLibrary::Get().GetDef(SkillSlot::Q, runeFlags, m_SkillData.element);
+    SkillStats stats;
+    if (caster) {
+        auto* pSkillComp = caster->GetComponent<SkillComponent>();
+        if (pSkillComp && m_slot != SkillSlot::Count)
+            stats = pSkillComp->BuildSkillStats(m_slot, m_SkillData.activationType);
+    }
 
-    // 3. VFX 스폰
+    // VFX 시퀀스 정의 + 룬 원소 색상 오버라이드
+    VFXSequenceDef seqDef = VFXLibrary::Get().GetDef(SkillSlot::Q, runeFlags, m_SkillData.element);
+    if (!stats.elementSet.empty())
+    {
+        seqDef = WithElementColors(seqDef, stats.elementSet[0]);
+        if (stats.elementSet.size() > 1)
+            seqDef.particleCount = max(100, (int)(seqDef.particleCount * 0.6f));
+    }
+
+    // 3. VFX 스폰 (1차 원소)
     m_vfxId = m_pVFXManager->SpawnSequenceEffect(origin, direction, seqDef);
+
+    // 추가 원소 VFX (2차 이상)
+    m_extraVFXIds.clear();
+    for (size_t ei = 1; ei < stats.elementSet.size(); ++ei)
+    {
+        VFXSequenceDef extraDef = VFXLibrary::Get().GetDef(SkillSlot::Q, runeFlags, m_SkillData.element);
+        extraDef = WithElementColors(extraDef, stats.elementSet[ei]);
+        extraDef.particleCount = max(100, (int)(extraDef.particleCount * 0.6f));
+        int eid = m_pVFXManager->SpawnSequenceEffect(origin, direction, extraDef);
+        if (eid >= 0) m_extraVFXIds.push_back(eid);
+    }
 
     wchar_t buf[256];
     swprintf_s(buf, 256, L"[WaveSlash] Execute: vfxId=%d, runeFlags=0x%X, dmgMult=%.1f\n",
@@ -252,14 +277,14 @@ void WaveSlashBehavior::Reset()
     if (m_pVFXManager)
     {
         for (auto& zone : m_fireTrail)
-        {
-            if (zone.trailVfxId >= 0)
-                m_pVFXManager->StopEffect(zone.trailVfxId);
-        }
+            if (zone.trailVfxId >= 0) m_pVFXManager->StopEffect(zone.trailVfxId);
+        for (int eid : m_extraVFXIds)
+            if (eid >= 0) m_pVFXManager->StopEffect(eid);
     }
     m_bIsFinished = true;
     m_bWaveActive = false;
     m_vfxId       = -1;
+    m_extraVFXIds.clear();
     m_hitEnemies.clear();
     m_fireTrail.clear();
 }

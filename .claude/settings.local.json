@@ -48,7 +48,9 @@
       "Bash(awk *)",
       "Bash(grep -oE \"Clip|\\\\\".{2,40}\\\\\"\" /c/Users/khj16/Downloads/gaym/gaym/Assets/Enemies/Dragon_blue/Blue_Anim.txt)",
       "Bash(grep -iE \"^\\(MagmaElemental_Rd|MoltenElemental_Rd|ChaosElemental_Rd|FireGolem_Rd|LavaMan_Rd\\)$\")",
-      "PowerShell(& \"C:\\\\Program Files\\\\Microsoft Visual Studio\\\\2022\\\\Community\\\\MSBuild\\\\Current\\\\Bin\\\\MSBuild.exe\" \"C:\\\\Users\\\\khj16\\\\Downloads\\\\gaym\\\\gaym\\\\gaym.sln\" /t:Build /p:Configuration=Release /p:Platform=x64 /m /nologo /v:minimal /clp:ErrorsOnly`;WarningsOnly`;Summary 2>&1 | Select-Object -Last 40)"
+      "PowerShell(& \"C:\\\\Program Files\\\\Microsoft Visual Studio\\\\2022\\\\Community\\\\MSBuild\\\\Current\\\\Bin\\\\MSBuild.exe\" \"C:\\\\Users\\\\khj16\\\\Downloads\\\\gaym\\\\gaym\\\\gaym.sln\" /t:Build /p:Configuration=Release /p:Platform=x64 /m /nologo /v:minimal /clp:ErrorsOnly`;WarningsOnly`;Summary 2>&1 | Select-Object -Last 40)",
+      "Bash(git commit -m ' *)",
+      "Bash(grep -E \"\\\\.cpp$|\\\\.h$\")"
     ]
   }
 }

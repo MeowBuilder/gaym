@@ -55,10 +55,24 @@ static XMVECTORF32 GetRuneGradeUIColor(RuneGrade grade)
     }
 }
 
+static const wchar_t* GetElementName(ElementType e)
+{
+    switch (e) {
+    case ElementType::Fire:    return L"화염";
+    case ElementType::Water:   return L"물결";
+    case ElementType::Wind:    return L"바람";
+    case ElementType::Earth:   return L"대지";
+    default:                   return L"";
+    }
+}
+
 static std::wstring BuildRuneDesc(const RuneDef& def)
 {
     std::wstringstream ss;
     auto pct = [](float m) { return (int)((m - 1.f) * 100.f + 0.5f); };
+
+    if (def.element != ElementType::None)
+        ss << L"[" << GetElementName(def.element) << L"] ";
 
     if (def.damageMult    != 1.f) ss << L"데미지 " << (pct(def.damageMult) >= 0 ? L"+" : L"") << pct(def.damageMult) << L"%  ";
     if (def.radiusMult    != 1.f) ss << L"범위 "   << (pct(def.radiusMult) >= 0 ? L"+" : L"") << pct(def.radiusMult) << L"%  ";
@@ -1562,64 +1576,60 @@ void Dx12App::RenderText()
                         }
                         else
                         {
-                            // Calculate final damage based on per-skill rune combo
-                            RuneCombo combo = pSkill->GetRuneCombo(slot);
-                            float baseDamage = data.damage;
+                            SkillStats stats = pSkill->BuildSkillStats(slot, data.activationType);
+                            float baseDamage = data.damage * stats.damageMult;
                             float finalDamage = baseDamage;
                             std::wstringstream dmgNote;
 
-                            bool enhanceOnly = combo.hasEnhance && !combo.hasCharge && !combo.hasChannel && !combo.hasPlace && !combo.hasInstant;
+                            bool enhanceOnly = stats.IsEnhance();
 
-                            if (combo.hasCharge)
+                            if (stats.IsCharge())
                             {
                                 if (pSkill->IsCharging())
                                 {
                                     float mult = 1.0f + pSkill->GetChargeProgress() * 2.0f;
-                                    if (combo.hasEnhance) mult *= 2.0f;
-                                    if (combo.hasPlace) mult *= 1.5f;
                                     finalDamage = baseDamage * mult;
                                     dmgNote << L" (charging)";
                                 }
                                 else
                                 {
-                                    float maxMult = 3.0f;
-                                    if (combo.hasEnhance) maxMult *= 2.0f;
-                                    if (combo.hasPlace) maxMult *= 1.5f;
-                                    finalDamage = baseDamage * maxMult;
+                                    finalDamage = baseDamage * 3.0f;
                                     dmgNote << L"~";
                                 }
-                                if (combo.hasPlace) dmgNote << L"+Place";
-                                if (combo.hasEnhance) dmgNote << L"+Enh";
                             }
-                            else if (combo.hasChannel)
+                            else if (stats.IsChannel())
                             {
-                                float tickMult = 0.3f;
-                                if (combo.hasEnhance) tickMult *= 2.0f;
-                                if (combo.hasPlace) tickMult *= 1.5f;
-                                finalDamage = baseDamage * tickMult;
+                                finalDamage = baseDamage * 0.3f;
                                 dmgNote << L"/tick";
-                                if (combo.hasPlace) dmgNote << L"+Place";
-                                if (combo.hasEnhance) dmgNote << L"+Enh";
                             }
                             else if (enhanceOnly)
                             {
                                 finalDamage = baseDamage * 2.0f;
                                 dmgNote << L" (buff)";
                             }
-                            else
+                            else if (stats.IsPlace())
                             {
-                                float mult = 1.0f;
-                                if (combo.hasEnhance) mult *= 2.0f;
-                                if (combo.hasPlace) mult *= 1.5f;
-                                finalDamage = baseDamage * mult;
-                                if (combo.hasPlace) dmgNote << L" (trap)";
-                                if (combo.hasEnhance && !combo.hasPlace) dmgNote << L"+Enh";
+                                dmgNote << L" (trap)";
                             }
 
                             // Apply existing enhance buff
                             if (pSkill->IsEnhanced() && !enhanceOnly)
-                            {
                                 finalDamage *= 2.0f;
+
+                            // Element tags from equipped runes
+                            if (!stats.elementSet.empty())
+                            {
+                                dmgNote << L"  [";
+                                for (size_t ei = 0; ei < stats.elementSet.size(); ++ei)
+                                {
+                                    if (ei > 0) dmgNote << L"/";
+                                    dmgNote << GetElementName(stats.elementSet[ei]);
+                                }
+                                dmgNote << L"]";
+                            }
+                            else if (data.element != ElementType::None)
+                            {
+                                dmgNote << L"  [" << GetElementName(data.element) << L"]";
                             }
 
                             slotText << L"  DMG: " << (int)finalDamage << dmgNote.str();
