@@ -6,6 +6,8 @@
 #include "NetworkManager.h" // Added NetworkManager include
 #include "BloomPostProcess.h"
 #include <memory>
+#include <string>
+#include <vector>
 
 // DirectXTK12 for text rendering
 #include <SpriteFont.h>
@@ -116,4 +118,18 @@ private:
     void InitializeNetwork();
     void RenderText();
     void UpdateNetwork(float deltaTime);
+
+    // Pause menu
+    bool m_bShowPauseMenu = false;
+    void RenderPauseMenu();
+
+    // Debug rune inspector
+    enum class DebugRuneUIState { None, SelectingRune, SelectingSkill };
+    DebugRuneUIState         m_debugRuneState        = DebugRuneUIState::None;
+    int                      m_debugRuneScrollOffset  = 0;
+    std::string              m_debugSelectedRuneId;
+    std::vector<std::string> m_debugRuneSortedIds;
+
+    void BuildDebugRuneList();
+    void RenderDebugRuneUI();
 };

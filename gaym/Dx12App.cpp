@@ -15,6 +15,7 @@
 #include <DescriptorHeap.h>  // DirectXTK12
 #include <sstream>
 #include <iomanip>
+#include <algorithm>
 
 // UTF-8(std::string) → UTF-16(std::wstring) 변환.
 // 기존 std::wstring(s.begin(), s.end())은 UTF-8 바이트를 그대로 wchar_t에 복사해서
@@ -91,6 +92,13 @@ static std::wstring BuildRuneDesc(const RuneDef& def)
     if (r.empty()) r = L"효과 없음";
     return r;
 }
+
+// ─── Debug Rune Inspector constants ─────────────────────────────────────────
+static constexpr int   kDebugVisibleRows = 14;
+static constexpr float kDebugRowHeight   = 34.0f;
+static constexpr float kDebugPanelLeft   = 30.0f;
+static constexpr float kDebugPanelWidth  = 900.0f;
+static constexpr float kDebugRowsStartY  = 148.0f;
 
 Dx12App* Dx12App::s_pInstance = nullptr;
 
@@ -520,12 +528,46 @@ void Dx12App::FrameAdvance()
         SkillComponent* pSkill = pPlayer->GetComponent<SkillComponent>();
         if (pSkill)
         {
-            pSkill->SetRuneInputBlocked(dropState == DropInteractionState::SelectingRune ||
-                                        dropState == DropInteractionState::SelectingSkill);
+            pSkill->SetRuneInputBlocked(
+                m_bShowPauseMenu ||
+                dropState == DropInteractionState::SelectingRune ||
+                dropState == DropInteractionState::SelectingSkill ||
+                m_debugRuneState != DebugRuneUIState::None);
         }
     }
 
-    if (dropState == DropInteractionState::SelectingRune)
+    if (m_bShowPauseMenu)
+    {
+        // ESC or clicking "계속하기" closes the menu
+        if (m_inputSystem.IsKeyPressed(VK_ESCAPE))
+        {
+            m_bShowPauseMenu = false;
+        }
+
+        if (m_inputSystem.IsMouseButtonPressed(0))
+        {
+            XMFLOAT2 mp = m_inputSystem.GetMousePosition();
+            float cx = (float)m_nWndClientWidth  / 2.0f;
+            float cy = (float)m_nWndClientHeight / 2.0f;
+
+            // "계속하기" button region
+            float btnW = 220.0f, btnH = 40.0f;
+            float resumeY = cy - 10.0f;
+            float quitY   = cy + 54.0f;
+
+            if (mp.x >= cx - btnW / 2.0f && mp.x <= cx + btnW / 2.0f &&
+                mp.y >= resumeY && mp.y <= resumeY + btnH)
+            {
+                m_bShowPauseMenu = false;
+            }
+            else if (mp.x >= cx - btnW / 2.0f && mp.x <= cx + btnW / 2.0f &&
+                     mp.y >= quitY && mp.y <= quitY + btnH)
+            {
+                ::PostQuitMessage(0);
+            }
+        }
+    }
+    else if (dropState == DropInteractionState::SelectingRune)
     {
         // In rune selection mode - handle mouse clicks on rune options
         float screenCenterX = (float)m_nWndClientWidth / 2.0f;
@@ -610,9 +652,127 @@ void Dx12App::FrameAdvance()
             m_pScene->CancelDropInteraction();
         }
     }
+    else if (m_debugRuneState != DebugRuneUIState::None)
+    {
+        // I or ESC (from top-level list) closes the inspector
+        if (m_inputSystem.IsKeyPressed('I'))
+        {
+            m_debugRuneState = DebugRuneUIState::None;
+        }
+        else if (m_debugRuneState == DebugRuneUIState::SelectingRune)
+        {
+            // Scroll with mouse wheel
+            float wheel = m_inputSystem.GetMouseWheelDelta();
+            if (wheel > 0.0f)
+                m_debugRuneScrollOffset = max(0, m_debugRuneScrollOffset - 1);
+            else if (wheel < 0.0f)
+                m_debugRuneScrollOffset = min(
+                    max(0, (int)m_debugRuneSortedIds.size() - kDebugVisibleRows),
+                    m_debugRuneScrollOffset + 1);
+
+            // Scroll with arrow keys
+            if (m_inputSystem.IsKeyPressed(VK_UP))
+                m_debugRuneScrollOffset = max(0, m_debugRuneScrollOffset - 1);
+            if (m_inputSystem.IsKeyPressed(VK_DOWN))
+                m_debugRuneScrollOffset = min(
+                    max(0, (int)m_debugRuneSortedIds.size() - kDebugVisibleRows),
+                    m_debugRuneScrollOffset + 1);
+
+            // ESC closes
+            if (m_inputSystem.IsKeyPressed(VK_ESCAPE))
+                m_debugRuneState = DebugRuneUIState::None;
+
+            // C = clear all equipped runes
+            if (m_inputSystem.IsKeyPressed('C'))
+            {
+                GameObject* pDbgPlayer = m_pScene->GetPlayer();
+                SkillComponent* pDbgSkill = pDbgPlayer
+                    ? pDbgPlayer->GetComponent<SkillComponent>() : nullptr;
+                if (pDbgSkill)
+                {
+                    for (int s = 0; s < static_cast<int>(SkillSlot::Count); ++s)
+                        for (int r = 0; r < RUNES_PER_SKILL; ++r)
+                            pDbgSkill->ClearRuneSlot(static_cast<SkillSlot>(s), r);
+                }
+            }
+
+            // Left click = select rune → go to skill slot selection
+            if (m_inputSystem.IsMouseButtonPressed(0))
+            {
+                XMFLOAT2 mousePos = m_inputSystem.GetMousePosition();
+                for (int i = 0; i < kDebugVisibleRows; ++i)
+                {
+                    int runeIdx = m_debugRuneScrollOffset + i;
+                    if (runeIdx >= (int)m_debugRuneSortedIds.size()) break;
+
+                    float rowY = kDebugRowsStartY + i * kDebugRowHeight;
+                    if (mousePos.x >= kDebugPanelLeft &&
+                        mousePos.x <= kDebugPanelLeft + kDebugPanelWidth &&
+                        mousePos.y >= rowY &&
+                        mousePos.y < rowY + kDebugRowHeight)
+                    {
+                        m_debugSelectedRuneId = m_debugRuneSortedIds[runeIdx];
+                        m_debugRuneState = DebugRuneUIState::SelectingSkill;
+                        break;
+                    }
+                }
+            }
+        }
+        else if (m_debugRuneState == DebugRuneUIState::SelectingSkill)
+        {
+            // ESC = back to rune list
+            if (m_inputSystem.IsKeyPressed(VK_ESCAPE))
+                m_debugRuneState = DebugRuneUIState::SelectingRune;
+
+            // Left click = equip selected rune into clicked skill+rune slot
+            if (m_inputSystem.IsMouseButtonPressed(0))
+            {
+                XMFLOAT2 mousePos = m_inputSystem.GetMousePosition();
+                float screenCenterX = (float)m_nWndClientWidth / 2.0f;
+                float screenCenterY = (float)m_nWndClientHeight / 2.0f;
+                float slotStartY    = screenCenterY - 20.0f;
+                float lineHeight    = 50.0f;
+
+                GameObject* pDbgPlayer = m_pScene->GetPlayer();
+                SkillComponent* pDbgSkill = pDbgPlayer
+                    ? pDbgPlayer->GetComponent<SkillComponent>() : nullptr;
+
+                bool equipped = false;
+                for (int skillIdx = 0; skillIdx < static_cast<int>(SkillSlot::Count) && !equipped; ++skillIdx)
+                {
+                    float slotY = slotStartY + skillIdx * lineHeight;
+                    for (int runeIdx = 0; runeIdx < RUNES_PER_SKILL && !equipped; ++runeIdx)
+                    {
+                        float runeX = screenCenterX - 140.0f + runeIdx * 140.0f;
+                        if (mousePos.x >= runeX && mousePos.x <= runeX + 120.0f &&
+                            mousePos.y >= slotY && mousePos.y <= slotY + 35.0f)
+                        {
+                            if (pDbgSkill)
+                                pDbgSkill->SetRuneSlot(static_cast<SkillSlot>(skillIdx),
+                                                       runeIdx, m_debugSelectedRuneId, 1);
+                            m_debugRuneState = DebugRuneUIState::SelectingRune;
+                            equipped = true;
+                        }
+                    }
+                }
+            }
+        }
+    }
     else
     {
         // Normal mode - check for F key interactions
+        // ESC = open pause menu
+        if (m_inputSystem.IsKeyPressed(VK_ESCAPE))
+            m_bShowPauseMenu = true;
+
+        // DEBUG: I key = open rune inspector
+        if (m_inputSystem.IsKeyPressed('I'))
+        {
+            BuildDebugRuneList();
+            m_debugRuneScrollOffset = 0;
+            m_debugRuneState = DebugRuneUIState::SelectingRune;
+        }
+
         // Priority: Drop item > Interaction cube
         if (m_inputSystem.IsKeyDown('F'))
         {
@@ -899,6 +1059,241 @@ void Dx12App::InitializeText()
     ID3D12CommandList* ppd3dCommandLists[] = { m_pd3dCommandList.Get() };
     m_pd3dCommandQueue->ExecuteCommandLists(_countof(ppd3dCommandLists), ppd3dCommandLists);
     WaitForGpuComplete();
+}
+
+void Dx12App::RenderPauseMenu()
+{
+    if (!m_bShowPauseMenu) return;
+
+    float cx = (float)m_nWndClientWidth  / 2.0f;
+    float cy = (float)m_nWndClientHeight / 2.0f;
+    XMFLOAT2 mp = m_inputSystem.GetMousePosition();
+
+    constexpr float btnW = 220.0f, btnH = 40.0f;
+    float resumeY = cy - 10.0f;
+    float quitY   = cy + 54.0f;
+
+    // Title
+    const wchar_t* title = L"===  일시정지  ===";
+    XMVECTOR tsz = m_spriteFont->MeasureString(title);
+    m_spriteFont->DrawString(m_spriteBatch.get(), title,
+        XMFLOAT2(cx - XMVectorGetX(tsz) / 2.0f, cy - 70.0f),
+        DirectX::Colors::White);
+
+    // "계속하기" button
+    bool resumeHover = (mp.x >= cx - btnW / 2.0f && mp.x <= cx + btnW / 2.0f &&
+                        mp.y >= resumeY && mp.y <= resumeY + btnH);
+    const wchar_t* resumeText = L"계속하기";
+    XMVECTOR rsz = m_spriteFont->MeasureString(resumeText);
+    m_spriteFont->DrawString(m_spriteBatch.get(), resumeText,
+        XMFLOAT2(cx - XMVectorGetX(rsz) / 2.0f, resumeY),
+        resumeHover ? DirectX::Colors::Yellow : DirectX::Colors::White);
+
+    // "게임 종료" button
+    bool quitHover = (mp.x >= cx - btnW / 2.0f && mp.x <= cx + btnW / 2.0f &&
+                      mp.y >= quitY && mp.y <= quitY + btnH);
+    const wchar_t* quitText = L"게임 종료";
+    XMVECTOR qsz = m_spriteFont->MeasureString(quitText);
+    m_spriteFont->DrawString(m_spriteBatch.get(), quitText,
+        XMFLOAT2(cx - XMVectorGetX(qsz) / 2.0f, quitY),
+        quitHover ? DirectX::Colors::OrangeRed : DirectX::Colors::Gray);
+
+    // Hint
+    const wchar_t* hint = L"[ESC] 계속하기";
+    XMVECTOR hsz = m_spriteFont->MeasureString(hint);
+    m_spriteFont->DrawString(m_spriteBatch.get(), hint,
+        XMFLOAT2(cx - XMVectorGetX(hsz) / 2.0f, quitY + 60.0f),
+        DirectX::Colors::DimGray);
+}
+
+void Dx12App::BuildDebugRuneList()
+{
+    m_debugRuneSortedIds.clear();
+    for (const auto& [id, def] : RuneRegistry::Get().GetAll())
+        m_debugRuneSortedIds.push_back(id);
+
+    auto gradeOrder = [](RuneGrade g) -> int {
+        switch (g) {
+        case RuneGrade::Legendary: return 0;
+        case RuneGrade::Unique:    return 1;
+        case RuneGrade::Epic:      return 2;
+        case RuneGrade::Rare:      return 3;
+        default:                   return 4;
+        }
+    };
+
+    std::sort(m_debugRuneSortedIds.begin(), m_debugRuneSortedIds.end(),
+        [&](const std::string& a, const std::string& b) {
+            const RuneDef* da = RuneRegistry::Get().Find(a);
+            const RuneDef* db = RuneRegistry::Get().Find(b);
+            if (!da || !db) return a < b;
+            int ga = gradeOrder(da->grade);
+            int gb = gradeOrder(db->grade);
+            return ga != gb ? ga < gb : a < b;
+        });
+}
+
+void Dx12App::RenderDebugRuneUI()
+{
+    if (m_debugRuneState == DebugRuneUIState::None || !m_pScene) return;
+
+    float screenCenterX = (float)m_nWndClientWidth / 2.0f;
+    float screenCenterY = (float)m_nWndClientHeight / 2.0f;
+
+    if (m_debugRuneState == DebugRuneUIState::SelectingRune)
+    {
+        // Header
+        m_spriteFont->DrawString(m_spriteBatch.get(),
+            L"=== [I] Debug Rune Inspector ===",
+            XMFLOAT2(kDebugPanelLeft, 60.0f), DirectX::Colors::Gold);
+
+        m_spriteFont->DrawString(m_spriteBatch.get(),
+            L"[C] 룬 전체 초기화   [ESC/I] 닫기   [위아래 / 휠] 스크롤   [클릭] 선택",
+            XMFLOAT2(kDebugPanelLeft, 88.0f), DirectX::Colors::Gray);
+
+        m_spriteFont->DrawString(m_spriteBatch.get(),
+            L"-----------------------------------------------------------------------",
+            XMFLOAT2(kDebugPanelLeft, 110.0f), DirectX::Colors::Gray);
+
+        m_spriteFont->DrawString(m_spriteBatch.get(),
+            L"등급               이름                      설명",
+            XMFLOAT2(kDebugPanelLeft, 122.0f), DirectX::Colors::DimGray);
+
+        // Rune rows
+        XMFLOAT2 mousePos = m_inputSystem.GetMousePosition();
+        int total = (int)m_debugRuneSortedIds.size();
+
+        for (int i = 0; i < kDebugVisibleRows; ++i)
+        {
+            int runeIdx = m_debugRuneScrollOffset + i;
+            if (runeIdx >= total) break;
+
+            const RuneDef* def = RuneRegistry::Get().Find(m_debugRuneSortedIds[runeIdx]);
+            if (!def) continue;
+
+            float rowY = kDebugRowsStartY + i * kDebugRowHeight;
+            bool isHovered = (mousePos.x >= kDebugPanelLeft &&
+                               mousePos.x <= kDebugPanelLeft + kDebugPanelWidth &&
+                               mousePos.y >= rowY &&
+                               mousePos.y < rowY + kDebugRowHeight);
+
+            // Grade label
+            const wchar_t* gradeLabel = GetRuneGradeLabel(def->grade);
+            if (isHovered)
+                m_spriteFont->DrawString(m_spriteBatch.get(), gradeLabel,
+                    XMFLOAT2(kDebugPanelLeft, rowY), DirectX::Colors::Yellow);
+            else
+                m_spriteFont->DrawString(m_spriteBatch.get(), gradeLabel,
+                    XMFLOAT2(kDebugPanelLeft, rowY), GetRuneGradeUIColor(def->grade));
+
+            // Rune name
+            std::wstring wname = Utf8ToWide(def->name);
+            m_spriteFont->DrawString(m_spriteBatch.get(), wname.c_str(),
+                XMFLOAT2(kDebugPanelLeft + 140.0f, rowY),
+                isHovered ? DirectX::Colors::Yellow : DirectX::Colors::White);
+
+            // Description
+            std::wstring desc = BuildRuneDesc(*def);
+            m_spriteFont->DrawString(m_spriteBatch.get(), desc.c_str(),
+                XMFLOAT2(kDebugPanelLeft + 370.0f, rowY),
+                isHovered ? DirectX::Colors::Yellow : DirectX::Colors::DimGray);
+        }
+
+        // Bottom separator and scroll status
+        float sepY = kDebugRowsStartY + kDebugVisibleRows * kDebugRowHeight;
+        m_spriteFont->DrawString(m_spriteBatch.get(),
+            L"-----------------------------------------------------------------------",
+            XMFLOAT2(kDebugPanelLeft, sepY), DirectX::Colors::Gray);
+
+        int visEnd = min(m_debugRuneScrollOffset + kDebugVisibleRows, total);
+        std::wstringstream statusSS;
+        statusSS << (m_debugRuneScrollOffset + 1) << L" - " << visEnd << L" / " << total;
+        if (m_debugRuneScrollOffset > 0)
+            statusSS << L"   [▲ 위로 스크롤]";
+        if (m_debugRuneScrollOffset + kDebugVisibleRows < total)
+            statusSS << L"   [▼ 아래로 스크롤]";
+        m_spriteFont->DrawString(m_spriteBatch.get(), statusSS.str().c_str(),
+            XMFLOAT2(kDebugPanelLeft, sepY + 16.0f), DirectX::Colors::Gray);
+    }
+    else if (m_debugRuneState == DebugRuneUIState::SelectingSkill)
+    {
+        // Title
+        const wchar_t* titleText = L"=== 디버그: 장착할 룬 슬롯 선택 ===";
+        XMVECTOR titleSize = m_spriteFont->MeasureString(titleText);
+        m_spriteFont->DrawString(m_spriteBatch.get(), titleText,
+            XMFLOAT2(screenCenterX - XMVectorGetX(titleSize) / 2.0f, screenCenterY - 100.0f),
+            DirectX::Colors::Gold);
+
+        // Selected rune info
+        const RuneDef* selDef = RuneRegistry::Get().Find(m_debugSelectedRuneId);
+        std::wstring wselName = selDef ? Utf8ToWide(selDef->name)
+                                       : Utf8ToWide(m_debugSelectedRuneId);
+        std::wstring selectedText = L"선택한 룬: " + wselName;
+        XMVECTOR selectedSize = m_spriteFont->MeasureString(selectedText.c_str());
+        float selTextX = screenCenterX - XMVectorGetX(selectedSize) / 2.0f;
+        m_spriteFont->DrawString(m_spriteBatch.get(), selectedText.c_str(),
+            XMFLOAT2(selTextX, screenCenterY - 62.0f), DirectX::Colors::Cyan);
+        if (selDef)
+        {
+            const wchar_t* selGrade = GetRuneGradeLabel(selDef->grade);
+            m_spriteFont->DrawString(m_spriteBatch.get(), selGrade,
+                XMFLOAT2(selTextX + XMVectorGetX(selectedSize) + 8.0f, screenCenterY - 62.0f),
+                GetRuneGradeUIColor(selDef->grade));
+        }
+
+        // Skill slots × rune slots
+        const wchar_t* slotNames[] = { L"Q", L"E", L"R", L"RMB" };
+        GameObject* pPlayer = m_pScene->GetPlayer();
+        SkillComponent* pSkill = pPlayer ? pPlayer->GetComponent<SkillComponent>() : nullptr;
+
+        XMFLOAT2 mousePos = m_inputSystem.GetMousePosition();
+        float slotStartY = screenCenterY - 20.0f;
+        float lineHeight = 50.0f;
+
+        for (int skillIdx = 0; skillIdx < static_cast<int>(SkillSlot::Count); ++skillIdx)
+        {
+            float slotY = slotStartY + skillIdx * lineHeight;
+            std::wstring skillLabel = std::wstring(L"[") + slotNames[skillIdx] + L"] ";
+            m_spriteFont->DrawString(m_spriteBatch.get(), skillLabel.c_str(),
+                XMFLOAT2(screenCenterX - 250.0f, slotY), DirectX::Colors::White);
+
+            for (int runeIdx = 0; runeIdx < RUNES_PER_SKILL; ++runeIdx)
+            {
+                float runeX = screenCenterX - 140.0f + runeIdx * 140.0f;
+                constexpr float runeW = 120.0f, runeH = 35.0f;
+
+                EquippedRune er = pSkill
+                    ? pSkill->GetRuneSlot(static_cast<SkillSlot>(skillIdx), runeIdx)
+                    : EquippedRune{};
+                const RuneDef* rDef = RuneRegistry::Get().Find(er.runeId);
+                std::wstring wRuneName = er.IsEmpty() ? L"[비어있음]"
+                    : (rDef ? Utf8ToWide(rDef->name) : Utf8ToWide(er.runeId));
+
+                bool isHovered = (mousePos.x >= runeX && mousePos.x <= runeX + runeW &&
+                                   mousePos.y >= slotY && mousePos.y <= slotY + runeH);
+
+                if (isHovered)
+                    m_spriteFont->DrawString(m_spriteBatch.get(), wRuneName.c_str(),
+                        XMFLOAT2(runeX, slotY), DirectX::Colors::Yellow);
+                else if (er.IsEmpty())
+                    m_spriteFont->DrawString(m_spriteBatch.get(), wRuneName.c_str(),
+                        XMFLOAT2(runeX, slotY), DirectX::Colors::DarkGray);
+                else if (rDef)
+                    m_spriteFont->DrawString(m_spriteBatch.get(), wRuneName.c_str(),
+                        XMFLOAT2(runeX, slotY), GetRuneGradeUIColor(rDef->grade));
+                else
+                    m_spriteFont->DrawString(m_spriteBatch.get(), wRuneName.c_str(),
+                        XMFLOAT2(runeX, slotY), DirectX::Colors::Cyan);
+            }
+        }
+
+        // Cancel hint
+        const wchar_t* cancelText = L"[ESC] 목록으로 돌아가기";
+        XMVECTOR cancelSize = m_spriteFont->MeasureString(cancelText);
+        m_spriteFont->DrawString(m_spriteBatch.get(), cancelText,
+            XMFLOAT2(screenCenterX - XMVectorGetX(cancelSize) / 2.0f, slotStartY + 220.0f),
+            DirectX::Colors::Gray);
+    }
 }
 
 void Dx12App::RenderText()
@@ -1333,6 +1728,12 @@ void Dx12App::RenderText()
         DamageNumberManager::Get().Render(m_spriteBatch.get(), m_spriteFont.get(),
                                           vp4x4, (int)m_nWndClientWidth, (int)m_nWndClientHeight);
     }
+
+    // ========== Debug Rune Inspector (overlay) ==========
+    RenderDebugRuneUI();
+
+    // ========== Pause Menu (topmost overlay) ==========
+    RenderPauseMenu();
 
     m_spriteBatch->End();
 }
