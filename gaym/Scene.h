@@ -93,6 +93,9 @@ struct PassConstants
 
     // Gerstner Waves (5 waves for ocean simulation)
     WaveParams m_Waves[5];
+
+    // 스테이지 테마: 0=Fire, 1=Water, 2=Earth, 3=Grass — 셰이더에서 caustics/fog 결정
+    int m_nStageTheme; int m_nThemePad1; int m_nThemePad2; int m_nThemePad3;
 };
 
 // Include TorchSystem after PassConstants is defined (avoid circular include)

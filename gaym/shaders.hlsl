@@ -71,6 +71,9 @@ cbuffer cbPass : register(b1)
 
     // Gerstner Waves (5 waves for ocean simulation)
     WaveParams g_Waves[5];
+
+    // Stage theme: 0=Fire, 1=Water, 2=Earth, 3=Grass — drives caustics/fog
+    int g_StageTheme; int _themePad1; int _themePad2; int _themePad3;
 };
 
 Texture2D gAlbedoMap    : register(t0);
@@ -196,6 +199,35 @@ void ApplyGerstnerWaves(inout float3 worldPos, inout float3 normal, out float cr
 
     // Normalize crest factor
     crestFactor = saturate(totalCrest / max(0.01, totalSteepness));
+}
+
+// ========================================================================
+
+// ========================================================================
+// Water-stage environmental effects
+// ========================================================================
+
+// Domain-warped pseudo-Voronoi caustics. 4 layers with sine/cosine domain warp
+// per octave to break up axial regularity. No texture sample needed.
+// p: world XZ (units = meters), t: seconds. Output: ~[0,1] intensity, sharp ridges.
+float WaterCaustics(float2 p, float t)
+{
+    p *= 0.35;
+
+    float c = 1.0;
+    [unroll]
+    for (int n = 0; n < 4; ++n)
+    {
+        float i = float(n);
+        float2 q = p + float2(i * 0.13 + t * 0.11, i * 0.08 - t * 0.13);
+        // Domain warp breaks the regular grid alignment of frac().
+        q.x += (0.55 / (i + 1.0)) * sin(p.y * (i + 3.5) + t * 0.40);
+        q.y += (0.55 / (i + 1.0)) * cos(p.x * (i + 2.5) - t * 0.30);
+        // Distance to nearest cell center (post-warp = irregular).
+        c = min(c, length(0.5 - frac(q)));
+    }
+    // Sharpen into thin bright ridges.
+    return pow(saturate(c * 1.7), 5.0);
 }
 
 // ========================================================================
@@ -566,6 +598,30 @@ float4 PS(PS_INPUT input) : SV_TARGET
         finalColor.rgb  = lerp(finalColor.rgb, fresnelColor, waterFresnel * 0.18f);
 
         return float4(finalColor.rgb, waterAlpha);
+    }
+
+    // ── Stage-themed environment: Water (caustics + atmospheric tint) ──
+    // bIsWater 분기는 위에서 return 했으므로 여기 도달하는 픽셀은 일반 지오메트리.
+    if (g_StageTheme == 1)
+    {
+        // Caustics — 위를 향한 면(바닥/지형)에만, 햇빛이 닿는 영역에만.
+        float upFacing = saturate(normal.y);
+        if (upFacing > 0.05f)
+        {
+            float caust = WaterCaustics(input.worldPosition.xz, g_Time);
+            float3 causticColor = float3(0.50f, 0.82f, 1.10f);
+            finalColor.rgb += causticColor * caust * upFacing * shadowFactor * 0.45f;
+        }
+
+        // 거리 기반 청록 안개 — 탑뷰 카메라 거리(보통 20~60m) 범위에 맞춰 시작.
+        float camDist = distance(g_CameraPosition, input.worldPosition);
+        float fog = saturate((camDist - 18.0f) / 70.0f);
+        float3 fogColor = float3(0.18f, 0.36f, 0.52f);
+        finalColor.rgb = lerp(finalColor.rgb, fogColor, fog * 0.85f);
+
+        // 가까이 있는 표면에도 청량한 톤 시프트(살짝 채도 ↓ + 푸르게).
+        float3 tinted = finalColor.rgb * float3(0.85f, 0.96f, 1.10f);
+        finalColor.rgb = lerp(finalColor.rgb, tinted, 0.85f);
     }
 
     // Hit Flash: rim-based white outline flash + additive bloom pop
