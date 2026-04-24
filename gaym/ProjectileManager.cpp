@@ -501,7 +501,7 @@ void ProjectileManager::ApplyDamage(Projectile& projectile, EnemyComponent* pEne
         }
     }
 
-    // onHit 훅 호출
+    // onHit 훅 + 반향(spawnOnHitCount) 처리
     if (projectile.skillSlot != SkillSlot::Count && projectile.owner)
     {
         SkillComponent* pSkillComp = projectile.owner->GetComponent<SkillComponent>();
@@ -509,6 +509,8 @@ void ProjectileManager::ApplyDamage(Projectile& projectile, EnemyComponent* pEne
         {
             ActivationType defaultType = ActivationType::Instant;
             SkillStats stats = pSkillComp->BuildSkillStats(projectile.skillSlot, defaultType);
+
+            // onHit 훅
             if (!stats.onHitHooks.empty())
             {
                 SkillContext ctx;
@@ -525,6 +527,59 @@ void ProjectileManager::ApplyDamage(Projectile& projectile, EnemyComponent* pEne
                     if (pT) ctx.hitEnemyPos = pT->GetPosition();
                 }
                 for (auto& hook : stats.onHitHooks) hook(ctx);
+            }
+
+            // 반향: 적중 위치에서 근처의 다른 적들을 향해 N개 추가 투사체 생성
+            if (stats.spawnOnHitCount > 0 && m_pScene)
+            {
+                CRoom* pRoom = m_pScene->GetCurrentRoom();
+                if (pRoom)
+                {
+                    XMFLOAT3 hitPos = {};
+                    if (pEnemy && pEnemy->GetOwner())
+                        if (auto* pT = pEnemy->GetOwner()->GetTransform())
+                            hitPos = pT->GetPosition();
+
+                    // 가장 가까운 다른 적들 최대 spawnOnHitCount개 수집
+                    std::vector<std::pair<float, EnemyComponent*>> candidates;
+                    XMVECTOR hitV = XMLoadFloat3(&hitPos);
+                    for (const auto& obj : pRoom->GetGameObjects())
+                    {
+                        if (!obj) continue;
+                        EnemyComponent* e = obj->GetComponent<EnemyComponent>();
+                        if (!e || e->IsDead() || e == pEnemy) continue;
+                        auto* pT = obj->GetTransform();
+                        if (!pT) continue;
+                        XMFLOAT3 ep = pT->GetPosition();
+                        float d = XMVectorGetX(XMVector3Length(XMLoadFloat3(&ep) - hitV));
+                        candidates.push_back({ d, e });
+                    }
+                    std::sort(candidates.begin(), candidates.end(),
+                        [](const auto& a, const auto& b){ return a.first < b.first; });
+
+                    int spawnCount = min(stats.spawnOnHitCount, (int)candidates.size());
+                    for (int si = 0; si < spawnCount; ++si)
+                    {
+                        EnemyComponent* pTarget = candidates[si].second;
+                        auto* pT = pTarget->GetOwner() ? pTarget->GetOwner()->GetTransform() : nullptr;
+                        if (!pT) continue;
+                        XMFLOAT3 targetPos = pT->GetPosition();
+
+                        Projectile echo = projectile;
+                        echo.position        = hitPos;
+                        echo.damage          = projectile.damage * 0.5f;
+                        echo.distanceTraveled = 0.f;
+                        echo.isActive        = true;
+                        echo.wasHit          = false;
+                        echo.spawnOnHitCount = 0; // 반향의 반향 방지
+                        echo.fluidVFXId      = -1;
+                        echo.extraVFXIds.clear();
+
+                        XMVECTOR dir = XMVector3Normalize(XMLoadFloat3(&targetPos) - hitV);
+                        XMStoreFloat3(&echo.direction, dir);
+                        SpawnProjectile(echo);
+                    }
+                }
             }
         }
     }

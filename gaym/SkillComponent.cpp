@@ -639,12 +639,35 @@ void SkillComponent::ExecuteOrSplit(size_t index, const XMFLOAT3& target, float 
         }
     };
 
+    // 궤도: 부채꼴로 N개의 추가 투사체 발사 (40% 데미지)
+    auto spawnOrbital = [&](const XMFLOAT3& t) {
+        if (stats.orbitalCount <= 0 || !m_pOwner || !m_pOwner->GetTransform()) return;
+        XMVECTOR originV = XMLoadFloat3(&m_pOwner->GetTransform()->GetPosition());
+        XMVECTOR toTarget = XMVector3Normalize(XMLoadFloat3(&t) - originV);
+        float dist = XMVectorGetX(XMVector3Length(XMLoadFloat3(&t) - originV));
+        constexpr float PI = 3.14159265f;
+        float step = PI / (stats.orbitalCount + 1); // 180도를 N+1 구간으로 나눔
+        for (int oi = 0; oi < stats.orbitalCount; ++oi)
+        {
+            float angle = step * (oi + 1) - PI * 0.5f; // -90 ~ +90도 범위
+            XMMATRIX rot = XMMatrixRotationY(angle);
+            XMVECTOR rotDir = XMVector3TransformNormal(toTarget, rot);
+            XMFLOAT3 orbTarget;
+            XMStoreFloat3(&orbTarget, originV + rotDir * dist);
+            m_Skills[index]->Execute(m_pOwner, orbTarget, mult * 0.4f);
+        }
+    };
+
     if (!combo.hasSplit)
     {
         m_Skills[index]->Execute(m_pOwner, target, mult);
+        spawnOrbital(target);
         invokeOnCast();
         // 쌍둥이별: 같은 방향으로 즉시 한 번 더 발사 (데미지 50%)
         if (stats.doublecast)
+            m_Skills[index]->Execute(m_pOwner, target, mult * 0.5f);
+        // 메아리: 즉시 50% 데미지로 재시전 (doublecast와 별개)
+        if (stats.echoOnCast)
             m_Skills[index]->Execute(m_pOwner, target, mult * 0.5f);
         return;
     }
@@ -665,8 +688,14 @@ void SkillComponent::ExecuteOrSplit(size_t index, const XMFLOAT3& target, float 
     XMStoreFloat3(&t2, XMLoadFloat3(&target) - right * SPREAD);
     m_Skills[index]->Execute(m_pOwner, t1, mult);
     m_Skills[index]->Execute(m_pOwner, t2, mult);
+    spawnOrbital(target);
     invokeOnCast();
     if (stats.doublecast)
+    {
+        m_Skills[index]->Execute(m_pOwner, t1, mult * 0.5f);
+        m_Skills[index]->Execute(m_pOwner, t2, mult * 0.5f);
+    }
+    if (stats.echoOnCast)
     {
         m_Skills[index]->Execute(m_pOwner, t1, mult * 0.5f);
         m_Skills[index]->Execute(m_pOwner, t2, mult * 0.5f);

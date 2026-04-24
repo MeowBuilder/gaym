@@ -44,6 +44,7 @@ struct Projectile
     float lifestealRatio  = 0.f;    // 흡수: 피해량 * ratio 만큼 시전자 HP 회복
     float execDamageBonus = 0.f;    // 처형자: 대상 HP 30% 이하 시 추가 배율
     float cdResetChance   = 0.f;    // 무한: 적중 시 쿨다운 초기화 확률
+    int   spawnOnHitCount = 0;      // 반향: 적중 시 주변 적으로 추가 투사체 생성
     SkillSlot skillSlot   = SkillSlot::Count; // 적중 시 onHit 훅 호출용 슬롯 정보
 
     // Helper to update position
