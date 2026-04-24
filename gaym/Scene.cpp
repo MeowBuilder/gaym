@@ -1080,6 +1080,9 @@ void Scene::Update(float deltaTime, InputSystem* pInputSystem)
     m_fTotalTime += deltaTime;
     m_pcbMappedPass->m_fTime = m_fTotalTime;
 
+    // 스테이지 테마 (셰이더 caustics/fog 분기용)
+    m_pcbMappedPass->m_nStageTheme = static_cast<int>(m_eCurrentTheme);
+
     // Update SpotLight parameters based on player position
     if (m_pPlayerGameObject)
     {
