@@ -11,6 +11,7 @@
 #include "Mesh.h"
 #include "Shader.h"
 #include "LavaGeyserManager.h"
+#include "RockfallManager.h"
 #include "NetworkManager.h"
 
 CRoom::CRoom()
@@ -40,6 +41,12 @@ void CRoom::Update(float deltaTime)
         if (m_pGeyserManager)
         {
             m_pGeyserManager->Update(deltaTime);
+        }
+
+        // Update rockfall manager (Earth)
+        if (m_pRockfallManager)
+        {
+            m_pRockfallManager->Update(deltaTime);
         }
 
         CheckClearCondition();
@@ -117,19 +124,13 @@ void CRoom::SetState(RoomState state)
     case RoomState::Active:
         OutputDebugString(L"[Room] Room activated - enemies will spawn\n");
         // Enemies will be spawned in Update
-        // Activate lava geyser manager
-        if (m_pGeyserManager)
-        {
-            m_pGeyserManager->SetActive(true);
-        }
+        if (m_pGeyserManager)   m_pGeyserManager->SetActive(true);
+        if (m_pRockfallManager) m_pRockfallManager->SetActive(true);
         break;
     case RoomState::Cleared:
         OutputDebugString(L"[Room] Room cleared!\n");
-        // Deactivate lava geyser manager
-        if (m_pGeyserManager)
-        {
-            m_pGeyserManager->SetActive(false);
-        }
+        if (m_pGeyserManager)   m_pGeyserManager->SetActive(false);
+        if (m_pRockfallManager) m_pRockfallManager->SetActive(false);
         break;
     }
 }
@@ -361,5 +362,26 @@ void CRoom::SetLavaGeyserEnabled(bool bEnabled)
     if (m_pGeyserManager)
     {
         m_pGeyserManager->SetActive(bEnabled);
+    }
+}
+
+void CRoom::InitRockfallManager(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList, Shader* pShader)
+{
+    if (m_pRockfallManager)
+    {
+        OutputDebugString(L"[Room] RockfallManager already initialized\n");
+        return;
+    }
+
+    m_pRockfallManager = std::make_unique<RockfallManager>();
+    m_pRockfallManager->Init(pDevice, pCommandList, this, pShader);
+    OutputDebugString(L"[Room] RockfallManager initialized\n");
+}
+
+void CRoom::SetRockfallEnabled(bool bEnabled)
+{
+    if (m_pRockfallManager)
+    {
+        m_pRockfallManager->SetActive(bEnabled);
     }
 }

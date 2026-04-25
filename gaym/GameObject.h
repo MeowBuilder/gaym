@@ -28,7 +28,8 @@ struct ObjectConstants
     UINT m_bIsLava = 0;
     UINT m_bIsWater = 0;
     UINT m_bHasEmissiveTexture = 0;
-    float m_fHitFlash = 0.f; UINT cbPad2 = 0;  // HLSL: 6 uints + g_HitFlash float + 4-byte implicit align → MATERIAL at offset 96
+    float m_fHitFlash = 0.f;
+    UINT m_bIsRocky = 0;  // HLSL: 7 uints + g_HitFlash float = 32B → MATERIAL at offset 96
 	MATERIAL mMaterial;
     XMFLOAT4X4 m_xmf4x4BoneTransforms[128];
 };
@@ -152,6 +153,13 @@ public:
         if (m_pcbMappedGameObject)
         {
             m_pcbMappedGameObject->m_bIsWater = bIsWater ? 1 : 0;
+        }
+    }
+    void SetRocky(bool bIsRocky)
+    {
+        if (m_pcbMappedGameObject)
+        {
+            m_pcbMappedGameObject->m_bIsRocky = bIsRocky ? 1 : 0;
         }
     }
 

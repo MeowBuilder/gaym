@@ -93,6 +93,9 @@
     <ClInclude Include="LavaGeyserManager.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
+    <ClInclude Include="RockfallManager.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
     <ClInclude Include="Animation.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
@@ -450,6 +453,9 @@
       <Filter>소스 파일</Filter>
     </ClCompile>
     <ClCompile Include="LavaGeyserManager.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="RockfallManager.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
     <ClCompile Include="Animation.cpp">

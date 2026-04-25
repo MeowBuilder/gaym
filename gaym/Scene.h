@@ -203,6 +203,7 @@ private:
     StageTheme m_eCurrentTheme = StageTheme::Fire; // 현재 스테이지 테마
     GameObject* m_pLavaPlane = nullptr; // 용암 바닥 평면
     GameObject* m_pWaterPlane = nullptr; // 물 바닥 평면
+    GameObject* m_pRockPlane = nullptr; // 바위/동굴 바닥 평면 (Earth)
 
     // Additional water textures (Water_6 + foam4)
     ComPtr<ID3D12Resource> m_pd3dWaterNormal2 = nullptr;      // Water_6_Normal.png (t7)
@@ -321,7 +322,14 @@ private:
 
     // Particle System
     std::unique_ptr<ParticleSystem> m_pParticleSystem;
-    int m_nEmberEmitterId = -1; // Floating embers emitter ID
+    int m_nEmberEmitterId = -1; // Floating embers emitter ID (Fire stage)
+    int m_nDustEmitterId  = -1; // Ambient dust emitter ID (Earth stage)
+    int m_nSandstormEmitterId = -1; // Periodic sandstorm gust (Earth)
+    // Earth 모래폭풍 사이클: m_bStormActive=false면 정적, true면 burst 중
+    float m_fStormTimer = 0.0f;
+    bool  m_bStormActive = false;
+    static constexpr float STORM_QUIET_DURATION  = 10.0f; // 정적
+    static constexpr float STORM_ACTIVE_DURATION = 5.0f;  // 폭풍
 
     // Fluid Particle System (SPH)
     std::unique_ptr<FluidParticleSystem> m_pFluidParticleSystem;

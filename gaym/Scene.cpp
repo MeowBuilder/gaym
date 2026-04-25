@@ -173,12 +173,30 @@ void Scene::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList)
     m_pParticleSystem->Init(pDevice, pCommandList, m_pDescriptorHeap.get(), nParticleDescriptorStart);
     OutputDebugString(L"[Scene] Particle system initialized\n");
 
-    // Floating embers for volcanic atmosphere
+    // Floating embers for volcanic atmosphere (Fire 테마에서만 활성)
     m_nEmberEmitterId = m_pParticleSystem->CreateEmitter(
         FireParticlePresets::FloatingEmbers(),
         XMFLOAT3(0.0f, 0.0f, 0.0f)
     );
     OutputDebugString(L"[Scene] Floating embers emitter created\n");
+
+    // Floating dust for cave/rock atmosphere (Earth 테마에서만 활성 — 기본 Stop)
+    m_nDustEmitterId = m_pParticleSystem->CreateEmitter(
+        FireParticlePresets::FloatingDust(),
+        XMFLOAT3(0.0f, 0.0f, 0.0f)
+    );
+    if (auto* pDust = m_pParticleSystem->GetEmitter(m_nDustEmitterId))
+        pDust->Stop();
+    OutputDebugString(L"[Scene] Floating dust emitter created (idle)\n");
+
+    // 주기적 모래폭풍 burst — Earth 스테이지 + STORM_ACTIVE 구간 동안만 가동
+    m_nSandstormEmitterId = m_pParticleSystem->CreateEmitter(
+        FireParticlePresets::Sandstorm(),
+        XMFLOAT3(0.0f, 0.0f, 0.0f)
+    );
+    if (auto* pStorm = m_pParticleSystem->GetEmitter(m_nSandstormEmitterId))
+        pStorm->Stop();
+    OutputDebugString(L"[Scene] Sandstorm emitter created (idle)\n");
 
     // Fluid Particle System (SRV 디스크립터 슬롯 1개)
     UINT nFluidParticleDescriptorStart = m_nNextDescriptorIndex;
@@ -362,6 +380,42 @@ void Scene::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList)
     }
 
     // --------------------------------------------------------------------------
+    // 바위 바닥 배치 (Earth 스테이지 전용 — Init 시 생성 후 평소엔 숨김)
+    // 텍스처 없이 머티리얼 + 셰이더 균열 발광으로 시각화 → 디스크립터 절약
+    // --------------------------------------------------------------------------
+    {
+        CRoom* pTempRoom = m_pCurrentRoom;
+        m_pCurrentRoom = nullptr;
+        m_pRockPlane = CreateGameObject(pDevice, pCommandList);
+        m_pCurrentRoom = pTempRoom;
+
+        if (m_pRockPlane)
+        {
+            CubeMesh* pPlaneMesh = new CubeMesh(pDevice, pCommandList, 1.0f, 0.1f, 1.0f);
+            m_pRockPlane->SetMesh(pPlaneMesh);
+
+            // 기본은 숨김 — Earth 스테이지 진입 시 표시 위치로 이동
+            m_pRockPlane->GetTransform()->SetPosition(0.0f, -10000.0f, 0.0f);
+            m_pRockPlane->GetTransform()->SetScale(2000.0f, 1.0f, 2000.0f);
+
+            m_pRockPlane->SetRocky(true);
+
+            MATERIAL rockMat;
+            rockMat.m_cAmbient  = XMFLOAT4(0.20f, 0.18f, 0.16f, 1.0f);
+            rockMat.m_cDiffuse  = XMFLOAT4(0.32f, 0.29f, 0.26f, 1.0f);  // 어두운 회갈색
+            rockMat.m_cSpecular = XMFLOAT4(0.18f, 0.18f, 0.18f, 4.0f);  // 거친 표면
+            rockMat.m_cEmissive = XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f);
+            m_pRockPlane->SetMaterial(rockMat);
+
+            auto* pRC = m_pRockPlane->AddComponent<RenderComponent>();
+            pRC->SetMesh(pPlaneMesh);
+            pRC->SetCastsShadow(false);
+            m_vShaders[0]->AddRenderComponent(pRC);
+        }
+        OutputDebugString(L"[Scene] Rock floor plane created (hidden until Earth stage)\n");
+    }
+
+    // --------------------------------------------------------------------------
     // Volcano 장식 메쉬 배치 제거됨 (사용자 요청 — 맵 외곽 배경으로 쓰던 대형 화산 오브젝트들)
     // --------------------------------------------------------------------------
 
@@ -437,6 +491,17 @@ void Scene::Init(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList)
             m_pDescriptorHeap.get(), nGeyserDescStart);
 
         OutputDebugString(L"[Scene] LavaGeyserManager initialized for current room\n");
+    }
+
+    // --------------------------------------------------------------------------
+    // 9. Initialize Rockfall Manager for current room (땅 맵 전용 기믹)
+    // --------------------------------------------------------------------------
+    if (m_pCurrentRoom && m_eCurrentTheme == StageTheme::Earth)
+    {
+        m_pCurrentRoom->InitRockfallManager(
+            pDevice, pCommandList, m_vShaders[0].get());
+
+        OutputDebugString(L"[Scene] RockfallManager initialized for current room\n");
     }
 
     OutputDebugString(L"[Scene] Enemy spawn system initialized\n");
@@ -1185,14 +1250,61 @@ void Scene::Update(float deltaTime, InputSystem* pInputSystem)
     // Update Particle System
     if (m_pParticleSystem)
     {
-        // Update floating embers to follow player
-        if (m_nEmberEmitterId >= 0 && m_pPlayerGameObject)
+        // Floating ambient particles follow player; theme-gated emission
+        if (m_pPlayerGameObject)
         {
-            auto* pEmitter = m_pParticleSystem->GetEmitter(m_nEmberEmitterId);
-            if (pEmitter)
+            XMFLOAT3 playerPos = m_pPlayerGameObject->GetTransform()->GetPosition();
+            // Fire 테마: 불꽃 잔해
+            if (m_nEmberEmitterId >= 0)
             {
-                XMFLOAT3 playerPos = m_pPlayerGameObject->GetTransform()->GetPosition();
-                pEmitter->SetPosition(playerPos);
+                if (auto* pEmber = m_pParticleSystem->GetEmitter(m_nEmberEmitterId))
+                {
+                    bool bWantEmit = (m_eCurrentTheme == StageTheme::Fire);
+                    if (bWantEmit && !pEmber->IsEmitting()) pEmber->Start();
+                    else if (!bWantEmit && pEmber->IsEmitting()) pEmber->Stop();
+                    pEmber->SetPosition(playerPos);
+                }
+            }
+            // Earth 테마: 동굴 먼지 (ambient)
+            if (m_nDustEmitterId >= 0)
+            {
+                if (auto* pDust = m_pParticleSystem->GetEmitter(m_nDustEmitterId))
+                {
+                    bool bWantEmit = (m_eCurrentTheme == StageTheme::Earth);
+                    if (bWantEmit && !pDust->IsEmitting()) pDust->Start();
+                    else if (!bWantEmit && pDust->IsEmitting()) pDust->Stop();
+                    pDust->SetPosition(playerPos);
+                }
+            }
+            // Earth 테마: 주기적 모래폭풍 burst (10s 정적 → 5s 폭풍 사이클)
+            if (m_nSandstormEmitterId >= 0)
+            {
+                if (auto* pStorm = m_pParticleSystem->GetEmitter(m_nSandstormEmitterId))
+                {
+                    if (m_eCurrentTheme == StageTheme::Earth)
+                    {
+                        m_fStormTimer += deltaTime;
+                        float threshold = m_bStormActive ? STORM_ACTIVE_DURATION : STORM_QUIET_DURATION;
+                        if (m_fStormTimer >= threshold)
+                        {
+                            m_bStormActive = !m_bStormActive;
+                            m_fStormTimer = 0.0f;
+                            if (m_bStormActive) { pStorm->Start(); OutputDebugString(L"[Scene] Sandstorm gust!\n"); }
+                            else                { pStorm->Stop();  OutputDebugString(L"[Scene] Sandstorm calm\n"); }
+                        }
+                        // 폭풍 중에는 폭풍이 플레이어 풍상(upwind, -X 방향) 쪽에서 시작되도록 살짝 오프셋
+                        XMFLOAT3 stormOrigin = playerPos;
+                        stormOrigin.x -= 8.0f;
+                        pStorm->SetPosition(stormOrigin);
+                    }
+                    else
+                    {
+                        // 다른 스테이지에선 즉시 정지·리셋
+                        if (pStorm->IsEmitting()) pStorm->Stop();
+                        m_bStormActive = false;
+                        m_fStormTimer = 0.0f;
+                    }
+                }
             }
         }
         m_pParticleSystem->Update(deltaTime);
@@ -2152,6 +2264,11 @@ void Scene::TransitionToRoomByIndex(int index)
                 pDevice, pCommandList, m_vShaders[0].get(),
                 m_pDescriptorHeap.get(), nGeyserDescStart);
         }
+        else if (m_eCurrentTheme == StageTheme::Earth)
+        {
+            m_pCurrentRoom->InitRockfallManager(
+                pDevice, pCommandList, m_vShaders[0].get());
+        }
 
         m_pCurrentRoom->SetState(RoomState::Active);
     }
@@ -2481,11 +2598,12 @@ void Scene::TransitionToWaterStage()
     // ── 5. 횃불 시스템 클리어
     if (m_pTorchSystem) m_pTorchSystem->Clear();
 
-    // ── 6. 용암 평면 숨기기 (렌더링에서 제외)
+    // ── 6. 용암·바위 평면 숨기기 (렌더링에서 제외)
     if (m_pLavaPlane)
     {
         m_pLavaPlane->GetTransform()->SetPosition(0.0f, -10000.0f, 0.0f);  // 화면 밖으로 이동
     }
+    if (m_pRockPlane) m_pRockPlane->GetTransform()->SetPosition(0.0f, -10000.0f, 0.0f);
 
     // ── 7. 영속 오브젝트의 RC를 셰이더에 다시 등록 (용암 제외)
     for (auto& pGO : m_vGameObjects)
@@ -2865,9 +2983,11 @@ void Scene::TransitionToWaterBossRoom()
     // ── 5. 횃불 시스템 클리어
     if (m_pTorchSystem) m_pTorchSystem->Clear();
 
-    // ── 6. 용암 평면 숨기기
+    // ── 6. 용암·바위 평면 숨기기
     if (m_pLavaPlane)
         m_pLavaPlane->GetTransform()->SetPosition(0.0f, -10000.0f, 0.0f);
+    if (m_pRockPlane)
+        m_pRockPlane->GetTransform()->SetPosition(0.0f, -10000.0f, 0.0f);
 
     // ── 7. 물 평면 제거 (재진입 시 중복 방지)
     GameObject* pOldWaterPlane = m_pWaterPlane;
@@ -3102,6 +3222,8 @@ void Scene::TransitionToEarthStage()
     // 용암·물 바닥 숨기기
     if (m_pLavaPlane)  m_pLavaPlane->GetTransform()->SetPosition(0.0f, -10000.0f, 0.0f);
     if (m_pWaterPlane) m_pWaterPlane->GetTransform()->SetPosition(0.0f, -10000.0f, 0.0f);
+    // 바위 바닥 표시 — Earth 전용
+    if (m_pRockPlane)  m_pRockPlane->GetTransform()->SetPosition(0.0f, -3.5f, -200.0f);
 
     for (auto& pGO : m_vGameObjects)
     {
@@ -3119,6 +3241,8 @@ void Scene::TransitionToEarthStage()
 
     if (m_pCurrentRoom) {
         for (const auto& pGO : m_pCurrentRoom->GetGameObjects()) pGO->Update(0.0f);
+        // Earth 전용 기믹 활성화
+        m_pCurrentRoom->InitRockfallManager(pDevice, pCommandList, m_vShaders[0].get());
         m_pCurrentRoom->SetState(RoomState::Active);
     }
 
@@ -3168,6 +3292,7 @@ void Scene::TransitionToGrassStage()
 
     if (m_pLavaPlane)  m_pLavaPlane->GetTransform()->SetPosition(0.0f, -10000.0f, 0.0f);
     if (m_pWaterPlane) m_pWaterPlane->GetTransform()->SetPosition(0.0f, -10000.0f, 0.0f);
+    if (m_pRockPlane)  m_pRockPlane->GetTransform()->SetPosition(0.0f, -10000.0f, 0.0f);
 
     for (auto& pGO : m_vGameObjects)
     {
@@ -3231,6 +3356,8 @@ void Scene::TransitionToEarthBossRoom()
 
     if (m_pLavaPlane)  m_pLavaPlane->GetTransform()->SetPosition(0.0f, -10000.0f, 0.0f);
     if (m_pWaterPlane) m_pWaterPlane->GetTransform()->SetPosition(0.0f, -10000.0f, 0.0f);
+    // 바위 바닥 표시 — Earth 보스전
+    if (m_pRockPlane)  m_pRockPlane->GetTransform()->SetPosition(0.0f, -3.5f, -200.0f);
 
     for (auto& pGO : m_vGameObjects)
     {
@@ -3313,6 +3440,7 @@ void Scene::TransitionToGrassBossRoom()
 
     if (m_pLavaPlane)  m_pLavaPlane->GetTransform()->SetPosition(0.0f, -10000.0f, 0.0f);
     if (m_pWaterPlane) m_pWaterPlane->GetTransform()->SetPosition(0.0f, -10000.0f, 0.0f);
+    if (m_pRockPlane)  m_pRockPlane->GetTransform()->SetPosition(0.0f, -10000.0f, 0.0f);
 
     for (auto& pGO : m_vGameObjects)
     {

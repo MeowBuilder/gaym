@@ -152,6 +152,47 @@ namespace FireParticlePresets
         return config;
     }
 
+    // 평상시 깔리는 먼지 — Earth 스테이지 ambient (가시성 확보).
+    inline ParticleEmitterConfig FloatingDust()
+    {
+        ParticleEmitterConfig config;
+        config.emissionRate = 35.0f;
+        config.minLifetime = 2.2f;
+        config.maxLifetime = 3.8f;
+        config.minStartSize = 0.20f;
+        config.maxStartSize = 0.38f;
+        config.minEndSize = 0.22f;
+        config.maxEndSize = 0.45f;
+        config.minVelocity = { 0.8f, -0.1f, -0.4f };   // 약한 +X 미풍 (방향성 유지)
+        config.maxVelocity = { 2.2f,  0.3f,  0.4f };
+        config.startColor = { 0.82f, 0.70f, 0.52f, 0.55f };  // 밝기·알파 ↑
+        config.endColor   = { 0.68f, 0.56f, 0.40f, 0.0f };
+        config.gravity    = { 0.4f, -0.05f, 0.0f };
+        config.spawnRadius = 12.0f;                          // 좁혀 밀도 ↑
+        return config;
+    }
+
+    // 주기적 모래폭풍 burst — Earth 스테이지에서 Active 상태 동안 쓸려옴.
+    // FloatingDust 대비 방출량/속도/입자 크기 모두 증가.
+    inline ParticleEmitterConfig Sandstorm()
+    {
+        ParticleEmitterConfig config;
+        config.emissionRate = 95.0f;
+        config.minLifetime = 1.4f;
+        config.maxLifetime = 2.6f;
+        config.minStartSize = 0.22f;
+        config.maxStartSize = 0.48f;
+        config.minEndSize = 0.30f;
+        config.maxEndSize = 0.60f;                     // 끝까지 streak 유지
+        config.minVelocity = { 5.0f, -0.3f, -0.8f };
+        config.maxVelocity = { 9.5f,  0.5f,  0.8f };
+        config.startColor = { 0.85f, 0.70f, 0.50f, 0.65f };
+        config.endColor   = { 0.70f, 0.55f, 0.38f, 0.0f };
+        config.gravity    = { 2.5f, -0.05f, 0.0f };    // 가속 풍압
+        config.spawnRadius = 18.0f;
+        return config;
+    }
+
     // Mega breath effect - continuous fire stream from dragon's mouth
     inline ParticleEmitterConfig DragonBreathStream()
     {

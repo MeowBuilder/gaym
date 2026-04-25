@@ -239,6 +239,7 @@ xcopy /Y "$(ProjectDir)Libraries\Libs\libprotobuf.dll" "$(OutDir)"</Command>
     <ClInclude Include="VFXLibrary.h" />
     <ClInclude Include="LavaGeyserComponent.h" />
     <ClInclude Include="LavaGeyserManager.h" />
+    <ClInclude Include="RockfallManager.h" />
     <ClInclude Include="RenderComponent.h" />
     <ClInclude Include="Resource.h" />
     <ClInclude Include="Room.h" />
@@ -355,6 +356,7 @@ xcopy /Y "$(ProjectDir)Libraries\Libs\libprotobuf.dll" "$(OutDir)"</Command>
     <ClCompile Include="VFXLibrary.cpp" />
     <ClCompile Include="LavaGeyserComponent.cpp" />
     <ClCompile Include="LavaGeyserManager.cpp" />
+    <ClCompile Include="RockfallManager.cpp" />
     <ClCompile Include="RenderComponent.cpp" />
     <ClCompile Include="Room.cpp" />
     <ClCompile Include="RotatorComponent.cpp" />

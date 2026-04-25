@@ -18,6 +18,7 @@ cbuffer cbGameObject : register(b0)
     uint bIsWater;
     uint bHasEmissiveTexture;
     float g_HitFlash;
+    uint bIsRocky;
     MATERIAL gMaterial;
     matrix gBoneTransforms[128];
 };
@@ -713,6 +714,25 @@ float4 PS(PS_INPUT input) : SV_TARGET
         float3 tinted = finalColor.rgb * float3(0.95f, 1.05f, 1.18f);
         finalColor.rgb = lerp(finalColor.rgb, tinted, 0.85f);
         finalColor.rgb *= 1.08f;  // overall lift
+    }
+
+    // ── Stage-themed environment: Earth (cave dimming + dusty fog) ──
+    // 균열 무늬 제거 — 바위/타일 텍스처가 이미 충분한 디테일을 가짐.
+    if (g_StageTheme == 2 && !bIsSkinned)
+    {
+        float upFacing = saturate(normal.y);
+        if (upFacing > 0.20f)
+        {
+            float slopeMul = smoothstep(0.20f, 0.65f, upFacing);
+            // 동굴 음영만 — 위쪽 표면을 살짝 어둡게 깔아 차가운 느낌
+            finalColor.rgb *= lerp(1.0f, 0.88f, slopeMul);
+        }
+
+        // 거리 기반 흙먼지 안개 — 갈색 톤, 옅게 깔림
+        float camDistE = distance(g_CameraPosition, input.worldPosition);
+        float fogE = saturate((camDistE - 18.0f) / 80.0f);
+        float3 fogColorE = float3(0.45f, 0.40f, 0.35f);
+        finalColor.rgb = lerp(finalColor.rgb, fogColorE, fogE * 0.55f);
     }
 
     // ── Stage-themed environment: Fire (lava-crack glow on upward surfaces) ──

@@ -7,6 +7,7 @@ class EnemyComponent;
 class EnemySpawner;
 class Scene;
 class LavaGeyserManager;
+class RockfallManager;
 class Shader;
 class CDescriptorHeap;
 
@@ -81,6 +82,11 @@ public:
     void SetLavaGeyserEnabled(bool bEnabled);
     LavaGeyserManager* GetLavaGeyserManager() const { return m_pGeyserManager.get(); }
 
+    // Rockfall system (Earth)
+    void InitRockfallManager(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList, Shader* pShader);
+    void SetRockfallEnabled(bool bEnabled);
+    RockfallManager* GetRockfallManager() const { return m_pRockfallManager.get(); }
+
 protected:
     std::vector<std::unique_ptr<GameObject>> m_vGameObjects; // 방에 속한 모든 오브젝트
     RoomState m_eState = RoomState::Inactive;
@@ -104,4 +110,7 @@ protected:
 
     // Lava Geyser system
     std::unique_ptr<LavaGeyserManager> m_pGeyserManager;
+
+    // Rockfall system (Earth stage)
+    std::unique_ptr<RockfallManager> m_pRockfallManager;
 };
