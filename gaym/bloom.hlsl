@@ -48,9 +48,9 @@ float4 PS_BrightPass(VS_OUT i) : SV_TARGET
     // Chroma gate: unsaturated bright stuff (character spec highlights, lit
     // skin/armor, bright stone) is fully killed. Saturated colors
     // (skill particles, fire/ice FX, water caustics) pass through cleanly.
-    //  chroma <= 0.10  -> gate 0       (no bloom on near-white highlights)
+    //  chroma <= 0.22  -> gate 0       (no bloom on near-white highlights / 약채도 라이팅)
     //  chroma 0.55+    -> gate 1.0     (full bloom on saturated FX)
-    float  chromaGate = smoothstep(0.10f, 0.55f, chroma);
+    float  chromaGate = smoothstep(0.22f, 0.55f, chroma);
     soft *= chromaGate;
 
     return float4(c * soft, 1.0f);
