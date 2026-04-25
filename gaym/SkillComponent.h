@@ -44,6 +44,9 @@ public:
     // Get cooldown progress (0.0 = just used, 1.0 = ready)
     float GetCooldownProgress(SkillSlot slot) const;
 
+    // 모든 슬롯 쿨타임 즉시 초기화
+    void ResetAllCooldowns();
+
     // 무한 룬: 쿨다운 즉시 초기화
     void ResetCooldown(SkillSlot slot);
     // 시간 역행 룬: 쿨다운 seconds 초 감소

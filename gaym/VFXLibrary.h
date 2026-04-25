@@ -110,10 +110,12 @@ public:
     void RegisterBase(SkillSlot slot, VFXSequenceDef def);
     void RegisterRuneMod(SkillSlot slot, uint32_t runeFlag, VFXModifier mod);
     void RegisterExactCombo(SkillSlot slot, uint32_t runeFlags, VFXSequenceDef def);
+    void RegisterSub(const std::string& id, VFXSequenceDef def);
 
     // 런타임 조회: base에 룬 modifier 누적 적용 (element를 지정하면 def.element override)
     VFXSequenceDef GetDef(SkillSlot slot, uint32_t runeFlags,
                           ElementType element = ElementType::Fire) const;
+    const VFXSequenceDef* GetSubDef(const std::string& id) const;
 
 private:
     VFXLibrary() = default;
@@ -121,6 +123,7 @@ private:
     std::array<VFXSequenceDef, static_cast<int>(SkillSlot::Count)> m_BaseDefs;
     std::array<std::unordered_map<uint32_t, VFXModifier>, static_cast<int>(SkillSlot::Count)> m_RuneMods;
     std::unordered_map<uint64_t, VFXSequenceDef> m_ExactCombos; // (slot<<32)|runes -> def
+    std::unordered_map<std::string, VFXSequenceDef> m_SubDefs;  // id -> 서브 VFX 정의
 
     static uint64_t MakeKey(SkillSlot slot, uint32_t runes) {
         return ((uint64_t)static_cast<int>(slot) << 32) | runes;

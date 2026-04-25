@@ -3,6 +3,8 @@
 #include "ISkillBehavior.h"
 #include "SkillData.h"
 #include "VFXLibrary.h"
+#include <vector>
+#include <string>
 
 class FluidSkillVFXManager;
 class Scene;
@@ -41,6 +43,7 @@ private:
     int m_vfxCoreId  = -1;  // 코어 빔 (직선 흐름)
     int m_vfxSwirlId = -1;  // 나선 공전
     int m_vfxBurstId = -1;  // 시작점 방사 스파크
+    std::vector<int> m_subVFXIds; // 룬 서브 파티클 슬롯 IDs
     GameObject* m_pCaster = nullptr;
     XMFLOAT3 m_lastTargetPos = { 0.f, 0.f, 0.f };
 
