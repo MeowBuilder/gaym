@@ -230,6 +230,80 @@ float WaterCaustics(float2 p, float t)
     return pow(saturate(c * 1.7), 5.0);
 }
 
+// Cheap hash + smoothed value noise (used by LavaCracks).
+float _hash12(float2 p)
+{
+    p = frac(p * float2(123.34f, 456.21f));
+    p += dot(p, p + 45.32f);
+    return frac(p.x * p.y);
+}
+float _vnoise(float2 p)
+{
+    float2 i = floor(p);
+    float2 f = frac(p);
+    f = f * f * (3.0f - 2.0f * f);
+    float a = _hash12(i);
+    float b = _hash12(i + float2(1, 0));
+    float c = _hash12(i + float2(0, 1));
+    float d = _hash12(i + float2(1, 1));
+    return lerp(lerp(a, b, f.x), lerp(c, d, f.x), f.y);
+}
+
+// (1) Per-cell soft tile background mask. Heavily distorted circular blob per
+//     cell — covers most of the cell but with irregular organic outline that
+//     doesn't read as a square grid. Neighboring blobs gently overlap.
+float LavaTileMask(float2 worldP)
+{
+    const float CELL_SIZE = 3.8f;
+
+    float2 q  = worldP / CELL_SIZE;
+    float2 ic = floor(q);
+    float2 fc = frac(q) - 0.5f;
+
+    float h1 = _hash12(ic);
+    float h2 = _hash12(ic + float2(7.3f, 13.1f));
+
+    // Per-cell rotation
+    float ang = h1 * 6.2831853f;
+    float ca = cos(ang), sa = sin(ang);
+    float2 fr = float2(ca * fc.x - sa * fc.y, sa * fc.x + ca * fc.y);
+
+    // Distance-based circular blob, heavily distorted by angular noise so the
+    // outline is organic — no rectangular feeling.
+    float r = length(fr);
+    float theta = atan2(fr.y, fr.x);
+    float distort = 0.55f + 0.40f * sin(theta * (3.0f + h2 * 2.0f) + h1 * 6.28f)
+                          + 0.20f * sin(theta * (5.0f + h1 * 1.5f) - h2 * 4.7f);
+    r *= distort;
+
+    // Soft fade — wider so neighboring blobs overlap slightly.
+    float mask = 1.0f - smoothstep(0.25f, 0.55f, r);
+
+    return saturate(mask) * (0.75f + 0.30f * h2);
+}
+
+// (2) Procedural crack lines — domain-warped ridge noise FBM. 메안더링 곡선,
+//     얇은 라인, 가지 치는 형태. 모든 위치에서 작동.
+float LavaCrackLines(float2 worldP, float t)
+{
+    float2 p = worldP * 0.20f;
+    float2 w = float2(
+        _vnoise(p * 0.6f + float2(0.0f, t * 0.010f)),
+        _vnoise(p * 0.8f + float2(t * 0.012f, 0.0f)));
+    p += (w - 0.5f) * 2.2f;
+
+    float n1 = _vnoise(p);
+    float r1 = 1.0f - smoothstep(0.0f, 0.060f, abs(n1 * 2.0f - 1.0f));
+
+    float n2 = _vnoise(p * 2.8f + 17.3f);
+    float r2 = 1.0f - smoothstep(0.0f, 0.045f, abs(n2 * 2.0f - 1.0f));
+
+    float n3 = _vnoise(p * 6.2f + 31.7f);
+    float r3 = 1.0f - smoothstep(0.0f, 0.030f, abs(n3 * 2.0f - 1.0f));
+
+    return max(max(r1, r2 * 0.80f), r3 * 0.55f);
+}
+
 // ========================================================================
 
 PS_INPUT VS(VS_INPUT input)
@@ -597,6 +671,18 @@ float4 PS(PS_INPUT input) : SV_TARGET
         finalColor.rgb  = lerp(finalColor.rgb, foamColor, foamStrength);
         finalColor.rgb  = lerp(finalColor.rgb, fresnelColor, waterFresnel * 0.18f);
 
+        // 일반 지오메트리와 동일한 atmospheric tint/fog를 물 표면에도 적용 → 시각적 연속성.
+        if (g_StageTheme == 1)
+        {
+            float camDist_w = distance(g_CameraPosition, input.worldPosition);
+            float fog_w = saturate((camDist_w - 16.0f) / 70.0f);
+            float3 fogColor_w = float3(0.30f, 0.55f, 0.72f);
+            finalColor.rgb = lerp(finalColor.rgb, fogColor_w, fog_w * 0.65f);
+            float3 tinted_w = finalColor.rgb * float3(0.95f, 1.05f, 1.18f);
+            finalColor.rgb = lerp(finalColor.rgb, tinted_w, 0.85f);
+            finalColor.rgb *= 1.08f;
+        }
+
         return float4(finalColor.rgb, waterAlpha);
     }
 
@@ -605,23 +691,56 @@ float4 PS(PS_INPUT input) : SV_TARGET
     if (g_StageTheme == 1)
     {
         // Caustics — 위를 향한 면(바닥/지형)에만, 햇빛이 닿는 영역에만.
+        // peak 색을 1.0 위로 밀어서 bloom 패스가 살짝 글린트로 잡아내게.
+        // 캐릭터(skinned)에는 적용 X — 머리·어깨 위에 패턴 투영 방지.
         float upFacing = saturate(normal.y);
-        if (upFacing > 0.05f)
+        if (upFacing > 0.05f && !bIsSkinned)
         {
             float caust = WaterCaustics(input.worldPosition.xz, g_Time);
-            float3 causticColor = float3(0.50f, 0.82f, 1.10f);
-            finalColor.rgb += causticColor * caust * upFacing * shadowFactor * 0.45f;
+            // 살짝 흔들리는 강도 (큰 파도 위 햇빛 흔들림 모사)
+            float shimmer = 0.85f + 0.30f * sin(g_Time * 0.9f + input.worldPosition.x * 0.07f);
+            float3 causticColor = float3(0.65f, 1.05f, 1.45f);  // peak가 1.0 초과 → bloom 통과
+            finalColor.rgb += causticColor * caust * upFacing * shadowFactor * 0.85f * shimmer;
         }
 
-        // 거리 기반 청록 안개 — 탑뷰 카메라 거리(보통 20~60m) 범위에 맞춰 시작.
+        // 거리 기반 청록 안개 — 시작은 빠르게, 두께는 가볍게.
         float camDist = distance(g_CameraPosition, input.worldPosition);
-        float fog = saturate((camDist - 18.0f) / 70.0f);
-        float3 fogColor = float3(0.18f, 0.36f, 0.52f);
-        finalColor.rgb = lerp(finalColor.rgb, fogColor, fog * 0.85f);
+        float fog = saturate((camDist - 16.0f) / 70.0f);
+        float3 fogColor = float3(0.30f, 0.55f, 0.72f);  // 더 밝은 청록 (어둡게 가라앉지 않게)
+        finalColor.rgb = lerp(finalColor.rgb, fogColor, fog * 0.65f);
 
-        // 가까이 있는 표면에도 청량한 톤 시프트(살짝 채도 ↓ + 푸르게).
-        float3 tinted = finalColor.rgb * float3(0.85f, 0.96f, 1.10f);
+        // 청량 톤 시프트 + 전체 밝기 살짝 lift — "햇빛 잘 드는 얕은 물" 느낌.
+        float3 tinted = finalColor.rgb * float3(0.95f, 1.05f, 1.18f);
         finalColor.rgb = lerp(finalColor.rgb, tinted, 0.85f);
+        finalColor.rgb *= 1.08f;  // overall lift
+    }
+
+    // ── Stage-themed environment: Fire (lava-crack glow on upward surfaces) ──
+    // 용암 평면(bIsLava)은 자체 흐름 셰이더가 있으니 제외. 거의 수평인 면에만.
+    // 캐릭터(skinned)·진짜 거대 lava plane(Y < -2)만 제외.
+    // bIsLava 단독 게이트 X — MapLoader가 mesh name에 "lava" 있으면 무조건 SetLava(true)하므로
+    // 일반 floor 타일들도 다 bIsLava=true 됨. Y로 진짜 lava plane(Y=-3.5)만 가려냄.
+    bool isLavaSubmergedPlane = bIsLava && (input.worldPosition.y < -2.0f);
+    if (g_StageTheme == 0 && !isLavaSubmergedPlane && !bIsSkinned)
+    {
+        float upFacing = saturate(normal.y);
+        if (upFacing > 0.25f)  // 기울어진 타일·낮은 경사도 포함
+        {
+            float slopeMul = smoothstep(0.25f, 0.65f, upFacing);
+
+            // (a) 베이스 워밍 — 약한 따뜻한 톤 (모든 floor 픽셀에 깔림).
+            finalColor.rgb += float3(0.055f, 0.022f, 0.004f) * slopeMul;
+
+            // (b) 셀별 부드러운 타일 배경 — 유기적 블롭, 옅은 주황 톤.
+            float tileMask = LavaTileMask(input.worldPosition.xz);
+            finalColor.rgb += float3(0.15f, 0.060f, 0.012f) * tileMask * slopeMul;
+
+            // (c) 균열 라인 — 모든 위치에서 그어짐, 타일 위에 살짝 더 진함.
+            float cracks = LavaCrackLines(input.worldPosition.xz, g_Time);
+            float3 crackColor = float3(0.95f, 0.40f, 0.08f);
+            float crackBoost = 0.55f + 0.45f * tileMask;
+            finalColor.rgb += crackColor * cracks * crackBoost * slopeMul * 0.40f;
+        }
     }
 
     // Hit Flash: rim-based white outline flash + additive bloom pop
