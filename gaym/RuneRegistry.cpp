@@ -56,6 +56,15 @@ void RuneDef::ApplyTo(SkillStats& stats, int stackCount) const
     stats.spawnOnHitCount       += spawnOnHitCount  * stackCount;
     if (randomElementOnCast)     stats.randomElementOnCast = true;
 
+    // 서브 파티클 VFX (중복 방지)
+    if (!subVFXId.empty())
+    {
+        bool already = false;
+        for (const auto& id : stats.subVFXIds)
+            if (id == subVFXId) { already = true; break; }
+        if (!already) stats.subVFXIds.push_back(subVFXId);
+    }
+
     // Hooks
     if (onCast) stats.onCastHooks.push_back(onCast);
     if (onHit)  stats.onHitHooks.push_back(onHit);
@@ -111,10 +120,10 @@ RuneRegistry::RuneRegistry()
     // ─── 노멀 등급 (15종) ────────────────────────────────────────────────────
 
     // 원소 강화 (Normal)
-    Register({ .id="W01", .name="수속성",       .grade=RuneGrade::Normal,  .element=ElementType::Water, .damageMult=1.10f });
-    Register({ .id="F01", .name="화속성",       .grade=RuneGrade::Normal,  .element=ElementType::Fire,  .damageMult=1.10f });
-    Register({ .id="E01", .name="토속성",       .grade=RuneGrade::Normal,  .element=ElementType::Earth, .damageMult=1.10f });
-    Register({ .id="A01", .name="풍속성",       .grade=RuneGrade::Normal,  .element=ElementType::Wind,  .damageMult=1.10f });
+    Register({ .id="W01", .name="수속성",       .grade=RuneGrade::Normal,  .element=ElementType::Water, .damageMult=1.10f, .subVFXId="sub_water" });
+    Register({ .id="F01", .name="화속성",       .grade=RuneGrade::Normal,  .element=ElementType::Fire,  .damageMult=1.10f, .subVFXId="sub_fire"  });
+    Register({ .id="E01", .name="토속성",       .grade=RuneGrade::Normal,  .element=ElementType::Earth, .damageMult=1.10f, .subVFXId="sub_earth" });
+    Register({ .id="A01", .name="풍속성",       .grade=RuneGrade::Normal,  .element=ElementType::Wind,  .damageMult=1.10f, .subVFXId="sub_wind"  });
 
     // 발동 방식 (Normal)
     Register({ .id="I01", .name="신속",         .grade=RuneGrade::Normal,  .castTimeMult=0.85f });
@@ -132,14 +141,14 @@ RuneRegistry::RuneRegistry()
     // ─── 레어 등급 (12종) ────────────────────────────────────────────────────
 
     // 원소 강화 (Rare)
-    Register({ .id="W02", .name="냉속성",       .grade=RuneGrade::Rare,    .element=ElementType::Water, .damageMult=1.15f, .statusDurationMult=1.20f });
-    Register({ .id="W03", .name="빙속성",       .grade=RuneGrade::Rare,    .element=ElementType::Water, .statusChanceMult=1.40f });
-    Register({ .id="F02", .name="점화",         .grade=RuneGrade::Rare,    .element=ElementType::Fire,  .damageMult=1.15f, .statusDurationMult=1.15f });
-    Register({ .id="F03", .name="작열",         .grade=RuneGrade::Rare,    .element=ElementType::Fire,  .damageMult=1.10f, .statusChanceMult=1.30f });
-    Register({ .id="E02", .name="암석",         .grade=RuneGrade::Rare,    .element=ElementType::Earth, .damageMult=1.15f });
-    Register({ .id="E03", .name="진동",         .grade=RuneGrade::Rare,    .element=ElementType::Earth, .statusDurationMult=1.30f });
-    Register({ .id="A02", .name="질풍",         .grade=RuneGrade::Rare,    .element=ElementType::Wind,  .damageMult=1.15f });
-    Register({ .id="A03", .name="냉각풍",       .grade=RuneGrade::Rare,    .element=ElementType::Wind,  .cooldownMult=0.90f });
+    Register({ .id="W02", .name="냉속성",       .grade=RuneGrade::Rare,    .element=ElementType::Water, .damageMult=1.15f, .statusDurationMult=1.20f, .subVFXId="sub_water" });
+    Register({ .id="W03", .name="빙속성",       .grade=RuneGrade::Rare,    .element=ElementType::Water, .statusChanceMult=1.40f,                        .subVFXId="sub_water" });
+    Register({ .id="F02", .name="점화",         .grade=RuneGrade::Rare,    .element=ElementType::Fire,  .damageMult=1.15f, .statusDurationMult=1.15f,  .subVFXId="sub_fire"  });
+    Register({ .id="F03", .name="작열",         .grade=RuneGrade::Rare,    .element=ElementType::Fire,  .damageMult=1.10f, .statusChanceMult=1.30f,    .subVFXId="sub_fire"  });
+    Register({ .id="E02", .name="암석",         .grade=RuneGrade::Rare,    .element=ElementType::Earth, .damageMult=1.15f,                              .subVFXId="sub_earth" });
+    Register({ .id="E03", .name="진동",         .grade=RuneGrade::Rare,    .element=ElementType::Earth, .statusDurationMult=1.30f,                      .subVFXId="sub_earth" });
+    Register({ .id="A02", .name="질풍",         .grade=RuneGrade::Rare,    .element=ElementType::Wind,  .damageMult=1.15f,                              .subVFXId="sub_wind"  });
+    Register({ .id="A03", .name="냉각풍",       .grade=RuneGrade::Rare,    .element=ElementType::Wind,  .cooldownMult=0.90f,                            .subVFXId="sub_wind"  });
 
     // 발동 방식 (Rare)
     Register({ .id="I03", .name="관통",         .grade=RuneGrade::Rare,    .piercing=true });
@@ -150,10 +159,10 @@ RuneRegistry::RuneRegistry()
     // ─── 에픽 등급 (8종) ─────────────────────────────────────────────────────
 
     // 원소 강화 (Epic)
-    Register({ .id="W04", .name="급류",         .grade=RuneGrade::Epic,    .element=ElementType::Water, .damageMult=1.25f });
-    Register({ .id="F04", .name="폭염",         .grade=RuneGrade::Epic,    .element=ElementType::Fire,  .damageMult=1.25f, .radiusMult=1.20f });
-    Register({ .id="E04", .name="대지",         .grade=RuneGrade::Epic,    .element=ElementType::Earth, .damageMult=1.25f });
-    Register({ .id="A04", .name="회오리",       .grade=RuneGrade::Epic,    .element=ElementType::Wind,  .damageMult=1.25f, .knockbackMult=1.40f });
+    Register({ .id="W04", .name="급류",         .grade=RuneGrade::Epic,    .element=ElementType::Water, .damageMult=1.25f,                              .subVFXId="sub_water" });
+    Register({ .id="F04", .name="폭염",         .grade=RuneGrade::Epic,    .element=ElementType::Fire,  .damageMult=1.25f, .radiusMult=1.20f,           .subVFXId="sub_fire"  });
+    Register({ .id="E04", .name="대지",         .grade=RuneGrade::Epic,    .element=ElementType::Earth, .damageMult=1.25f,                              .subVFXId="sub_earth" });
+    Register({ .id="A04", .name="회오리",       .grade=RuneGrade::Epic,    .element=ElementType::Wind,  .damageMult=1.25f, .knockbackMult=1.40f,        .subVFXId="sub_wind"  });
 
     // 발동 방식 (Epic)
     Register({ .id="I04", .name="분열",         .grade=RuneGrade::Epic,    .extraProjectiles=3 });
@@ -164,16 +173,16 @@ RuneRegistry::RuneRegistry()
 
     // ─── 유니크 등급 (5종) ───────────────────────────────────────────────────
     // 흡혈류: 수속성 + 데미지 1.35배 + 흡혈 8%
-    Register({ .id="W05", .name="흡혈류",       .grade=RuneGrade::Unique,  .element=ElementType::Water, .damageMult=1.35f, .lifestealRatio=0.08f });
+    Register({ .id="W05", .name="흡혈류",       .grade=RuneGrade::Unique,  .element=ElementType::Water, .damageMult=1.35f, .lifestealRatio=0.08f, .subVFXId="sub_water" });
     // 방어 분쇄: 화속성 + 데미지 1.35배 + 방어력 25% 감소 디버프 (3초)
-    Register({ .id="F05", .name="방어 분쇄",    .grade=RuneGrade::Unique,  .element=ElementType::Fire,  .damageMult=1.35f,
+    Register({ .id="F05", .name="방어 분쇄",    .grade=RuneGrade::Unique,  .element=ElementType::Fire,  .damageMult=1.35f, .subVFXId="sub_fire",
                .onHit=[](SkillContext& ctx){
                    if (!ctx.hitEnemy) return;
                    auto* pEnemy = static_cast<EnemyComponent*>(ctx.hitEnemy);
                    pEnemy->ApplyDefenseDebuff(0.75f, 3.0f);
                } });
-    Register({ .id="E05", .name="광물",         .grade=RuneGrade::Unique,  .element=ElementType::Earth, .damageMult=1.35f });
-    Register({ .id="A05", .name="폭풍",         .grade=RuneGrade::Unique,  .element=ElementType::Wind,  .damageMult=1.35f });
+    Register({ .id="E05", .name="광물",         .grade=RuneGrade::Unique,  .element=ElementType::Earth, .damageMult=1.35f, .subVFXId="sub_earth" });
+    Register({ .id="A05", .name="폭풍",         .grade=RuneGrade::Unique,  .element=ElementType::Wind,  .damageMult=1.35f, .subVFXId="sub_wind"  });
     // 연쇄 번개: 설치 모드 + 적중 시 가장 가까운 다른 적에게 50% 피해 연쇄
     Register({ .id="S04", .name="연쇄 번개",    .grade=RuneGrade::Unique,  .activationOverride=ActivationType::Place,
                .onHit=[](SkillContext& ctx){

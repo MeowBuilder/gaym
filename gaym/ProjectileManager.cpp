@@ -114,6 +114,16 @@ void ProjectileManager::SpawnProjectile(const Projectile& projectile)
                     proj.position, proj.direction, extraDef);
                 if (eid >= 0) proj.extraVFXIds.push_back(eid);
             }
+
+            // 서브 파티클 VFX 스폰
+            for (const auto& subId : proj.subVFXDefIds)
+            {
+                const VFXSequenceDef* subDef = VFXLibrary::Get().GetSubDef(subId);
+                if (!subDef) continue;
+                int sid = m_pFluidVFXManager->SpawnSequenceEffect(
+                    proj.position, proj.direction, *subDef);
+                if (sid >= 0) proj.subVFXSlotIds.push_back(sid);
+            }
         }
         else if (!proj.isPlayerProjectile && m_pEnemyFluidVFXManager)
         {
@@ -231,7 +241,8 @@ void ProjectileManager::SpawnProjectile(
     float execDamageBonus,
     float cdResetChance,
     SkillSlot skillSlot,
-    const std::vector<ElementType>& elementSet)
+    const std::vector<ElementType>& elementSet,
+    const std::vector<std::string>& subVFXDefIds)
 {
     Projectile proj;
     proj.position         = startPos;
@@ -255,6 +266,7 @@ void ProjectileManager::SpawnProjectile(
     proj.cdResetChance    = cdResetChance;
     proj.skillSlot        = skillSlot;
     proj.elementSet       = elementSet;
+    proj.subVFXDefIds     = subVFXDefIds;
 
     // Calculate direction
     XMVECTOR start = XMLoadFloat3(&startPos);
@@ -320,8 +332,12 @@ void ProjectileManager::Update(float deltaTime)
         if (pVFX && projectile.fluidVFXId >= 0)
             pVFX->TrackEffect(projectile.fluidVFXId, projectile.position, projectile.direction);
         if (pVFX)
+        {
             for (int eid : projectile.extraVFXIds)
                 if (eid >= 0) pVFX->TrackEffect(eid, projectile.position, projectile.direction);
+            for (int sid : projectile.subVFXSlotIds)
+                if (sid >= 0) pVFX->TrackEffect(sid, projectile.position, projectile.direction);
+        }
 
         // Check collisions
         if (projectile.isActive)
@@ -344,7 +360,7 @@ void ProjectileManager::Update(float deltaTime)
                 else
                     pVFX->StopEffect(projectile.fluidVFXId);
             }
-            // Extra element VFX
+            // Extra element VFX + 서브 파티클 VFX
             if (pVFX)
             {
                 for (int eid : projectile.extraVFXIds)
@@ -354,6 +370,14 @@ void ProjectileManager::Update(float deltaTime)
                         pVFX->ExplodeEffect(eid, projectile.position);
                     else
                         pVFX->StopEffect(eid);
+                }
+                for (int sid : projectile.subVFXSlotIds)
+                {
+                    if (sid < 0) continue;
+                    if (projectile.wasHit && projectile.isPlayerProjectile)
+                        pVFX->ExplodeEffect(sid, projectile.position);
+                    else
+                        pVFX->StopEffect(sid);
                 }
             }
             // Spawn explosion particles for each element

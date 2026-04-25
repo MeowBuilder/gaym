@@ -32,6 +32,9 @@ public:
     // Get the skill data
     virtual const SkillData& GetSkillData() const = 0;
 
+    // Optional per-frame geometry render (override in behaviors that need a mesh)
+    virtual void Render(ID3D12GraphicsCommandList* pCmdList) {}
+
     // Slot assignment (set by SkillComponent::EquipSkill)
     void      SetSlot(SkillSlot s) { m_slot = s; }
     SkillSlot GetSlot() const      { return m_slot; }

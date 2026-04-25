@@ -136,7 +136,8 @@ void FireballBehavior::ExecuteInstant(GameObject* caster, const DirectX::XMFLOAT
         stats.execDamageBonus,
         stats.cdResetChance,
         m_slot,
-        stats.elementSet
+        stats.elementSet,
+        stats.subVFXIds
     );
 }
 

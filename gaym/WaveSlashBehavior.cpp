@@ -90,6 +90,15 @@ void WaveSlashBehavior::Execute(GameObject* caster, const DirectX::XMFLOAT3& tar
         if (eid >= 0) m_extraVFXIds.push_back(eid);
     }
 
+    // 서브 파티클 VFX 스폰
+    for (const auto& subId : stats.subVFXIds)
+    {
+        const VFXSequenceDef* subDef = VFXLibrary::Get().GetSubDef(subId);
+        if (!subDef) continue;
+        int sid = m_pVFXManager->SpawnSequenceEffect(origin, direction, *subDef);
+        if (sid >= 0) m_extraVFXIds.push_back(sid);
+    }
+
     wchar_t buf[256];
     swprintf_s(buf, 256, L"[WaveSlash] Execute: vfxId=%d, runeFlags=0x%X, dmgMult=%.1f\n",
         m_vfxId, runeFlags, damageMultiplier);

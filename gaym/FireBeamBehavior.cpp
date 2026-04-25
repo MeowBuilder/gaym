@@ -164,6 +164,24 @@ void FireBeamBehavior::Execute(GameObject* caster, const DirectX::XMFLOAT3& targ
         m_vfxSwirlId = m_pVFXManager->SpawnSequenceEffect(origin, direction, BuildSwirlDef(), true);
         m_vfxBurstId = m_pVFXManager->SpawnSequenceEffect(origin, direction, BuildBurstDef(), true);
 
+        // 서브 파티클 VFX 스폰
+        m_subVFXIds.clear();
+        if (caster)
+        {
+            auto* pSkillComp = caster->GetComponent<SkillComponent>();
+            if (pSkillComp && m_slot != SkillSlot::Count)
+            {
+                SkillStats stats = pSkillComp->BuildSkillStats(m_slot, m_SkillData.activationType);
+                for (const auto& subId : stats.subVFXIds)
+                {
+                    const VFXSequenceDef* subDef = VFXLibrary::Get().GetSubDef(subId);
+                    if (!subDef) continue;
+                    int sid = m_pVFXManager->SpawnSequenceEffect(origin, direction, *subDef, true);
+                    if (sid >= 0) m_subVFXIds.push_back(sid);
+                }
+            }
+        }
+
         wchar_t buf[96];
         swprintf_s(buf, 96, L"[FireBeam] Started core=%d swirl=%d burst=%d\n",
             m_vfxCoreId, m_vfxSwirlId, m_vfxBurstId);
@@ -194,6 +212,8 @@ void FireBeamBehavior::Execute(GameObject* caster, const DirectX::XMFLOAT3& targ
             if (m_vfxCoreId  >= 0) m_pVFXManager->TrackEffect(m_vfxCoreId,  origin, direction);
             if (m_vfxSwirlId >= 0) m_pVFXManager->TrackEffect(m_vfxSwirlId, origin, direction);
             if (m_vfxBurstId >= 0) m_pVFXManager->TrackEffect(m_vfxBurstId, origin, direction);
+            for (int sid : m_subVFXIds)
+                if (sid >= 0) m_pVFXManager->TrackEffect(sid, origin, direction);
         }
     }
 }
@@ -220,6 +240,8 @@ void FireBeamBehavior::Update(float deltaTime)
     if (m_vfxCoreId  >= 0) m_pVFXManager->TrackEffect(m_vfxCoreId,  offsetOrigin, dir);
     if (m_vfxSwirlId >= 0) m_pVFXManager->TrackEffect(m_vfxSwirlId, offsetOrigin, dir);
     if (m_vfxBurstId >= 0) m_pVFXManager->TrackEffect(m_vfxBurstId, offsetOrigin, dir);
+    for (int sid : m_subVFXIds)
+        if (sid >= 0) m_pVFXManager->TrackEffect(sid, offsetOrigin, dir);
 
     m_hitTimer += deltaTime;
     if (m_hitTimer >= HIT_INTERVAL) {
@@ -283,6 +305,8 @@ void FireBeamBehavior::Reset()
         if (m_vfxCoreId  >= 0) m_pVFXManager->StopEffect(m_vfxCoreId);
         if (m_vfxSwirlId >= 0) m_pVFXManager->StopEffect(m_vfxSwirlId);
         if (m_vfxBurstId >= 0) m_pVFXManager->StopEffect(m_vfxBurstId);
+        for (int sid : m_subVFXIds)
+            if (sid >= 0) m_pVFXManager->StopEffect(sid);
         OutputDebugString(L"[FireBeam] Stopped\n");
     }
     m_bIsFinished = true;
@@ -290,6 +314,7 @@ void FireBeamBehavior::Reset()
     m_vfxCoreId   = -1;
     m_vfxSwirlId  = -1;
     m_vfxBurstId  = -1;
+    m_subVFXIds.clear();
     m_pCaster     = nullptr;
 }
 

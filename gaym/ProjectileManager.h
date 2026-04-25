@@ -66,7 +66,8 @@ public:
         float execDamageBonus = 0.f,
         float cdResetChance = 0.f,
         SkillSlot skillSlot = SkillSlot::Count,
-        const std::vector<ElementType>& elementSet = {}
+        const std::vector<ElementType>& elementSet = {},
+        const std::vector<std::string>& subVFXDefIds = {}
     );
 
     // Update all projectiles (movement + collision)

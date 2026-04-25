@@ -2,6 +2,7 @@
 
 #include <DirectXMath.h>
 #include <vector>
+#include <string>
 #include "SkillTypes.h"
 
 using namespace DirectX;
@@ -36,6 +37,8 @@ struct Projectile
     std::vector<int> extraVFXIds;    // Extra VFX slots for multi-element runes
     RuneCombo runeCombo;             // Rune combo for VFX customization
     std::vector<ElementType> elementSet; // Rune element set for multi-element VFX
+    std::vector<std::string> subVFXDefIds;  // 서브 파티클 VFX def ID (스폰 시 사용)
+    std::vector<int>         subVFXSlotIds; // 스폰된 서브 VFX 슬롯 IDs (Track/Stop용)
     bool wasHit = false;         // True if deactivated by collision (not range)
 
     // Rune-driven runtime flags (set at spawn from SkillStats)

@@ -955,6 +955,16 @@ void Scene::Update(float deltaTime, InputSystem* pInputSystem)
             : L"[Debug] No-texture OFF (textures enabled)\n");
     }
 
+    // F5: 모든 스킬 쿨타임 즉시 초기화
+    if (pInputSystem && pInputSystem->IsKeyPressed(VK_F5))
+    {
+        if (m_pPlayerGameObject)
+        {
+            auto* pSkill = m_pPlayerGameObject->GetComponent<SkillComponent>();
+            if (pSkill) pSkill->ResetAllCooldowns();
+        }
+    }
+
     // B 키: 현재 테마에 맞는 보스전
     if (pInputSystem && pInputSystem->IsKeyPressed('B'))
     {
@@ -1471,6 +1481,20 @@ void Scene::Render(ID3D12GraphicsCommandList* pCommandList, D3D12_GPU_DESCRIPTOR
     if (m_pProjectileManager)
     {
         m_pProjectileManager->Render(pCommandList);
+    }
+
+    // Render skill geometry meshes (e.g. meteor rock)
+    if (m_pPlayerGameObject)
+    {
+        auto* pSkill = m_pPlayerGameObject->GetComponent<SkillComponent>();
+        if (pSkill)
+        {
+            for (int s = 0; s < static_cast<int>(SkillSlot::Count); ++s)
+            {
+                ISkillBehavior* pBehavior = pSkill->GetSkill(static_cast<SkillSlot>(s));
+                if (pBehavior) pBehavior->Render(pCommandList);
+            }
+        }
     }
 
     // Render particles

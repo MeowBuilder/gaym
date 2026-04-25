@@ -263,6 +263,104 @@ void VFXLibrary::Initialize() {
         // SkillSlot::None(0)과 999번 룬 플래그를 조합하여 보스 전용 키로 등록
         RegisterExactCombo((SkillSlot)0, 999, std::move(def));
     }
+
+    // ──────────────────────────────────────────────────────────
+    // 서브 파티클 VFX (룬 원소 강화 시 메인 옆에 추가 스폰)
+    // masterCPFallSpeed=0 → slot.origin 추적 (투사체/스킬 위치 따라다님)
+    // ──────────────────────────────────────────────────────────
+
+    // sub_water: 물방울들이 메인 주변을 천천히 공전
+    {
+        VFXSequenceDef def;
+        def.name          = "sub_water";
+        def.element       = ElementType::Water;
+        def.particleCount = 100;
+        def.spawnRadius   = 2.0f;
+        def.masterCPFallSpeed    = 0.f;
+        def.masterCPStrength     = 18.f;
+        def.masterCPSphereRadius = 2.5f;
+        def.overrideColors    = true;
+        def.overrideCoreColor = { 0.55f, 0.85f, 1.0f, 1.0f };
+        def.overrideEdgeColor = { 0.05f, 0.25f, 0.75f, 0.75f };
+        SatelliteCPDesc sat;
+        sat.orbitRadius        = 3.0f;
+        sat.orbitSpeed         = 1.2f;
+        sat.orbitPhase         = 0.f;
+        sat.verticalOffset     = 0.f;
+        sat.attractionStrength = 10.f;
+        sat.sphereRadius       = 1.2f;
+        sat.orbitTiltX         = 0.5f;
+        def.satelliteCPs.push_back(sat);
+        RegisterSub("sub_water", def);
+    }
+
+    // sub_fire: 불꽃 파편이 메인 주변에서 사방으로 집결
+    {
+        VFXSequenceDef def;
+        def.name          = "sub_fire";
+        def.element       = ElementType::Fire;
+        def.particleCount = 80;
+        def.spawnRadius   = 0.5f;
+        def.masterCPFallSpeed    = 0.f;
+        def.masterCPStrength     = 20.f;
+        def.masterCPSphereRadius = 1.8f;
+        def.overrideColors    = true;
+        def.overrideCoreColor = { 1.0f, 0.75f, 0.05f, 1.0f };
+        def.overrideEdgeColor = { 0.9f, 0.20f, 0.0f,  0.80f };
+        def.cardinalSpawnRadius = 2.5f;
+        def.cardinalInwardSpeed = 8.f;
+        RegisterSub("sub_fire", def);
+    }
+
+    // sub_earth: 암석 파편이 메인 주변을 느리게 공전
+    {
+        VFXSequenceDef def;
+        def.name          = "sub_earth";
+        def.element       = ElementType::Earth;
+        def.particleCount = 80;
+        def.spawnRadius   = 2.5f;
+        def.masterCPFallSpeed    = 0.f;
+        def.masterCPStrength     = 22.f;
+        def.masterCPSphereRadius = 2.0f;
+        def.overrideColors    = true;
+        def.overrideCoreColor = { 0.70f, 0.55f, 0.25f, 1.0f };
+        def.overrideEdgeColor = { 0.35f, 0.22f, 0.08f, 0.80f };
+        SatelliteCPDesc satA;
+        satA.orbitRadius        = 2.5f; satA.orbitSpeed = 0.8f;
+        satA.orbitPhase         = 0.f;  satA.verticalOffset = 0.3f;
+        satA.attractionStrength = 12.f; satA.sphereRadius   = 1.0f;
+        satA.orbitTiltX         = 0.3f;
+        def.satelliteCPs.push_back(satA);
+        SatelliteCPDesc satB = satA;
+        satB.orbitPhase = 3.14159f; satB.verticalOffset = -0.3f;
+        def.satelliteCPs.push_back(satB);
+        RegisterSub("sub_earth", def);
+    }
+
+    // sub_wind: 바람 기류가 메인을 빠르게 감싸며 공전
+    {
+        VFXSequenceDef def;
+        def.name          = "sub_wind";
+        def.element       = ElementType::Wind;
+        def.particleCount = 120;
+        def.spawnRadius   = 2.0f;
+        def.masterCPFallSpeed    = 0.f;
+        def.masterCPStrength     = 15.f;
+        def.masterCPSphereRadius = 2.8f;
+        def.overrideColors    = true;
+        def.overrideCoreColor = { 0.80f, 0.98f, 0.70f, 1.0f };
+        def.overrideEdgeColor = { 0.25f, 0.75f, 0.35f, 0.65f };
+        SatelliteCPDesc satA;
+        satA.orbitRadius        = 3.2f; satA.orbitSpeed = 3.5f;
+        satA.orbitPhase         = 0.f;  satA.verticalOffset = 0.f;
+        satA.attractionStrength = 8.f;  satA.sphereRadius   = 1.3f;
+        satA.orbitTiltX         = 1.2f; satA.precessionSpeed = 0.5f;
+        def.satelliteCPs.push_back(satA);
+        SatelliteCPDesc satB = satA;
+        satB.orbitPhase = 3.14159f;
+        def.satelliteCPs.push_back(satB);
+        RegisterSub("sub_wind", def);
+    }
 }
 
 void VFXLibrary::RegisterBase(SkillSlot slot, VFXSequenceDef def) {
@@ -298,6 +396,15 @@ VFXSequenceDef VFXLibrary::GetDef(SkillSlot slot, uint32_t runeFlags, ElementTyp
     // 호출 측에서 element를 명시하면 def의 element를 override (속성색 적용)
     result.element = element;
     return result;
+}
+
+void VFXLibrary::RegisterSub(const std::string& id, VFXSequenceDef def) {
+    m_SubDefs[id] = std::move(def);
+}
+
+const VFXSequenceDef* VFXLibrary::GetSubDef(const std::string& id) const {
+    auto it = m_SubDefs.find(id);
+    return (it != m_SubDefs.end()) ? &it->second : nullptr;
 }
 
 VFXSequenceDef VFXLibrary::ApplyModifier(VFXSequenceDef def, const VFXModifier& mod) const {

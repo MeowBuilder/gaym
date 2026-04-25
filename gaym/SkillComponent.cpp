@@ -397,6 +397,17 @@ float SkillComponent::GetCooldownProgress(SkillSlot slot) const
     return 1.0f - (remaining / cooldown);
 }
 
+void SkillComponent::ResetAllCooldowns()
+{
+    for (size_t i = 0; i < static_cast<size_t>(SkillSlot::Count); ++i)
+    {
+        m_CooldownTimers[i] = 0.f;
+        if (m_SkillStates[i] == SkillState::Cooldown)
+            m_SkillStates[i] = SkillState::Ready;
+    }
+    OutputDebugString(L"[Debug] All skill cooldowns reset\n");
+}
+
 bool SkillComponent::TryUseSkill(SkillSlot slot, const DirectX::XMFLOAT3& targetPosition)
 {
     size_t index = static_cast<size_t>(slot);
